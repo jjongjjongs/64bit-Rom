@@ -19,6 +19,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import com.example.singlevm.engine.Android7GuestEngineAdapter;
 import com.example.singlevm.engine.EngineAdapter;
 import com.example.singlevm.engine.EngineReadiness;
@@ -139,6 +140,15 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
     private final Deque<String> qemuTail = new ArrayDeque<>();
     private volatile boolean qemuTerminatedByHost = false;
     /**
+     * 실행 화면이 왜 닫혔는지. 앱 코드는 어디서도 finish() 를 부르지 않는데 게스트가 4초 만에
+     * "앱이 종료를 요청"으로 끝나는 일이 두 번 있었고, 로그로는 뒤로가기인지 시스템인지 구분할
+     * 수 없었다. 생명주기마다 사유를 남겨 다음 로그가 직접 말하게 한다.
+     */
+    private volatile String closeReason = null;
+    /** 마지막으로 뒤로가기를 누른 시각. 두 번째 누름이 2초 안에 오면 그때 종료한다. */
+    private long lastBackPressAt = 0L;
+    private static final long BACK_CONFIRM_WINDOW_MS = 2_000L;
+    /**
      * Lines the guest actually produced. Counted separately from qemuTail because the tail also
      * carries our own "stream interrupted" marker — using the tail's emptiness to detect a silent
      * boot meant that marker suppressed the very warning it should have triggered.
@@ -257,7 +267,40 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
     @Override // android.app.Activity
     protected void onPause() {
         stopFrameLoop();
+        appendRuntimeLog("\n[생명주기] onPause finishing=" + isFinishing());
         super.onPause();
+    }
+
+    @Override // android.app.Activity
+    protected void onStop() {
+        appendRuntimeLog("\n[생명주기] onStop finishing=" + isFinishing()
+                + " changingConfig=" + isChangingConfigurations());
+        super.onStop();
+    }
+
+    /**
+     * 뒤로가기 한 번으로 게임을 끄지 않는다. 가로 전체 화면에서는 화면 왼쪽·오른쪽 가장자리를
+     * 안쪽으로 쓸면 그게 곧 뒤로가기라, 게임을 하다 손이 스치기만 해도 가상롬이 통째로 꺼진다.
+     */
+    @Override // android.app.Activity
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - this.lastBackPressAt <= BACK_CONFIRM_WINDOW_MS) {
+            this.closeReason = "사용자가 뒤로가기를 두 번 눌러 종료";
+            appendRuntimeLog("\n[생명주기] " + this.closeReason);
+            super.onBackPressed();
+            return;
+        }
+        this.lastBackPressAt = now;
+        appendRuntimeLog("\n[생명주기] 뒤로가기 1회 — 무시함 (2초 안에 한 번 더 누르면 종료)");
+        Toast.makeText(this, "한 번 더 누르면 게임을 종료합니다", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override // android.app.Activity
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        appendRuntimeLog("\n[생명주기] onTrimMemory level=" + level);
     }
 
     /**
@@ -762,7 +805,9 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         StringBuilder out = new StringBuilder();
         out.append("QEMU_PROCESS_EXIT=").append(exitCode)
                 .append(" (").append(ranForMs).append("ms 실행)\n");
-        if (this.qemuTerminatedByHost) {
+        if (this.qemuTerminatedByHost && this.closeReason != null) {
+            out.append("\n※ 실행 화면이 닫혀 가상롬을 껐습니다. 사유: ").append(this.closeReason).append('\n');
+        } else if (this.qemuTerminatedByHost) {
             out.append("\n※ 앱이 종료를 요청했습니다 (액티비티 종료). 게스트가 스스로 끝난 게 아닙니다.\n");
         }
         if (this.qemuOutputLines == 0) {
@@ -776,7 +821,8 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         } else {
             out.append("\n게스트 시리얼 출력 ").append(this.qemuOutputLines).append("줄 수신됨.\n");
         }
-        if (ranForMs < QEMU_EARLY_EXIT_MS) {
+        // 화면이 닫혀 우리가 끈 경우는 부팅 실패가 아니다. 그때 커널/이미지를 탓하면 엉뚱한 곳을 보게 된다.
+        if (ranForMs < QEMU_EARLY_EXIT_MS && !this.qemuTerminatedByHost) {
             out.append("\n⚠ 게스트가 부팅하지 못하고 즉시 종료했습니다.\n")
                     .append("커널/램디스크/시스템 이미지가 이 QEMU 구성(-machine virt)과 맞는지,\n")
                     .append("램디스크에 커널 cmdline이 요구하는 /init.wrapper 가 있는지 확인하세요.\n");
@@ -844,6 +890,15 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
 
     @Override // android.app.Activity
     protected void onDestroy() {
+        if (this.closeReason == null) {
+            // 앱이 스스로 닫은 게 아니다. finishing=true 면 뒤로가기/홈 외의 사용자 동작이나
+            // 작업 정리, false 면 시스템이 화면을 회수한 것이다.
+            this.closeReason = isFinishing()
+                    ? "화면이 닫힘 (finishing=true, 앱 코드가 아닌 사용자 동작 또는 작업 정리)"
+                    : "시스템이 화면을 회수함 (finishing=false)";
+        }
+        appendRuntimeLog("\n[생명주기] onDestroy changingConfig=" + isChangingConfigurations()
+                + " 사유: " + this.closeReason);
         Process bridgeLog = this.bridgeLogProcess;
         if (bridgeLog != null) {
             bridgeLog.destroy();
