@@ -251,6 +251,19 @@ struct pipe_slot {
     int header_seen;        // 첫 쓰기(서비스 이름)를 이미 검사했는가
     int rejected;           // 호스트에 없는 서비스라 거절한 파이프
     char service[64];       // 로그용. 헤더에서 뽑은 서비스 이름
+
+    // EGL 확장 문자열 바꿔치기 상태 (아래 "호스트 EGL 확장 문자열" 참고).
+    // 게스트→호스트 스트림을 명령 단위로 따라가며, rcQueryEGLString(EGL_EXTENSIONS)
+    // 을 보면 그 응답을 scrub_* 로 바꿔 쓴다.
+    int is_gles;            // 서비스가 opengles 라 스트림을 따라가는가
+    int track_broken;       // 명령 경계를 놓쳐 따라가기를 포기했는가
+    unsigned flags_left;    // 헤더 뒤 clientFlags 4 바이트 중 아직 안 지나간 수
+    unsigned char hdr[20];  // 현재 명령의 앞부분: opcode, 길이, 인자 세 개
+    unsigned hdr_len;
+    uint32_t cmd_left;      // 현재 명령에서 아직 안 지나간 바이트 (헤더 8 바이트 뒤로)
+    pthread_mutex_t scrub_lock;
+    uint32_t scrub_size;    // 바꿔 쓸 응답 전체 길이 (NUL 포함)
+    uint32_t scrub_off;     // 그중 이미 지나간 바이트
 };
 
 // 호스트가 실제로 답할 수 있는 서비스 목록.
@@ -287,6 +300,146 @@ static int service_known(const char *name) {
     for (size_t i = 0; i < sizeof(g_known_services) / sizeof(g_known_services[0]); i++)
         if (strcmp(name, g_known_services[i]) == 0) return 1;
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// 호스트 EGL 확장 문자열
+//
+// 게스트 EGL(libEGL_emulation) 은 자기 확장 목록에 호스트가 알려 준 EGL_EXTENSIONS 를
+// 그대로 이어 붙인다. 진짜 에뮬레이터라면 호스트의 EGL 번역기가 주는 짧고 고정된
+// 목록이지만, 이 앱의 렌더러는 폰의 진짜 libEGL 에 그 질문을 그대로 넘기므로 폰 GPU
+// 드라이버의 목록이 게스트로 흘러든다. 실측(폰 logcat, 1,247 글자):
+//
+//   EGL_ANDROID_front_buffer_auto_refresh EGL_ANDROID_native_fence_sync ...
+//
+// 그 결과 게스트는 폰이 되는 것을 자기도 된다고 믿는다. 두 가지가 치명적이다:
+//
+//   * EGL_ANDROID_native_fence_sync — SurfaceFlinger(libgui SyncFeatures) 가 이것을
+//     보고 프레임마다 eglCreateSyncKHR(EGL_SYNC_NATIVE_FENCE_ANDROID) 를 부른다. 게스트
+//     EGL 은 호스트가 ANDROID_EMU_native_sync 를 광고하지 않으면 그 타입을
+//     EGL_BAD_ATTRIBUTE(0x3004) 로 거절한다. GLConsumer 는 그 실패를 "새 프레임을
+//     버린다" 로 처리하므로 모든 레이어가 첫 프레임에서 멈춘다 — 실측에서 부팅
+//     애니메이션 내내 80ms 마다 찍힌 `syncForReleaseLocked: error creating EGL
+//     fence: 0x3004` 가 그것이고, 실행 화면은 검은 채로 남았다. 이 이름이 없으면
+//     SF 는 EGL_KHR_fence_sync(게스트 자체 목록) 로 내려가고, 그건 게스트 EGL 이
+//     glFinish 로 흉내 내 준다.
+//   * EGL_KHR_partial_update / EGL_EXT_buffer_age — hwui(RenderThread) 가 이것을 보면
+//     eglSetDamageRegionKHR 를 부르고, 실패하면 LOG_ALWAYS_FATAL 이다. 게스트 EGL 은
+//     그 함수가 없다.
+//
+// 그래서 호스트의 답을 통째로, 길이는 그대로 둔 채, 진짜 에뮬레이터 호스트가 줄 법한
+// 목록으로 바꿔 쓴다. 길이를 지키는 이유: 게스트는 먼저 길이를 물어 그만큼 버퍼를
+// 잡고, 그 크기만큼 정확히 읽는다. 또 파이프 체크섬(v1)은 내용이 아니라 길이로
+// 계산되므로 내용만 바꾸면 깨지지 않는다. 남는 자리는 공백으로 채운다 — 게스트는
+// strstr 로 이름을 찾을 뿐이라 공백은 무해하다.
+//
+// 바꿔 쓰려면 "지금 오는 응답이 그 질문의 답" 임을 알아야 하고, 그러려면 게스트→
+// 호스트 스트림을 명령 단위로 따라가야 한다. 인코더 규약: 모든 명령은
+// [opcode u32][전체 길이 u32][인자들...] 이고, 호스트 연결 직후 4 바이트 clientFlags 가
+// 먼저 온다. 한 write 에 명령 여러 개가 들어오기도 하고(실측: rcSetWindowColorBuffer
+// 와 rcMakeCurrent 가 한 번에), 큰 명령(glTexImage2D)은 여러 write 로 쪼개져 오므로
+// "현재 명령에서 몇 바이트 남았나" 를 파이프마다 들고 간다. 응답 쪽도 같은 이유로
+// 오프셋 기준으로 바꿔 쓴다 — 응답이 몇 번의 read 로 나뉘어 와도 상관없다.
+//
+// 질문/답은 같은 스레드에서 동기적으로 오간다(write 가 끝나야 read 를 시작한다).
+// 그래서 디스패처가 write 를 큐에 넣기 전에 따라가 두면, 그 답을 읽기 워커가 볼
+// 때는 이미 상태가 잡혀 있다.
+// ---------------------------------------------------------------------------
+
+#define RC_QUERY_EGL_STRING 0x2712u
+#define EGL_EXTENSIONS_ENUM 0x3055u
+
+// 에뮬레이터 호스트의 EGL 번역기가 주는 목록과 같은 모양. 게스트가 스스로 붙이는
+// EGL_KHR_fence_sync / EGL_KHR_image_base 등은 여기 없어도 된다.
+static const char g_egl_extensions[] =
+    "EGL_KHR_image_base EGL_KHR_gl_texture_2D_image EGL_ANDROID_recordable "
+    "EGL_KHR_surfaceless_context ";
+
+static uint32_t le32(const unsigned char *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+// 명령 하나가 끝났다. rcQueryEGLString(EGL_EXTENSIONS, buffer, size) 였다면 그 답을
+// 바꿔 쓰도록 예약한다. 인자 배치: name(+8), __size_buffer(+12), bufferSize(+16).
+// 크기를 묻는 첫 호출은 size 가 0 이고 답이 없으므로 건너뛴다.
+static void command_done(struct pipe_slot *s) {
+    if (s->hdr_len >= 20 && le32(s->hdr) == RC_QUERY_EGL_STRING) {
+        uint32_t name = le32(s->hdr + 8);
+        uint32_t size = le32(s->hdr + 12);
+        if (name == EGL_EXTENSIONS_ENUM && size > 0) {
+            pthread_mutex_lock(&s->scrub_lock);
+            s->scrub_size = size;
+            s->scrub_off = 0;
+            pthread_mutex_unlock(&s->scrub_lock);
+            put("pipe %d: EGL 확장 문자열 응답 %u 바이트를 에뮬레이터 목록으로 바꿔 쓴다",
+                s->slot_no, size);
+        }
+    }
+    s->hdr_len = 0;
+    s->cmd_left = 0;
+}
+
+// 게스트→호스트 바이트를 명령 경계에 맞춰 따라간다. 내용은 바꾸지 않는다.
+static void track_guest_stream(struct pipe_slot *s, const unsigned char *p, size_t n) {
+    if (!s->is_gles || s->track_broken) return;
+    while (n > 0) {
+        size_t k;
+        if (s->flags_left > 0) {
+            k = n < s->flags_left ? n : s->flags_left;
+            s->flags_left -= (unsigned)k;
+            p += k; n -= k;
+            continue;
+        }
+        if (s->hdr_len < 8) {
+            k = 8 - s->hdr_len;
+            if (k > n) k = n;
+            memcpy(s->hdr + s->hdr_len, p, k);
+            s->hdr_len += (unsigned)k;
+            p += k; n -= k;
+            if (s->hdr_len < 8) continue;
+            uint32_t len = le32(s->hdr + 4);
+            if (len < 8) {
+                // 길이가 헤더보다 짧을 수는 없다. 경계를 놓친 것이므로 더는 믿지 않는다.
+                // 바꿔치기만 멈출 뿐 파이프 자체는 그대로 흘려보낸다.
+                put("pipe %d: 명령 길이 %u (opcode 0x%x) - 스트림 추적을 멈춘다",
+                    s->slot_no, len, le32(s->hdr));
+                s->track_broken = 1;
+                return;
+            }
+            s->cmd_left = len - 8;
+            if (s->cmd_left == 0) command_done(s);
+            continue;
+        }
+        k = n < s->cmd_left ? n : s->cmd_left;
+        if (s->hdr_len < sizeof(s->hdr)) {
+            size_t c = sizeof(s->hdr) - s->hdr_len;
+            if (c > k) c = k;
+            memcpy(s->hdr + s->hdr_len, p, c);
+            s->hdr_len += (unsigned)c;
+        }
+        s->cmd_left -= (uint32_t)k;
+        p += k; n -= k;
+        if (s->cmd_left == 0) command_done(s);
+    }
+}
+
+// 호스트→게스트 바이트. 예약된 응답 구간이면 그 자리를 바꿔 쓴다.
+static void scrub_host_stream(struct pipe_slot *s, unsigned char *buf, size_t n) {
+    if (!s->is_gles) return;
+    pthread_mutex_lock(&s->scrub_lock);
+    if (s->scrub_off < s->scrub_size) {
+        size_t left = s->scrub_size - s->scrub_off;
+        size_t k = n < left ? n : left;
+        size_t canon = sizeof(g_egl_extensions) - 1;
+        for (size_t i = 0; i < k; i++) {
+            size_t pos = s->scrub_off + i;
+            if (pos == s->scrub_size - 1) buf[i] = '\0';
+            else if (pos < canon) buf[i] = (unsigned char)g_egl_extensions[pos];
+            else buf[i] = ' ';
+        }
+        s->scrub_off += (uint32_t)k;
+    }
+    pthread_mutex_unlock(&s->scrub_lock);
 }
 
 static char g_ports[MAX_PIPES][288];
@@ -436,6 +589,7 @@ static void *worker_main(void *arg) {
                 reply(r->unique, -EIO, NULL, 0);
             } else {
                 s->rx += (unsigned long)n;
+                if (n > 0) scrub_host_stream(s, buf, (size_t)n);
                 // 호스트가 이 파이프에 처음으로 무언가 보낸 순간. 이 줄이 안 나오면
                 // 게스트는 요청만 보내고 영원히 답을 기다리는 중이라는 뜻이다.
                 if (n > 0 && !s->rx_announced) {
@@ -524,6 +678,7 @@ static int slot_alloc(void) {
     s->header_seen = 0;
     s->rejected = 0;
     s->service[0] = '\0';
+    pthread_mutex_init(&s->scrub_lock, NULL);
     pthread_mutex_init(&s->rq.lock, NULL);
     pthread_cond_init(&s->rq.cv, NULL);
     pthread_mutex_init(&s->wq.lock, NULL);
@@ -832,7 +987,17 @@ int main(void) {
                         break;
                     }
                     put("pipe %d: 서비스 '%s'", s->slot_no, s->service);
+                    if (strcmp(s->service, "opengles") == 0) {
+                        s->is_gles = 1;
+                        s->flags_left = 4;
+                        // 헤더 write 에 그 뒤 바이트가 딸려 올 수도 있다.
+                        const char *nul = memchr(buf, '\0', len);
+                        size_t used = (size_t)(nul - buf) + 1;
+                        track_guest_stream(s, r->payload + used, len - used);
+                    }
                 }
+            } else {
+                track_guest_stream(s, r->payload, len);
             }
             r->unique = in.unique;
             r->opcode = FUSE_WRITE_OP;

@@ -87,7 +87,7 @@ public final class GuestVm {
      */
     private static final String[] BRIDGE_LOGCAT_COMMAND = {
         "logcat", "-v", "time", "-T", "1", "-s",
-        "SingleVmGlesBridge:V", "emuGL:V", "libc:V", "DEBUG:V", "AndroidRuntime:E",
+        "SingleVmGlesBridge:V", "SingleVmEmugl:V", "emuGL:V", "libc:V", "DEBUG:V", "AndroidRuntime:E",
     };
     private static final int BRIDGE_LOG_TAIL_LINES = 60;
     /**

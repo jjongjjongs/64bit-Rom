@@ -1009,6 +1009,54 @@ recovery 로 리부트해서, 만약 아직도 abort 한다면 그 이유를 볼
 - **`seriallogcat`**: ueventd 이후 안드로이드는 logcat 으로만 로그를 남깁니다.
   조립 단계에서 init.rc 에 logcat 을 콘솔로 흘리는 서비스를 심습니다.
 
+### 7.13 부팅은 끝났는데 화면이 검은 이유 — 폰의 EGL 확장 목록이 게스트로 샜습니다
+
+grallocPipe 거절(7.11) 뒤의 첫 폰 실행에서 게스트가 끝까지 부팅했습니다: 부팅
+애니메이션이 프레임을 그리고, PackageManager 가 70개 패키지를 훑고, system_server 가
+boot phase 500 까지 올라오고, 설정이 `w800dp h480dp … land` 입니다. 그런데 실행
+화면은 검은 채였습니다.
+
+logcat 에 같은 줄이 부팅 애니메이션 내내 **80ms 마다** 찍혀 있었습니다:
+
+```
+E GLConsumer: [BootAnimation] syncForReleaseLocked: error creating EGL fence: 0x3004
+```
+
+0x3004 는 EGL_BAD_ATTRIBUTE 입니다. 게스트 EGL(libEGL_emulation, Android 7) 의
+`eglCreateSyncKHR` 은 호스트가 `ANDROID_EMU_native_sync` 를 광고하지 않으면
+`EGL_SYNC_NATIVE_FENCE_ANDROID` 타입을 정확히 그 오류로 거절합니다. 그리고
+`GLConsumer::updateAndReleaseLocked` 는 그 실패를 "방금 받은 프레임을 버린다" 로
+처리합니다. 즉 SurfaceFlinger 의 모든 레이어가 **첫 프레임에서 멈춥니다**. 부팅
+애니메이션의 첫 프레임은 검은색이므로 화면이 검게 보인 것입니다. 렌더러가 프레임을
+올리지 않은 게 아니라, SF 가 올릴 새 프레임을 끝내 받지 못한 것입니다.
+
+왜 SF 가 그 타입을 쓰려 했는가. libgui 의 SyncFeatures 는 EGL 확장 문자열에
+`EGL_ANDROID_native_fence_sync` 가 있으면 그것을 씁니다. 게스트 EGL 은 자기 고정
+목록에 호스트가 `rcQueryEGLString(EGL_EXTENSIONS)` 로 알려 준 목록을 그대로 이어
+붙이는데, 진짜 에뮬레이터라면 그게 호스트 EGL 번역기의 짧은 고정 목록입니다. 이
+앱의 렌더러는 그 질문을 폰의 진짜 libEGL 에 넘기므로 폰 GPU 드라이버의 1,247 글자
+목록이 게스트로 흘러듭니다 — 브리지 로그의 응답이 `EGL_ANDROID_front_buffer_auto_refresh
+EGL_ANDROID_native_fence_sync …` 로 시작하는 것이 그 증거입니다. 같은 경로로
+`EGL_KHR_partial_update` / `EGL_EXT_buffer_age` 도 새는데, 이건 hwui 가
+`eglSetDamageRegionKHR` 를 부르게 만들고 실패하면 LOG_ALWAYS_FATAL 이라 앱마다
+RenderThread 가 죽었을 것입니다.
+
+고친 자리는 `qemu_piped` 입니다(렌더러와 브리지는 소스가 없습니다). 데몬이
+opengles 파이프의 게스트→호스트 스트림을 명령 단위로 따라가다
+`rcQueryEGLString(EGL_EXTENSIONS, buffer, size)` 를 보면, 그 응답 `size` 바이트를
+에뮬레이터 호스트가 줄 법한 목록(`EGL_KHR_image_base EGL_KHR_gl_texture_2D_image
+EGL_ANDROID_recordable …`)으로 **길이를 지킨 채** 바꿔 씁니다. 길이를 지키는 이유는
+두 가지입니다: 게스트가 먼저 길이를 물어 그만큼 읽고, 파이프 체크섬(v1)이 내용이
+아닌 길이로 계산되기 때문입니다. 남는 자리는 공백이고, 게스트는 strstr 로 이름을
+찾을 뿐이라 무해합니다.
+
+이름이 사라지면 SF 는 게스트 자체 목록의 `EGL_KHR_fence_sync` 로 내려가고, 게스트
+EGL 은 그 타입을 `eglWaitClient()`(glFinish) 로 흉내 내 즉시 신호된 sync 를 돌려
+줍니다. 프레임마다 호스트 왕복이 하나 늘지만 동작합니다.
+
+같은 종류의 누출이 GL 쪽(`rcGetGLString(GL_EXTENSIONS)`, 폰의 GLES 확장 목록)에도
+있을 수 있습니다. 게임이 돌기 시작하면 그쪽도 봐야 합니다.
+
 ---
 
 ## 8. 폰으로 옮긴 뒤
