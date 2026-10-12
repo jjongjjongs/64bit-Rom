@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
     private static final String PREFS = "single_vm_state";
     private static final int REQUEST_IMPORT_ANDROID7_IMAGE = 7002;
     private static final int REQUEST_IMPORT_APK = 7001;
+    private static final int REQUEST_NOTIFICATIONS = 7003;
     private File android7ImageDir;
     private File apkDir;
     private GridLayout appGrid;
@@ -114,6 +115,44 @@ public class MainActivity extends Activity {
         ensureVmDirs();
         refreshState();
         handleStartupIntent(getIntent());
+        requestNotificationPermission();
+    }
+
+    /**
+     * 앱이 보일 때마다 가상롬이 켜져 있게 한다. 부팅은 분 단위라, 게임을 누른 뒤에 켜면 그만큼
+     * 기다려야 한다. 미리 켜 두면 게임은 이미 돌고 있는 가상롬 위에서 바로 뜬다. 이미 켜져 있으면
+     * 서비스가 아무것도 하지 않는다.
+     */
+    @Override // android.app.Activity
+    protected void onResume() {
+        super.onResume();
+        startVmIfReady();
+    }
+
+    private void startVmIfReady() {
+        EngineAdapter engine = EngineRegistry.primary();
+        if (!Android7GuestEngineAdapter.ID.equals(engine.id())) {
+            return;
+        }
+        if (!engine.inspect(this, this.vmRoot).ready) {
+            // 이미지가 없거나 잘못된 것이면 켤 수 없다. 실행 전 점검이 이유를 보여 준다.
+            return;
+        }
+        try {
+            VmService.start(this);
+        } catch (RuntimeException e) {
+            // 포그라운드 서비스를 못 띄우는 기기 상태(백그라운드 제한 등)여도 앱은 계속 쓸 수 있어야
+            // 한다. 게임을 누르면 실행 화면이 다시 시도한다.
+        }
+    }
+
+    /** 가상롬 알림("가상롬 실행 중 · 끄기")을 보이려면 Android 13 부터 권한이 필요하다. */
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATIONS);
+        }
     }
 
     @Override // android.app.Activity

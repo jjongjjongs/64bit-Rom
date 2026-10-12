@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 가상롬을 화면 밖에서도 살려 두는 VmService 용. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:theme="@style/AppTheme"
         android:label="@string/app_name"
@@ -13,6 +17,16 @@
             android:process=":vm"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"/>
+        <!-- 가상롬 본체. 실행 화면과 같은 ":vm" 프로세스여야 렌더러를 함께 쓴다. -->
+        <service
+            android:name="com.example.singlevm.VmService"
+            android:exported="false"
+            android:process=":vm"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the user's Android virtual machine running so games launch without a full reboot"/>
+        </service>
         <activity
             android:name="com.example.singlevm.MainActivity"
             android:exported="true">
