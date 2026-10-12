@@ -135,7 +135,7 @@ public class VmService extends Service {
         }
         return builder
                 .setSmallIcon(R.drawable.ic_cmd_scan)
-                .setContentTitle("가상롬 실행 중")
+                .setContentTitle("Mini Rom 실행 중")
                 .setContentText("Android 7 · 게임을 바로 실행할 수 있습니다")
                 .setContentIntent(open)
                 .setOngoing(true)
