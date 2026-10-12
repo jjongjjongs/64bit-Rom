@@ -20,6 +20,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -759,8 +760,15 @@ public class MainActivity extends Activity {
         showToast("Android 7 구성 파일을 확인하는 중입니다.");
         new Thread(() -> {
             try {
+                // 돌고 있는 가상롬이 system.img 를 열어 둔 채로 덮어쓰면 그 게스트는 깨진다.
+                // 먼저 끄고, 새 이미지를 풀고 나서 다시 켠다. 설치한 게임은 건드리지 않는다.
+                stopVmBlocking("게스트 이미지 교체");
                 final String result = importAndroid7Image(uri);
-                runOnUiThread(() -> showToast(result));
+                runOnUiThread(() -> {
+                    showToast(result);
+                    refreshState();
+                    startVmIfReady();
+                });
             } catch (IOException e) {
                 final String message = e.getMessage();
                 runOnUiThread(() -> showError("Android 7 구성 가져오기 실패", message));
@@ -1332,18 +1340,58 @@ public class MainActivity extends Activity {
     private void confirmReset() {
         new AlertDialog.Builder(this)
                 .setTitle("가상롬 초기화")
-                .setMessage("가져온 APK와 추출된 라이브러리, 단일 가상롬 데이터 영역을 삭제합니다.")
-                .setPositiveButton("초기화", (dialog, which) -> resetVm())
+                .setMessage("이미지만: Android 7 게스트 이미지(kernel, system.img, userdata.img 등)만 지우고 "
+                        + "설치한 게임은 남깁니다. 새 구성을 가져오기 전에 꼭 지울 필요는 없습니다 — "
+                        + "가져오기가 기존 이미지를 덮어씁니다.\n\n"
+                        + "전체: 설치한 게임, 가져온 APK, 가상롬 데이터를 모두 지웁니다.")
+                .setPositiveButton("이미지만", (dialog, which) -> resetGuestImage())
+                .setNeutralButton("전체", (dialog, which) -> resetVm())
                 .setNegativeButton("취소", null)
                 .show();
     }
 
+    /** 게스트 이미지 폴더만 비운다. 게임 목록과 설정은 그대로다. */
+    private void resetGuestImage() {
+        showToast("가상롬을 끄고 게스트 이미지를 지우는 중입니다.");
+        new Thread(() -> {
+            stopVmBlocking("게스트 이미지 초기화");
+            clearDirectory(this.android7ImageDir);
+            ensureVmDirs();
+            runOnUiThread(() -> {
+                refreshState();
+                showToast("게스트 이미지를 지웠습니다. 설정에서 새 구성을 가져오세요.");
+            });
+        }, "guest-image-reset").start();
+    }
+
     private void resetVm() {
-        clearDirectory(this.vmRoot);
-        this.prefs.edit().clear().apply();
-        ensureVmDirs();
-        refreshState();
-        showToast("가상롬을 초기화했습니다.");
+        showToast("가상롬을 끄고 초기화하는 중입니다.");
+        new Thread(() -> {
+            // 가상롬이 돌고 있는 채로 루트를 지우면 QEMU 는 열어 둔 파일로 계속 돌지만,
+            // 파이프 소켓 폴더가 사라져 포트 교체(chardev-change)가 ENOENT 로 실패한다.
+            stopVmBlocking("가상롬 초기화");
+            clearDirectory(this.vmRoot);
+            this.prefs.edit().clear().apply();
+            ensureVmDirs();
+            runOnUiThread(() -> {
+                refreshState();
+                showToast("가상롬을 초기화했습니다.");
+            });
+        }, "vm-reset").start();
+    }
+
+    /**
+     * 가상롬을 끄고 실제로 꺼질 때까지 기다린다. 이미지를 지우거나 덮어쓰기 전에 부른다.
+     * 메인 스레드에서 부르면 안 된다.
+     */
+    private void stopVmBlocking(String reason) {
+        VmService.stop(this);
+        GuestVm vm = GuestVm.get(this);
+        vm.stop(reason);
+        long deadline = SystemClock.elapsedRealtime() + 8_000L;
+        while (vm.isRunning() && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(100);
+        }
     }
 
     private void ensureVmDirs() {

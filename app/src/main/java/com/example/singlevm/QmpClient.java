@@ -163,6 +163,12 @@ final class QmpClient implements Runnable {
             return;
         }
         File pipeSocket = new File(this.transportDir, "pipe" + pipeIndex + ".sock");
+        // 폴더가 없으면 QEMU 의 bind 가 ENOENT 로 실패한다(실측: 가상롬이 도는 중에 초기화를 눌러
+        // 루트가 지워졌을 때). 다시 만들어 두면 교체는 된다.
+        if (!this.transportDir.isDirectory() && !this.transportDir.mkdirs()) {
+            this.log.line("[qmp] 전송 폴더가 없어 pipe" + pipeIndex + " 교체를 건너뛴다");
+            return;
+        }
         JSONObject addr = new JSONObject()
                 .put("type", "unix")
                 .put("data", new JSONObject().put("path", pipeSocket.getAbsolutePath()));
