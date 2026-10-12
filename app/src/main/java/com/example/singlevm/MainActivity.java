@@ -129,6 +129,19 @@ public class MainActivity extends Activity {
         startVmIfReady();
     }
 
+    /**
+     * 뒤로가기로 앱을 나가면 가상롬도 끈다. 홈 버튼이나 다른 앱으로 전환은 {@code isFinishing()}
+     * 이 아니므로 그대로 둔다 — 그때는 알림의 "끄기" 로 끌 수 있다. 최근 앱에서 밀어 치우는 경우는
+     * {@link VmService#onTaskRemoved} 가 맡는다.
+     */
+    @Override // android.app.Activity
+    protected void onDestroy() {
+        if (isFinishing()) {
+            VmService.stop(this);
+        }
+        super.onDestroy();
+    }
+
     private void startVmIfReady() {
         EngineAdapter engine = EngineRegistry.primary();
         if (!Android7GuestEngineAdapter.ID.equals(engine.id())) {
