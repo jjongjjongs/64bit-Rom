@@ -1093,6 +1093,38 @@ goldfish 호스트에서는 파이프의 열기/닫기가 그대로 보이므로
   다시 써야 하면 첫 write 를 1 초 미룹니다. 교체가 끝나기 전에 새 헤더가 옛 연결로 새어
   나가지 않게 하기 위해서입니다.
 
+### 7.15 런처가 영영 안 뜨는 이유 — system_server 가 60 초마다 죽습니다 (진단 중)
+
+7.13·7.14 를 고친 뒤 렌더러는 프레임을 받지만 전부 검은색입니다(`nonBlack=0`). 폰 로그를
+보면 부팅 약 60 초 뒤에 system_server 가 죽고 zygote 가 다시 뜨기를 반복합니다:
+
+```
+W AlarmManager: Failed to open alarm driver. Falling back to a handler.
+...
+E AndroidRuntime: *** FATAL EXCEPTION IN SYSTEM PROCESS: main
+E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method
+   'void android.app.PendingIntent.send()' on a null object reference
+E AndroidRuntime:   at com.android.server.AlarmManagerService$AlarmHandler.handleMessage(AlarmManagerService.java:2616)
+```
+
+Android 7 의 AlarmManagerService 는 `/dev/alarm`(옛 안드로이드 알람 드라이버, 5.10 에는
+없음)을 못 열면 `timerfd_create(CLOCK_REALTIME_ALARM / CLOCK_BOOTTIME_ALARM)` 로 넘어가고,
+그것도 실패하면 자바 핸들러로 폴백합니다. 핸들러 경로는 `operation == null` 인 리스너
+알람을 처리하지 못하는 버그가 있어, 첫 리스너 알람(약 60 초 뒤)에서 NPE 로 죽습니다.
+system_server 가 죽으면 런처도 함께 사라지므로 화면은 계속 검습니다.
+
+timerfd 쪽이 왜 실패하는지가 남은 질문입니다. 커널(5.10 `fs/timerfd.c`)은 그 두 clockid 에
+`CAP_WAKE_ALARM`(비트 35) 을 요구하고 없으면 `EPERM` 을 줍니다. 로그에는 zygote 의
+preload 중에 커널 경고 ``capability: warning: `main' uses 32-bit capabilities`` 가 한 번
+나옵니다 — 32 비트(v1) capset 은 상위 32 비트 능력을 모두 지우지만, capget 도 같은 경고를
+내므로 이것만으로는 단정할 수 없습니다. 앱의 60 초 진단 명령이 init/zygote/system_server
+의 `/proc/<pid>/status` Cap 줄과 `/dev/alarm`, `/dev/rtc0` 을 콘솔로 찍도록 했습니다
+(`VM_DIAG_CAPS_BEGIN` … `END`). `CapEff` 에 비트 35 가 없으면 능력 문제, 있으면 다른 원인입니다.
+
+고치는 길은 두 가지입니다. (1) 능력이 사라진 자리를 찾아 되돌린다. (2) 이 게스트 전용
+커널에서 timerfd 의 `CAP_WAKE_ALARM` 요구를 지운다 — 한 사람이 혼자 쓰는 VM 이라 잃을 것은
+없지만 커널의 권한 검사를 빼는 일이므로 사용자 확인 뒤에 한다.
+
 ---
 
 ## 8. 폰으로 옮긴 뒤

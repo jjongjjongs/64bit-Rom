@@ -122,7 +122,18 @@ public final class GuestVm {
     /** A guest that dies faster than this never really booted; say so loudly. */
     private static final long QEMU_EARLY_EXIT_MS = 5_000L;
     private static final String GUEST_DIAGNOSTICS_COMMAND =
-            "echo VM_DIAG_FILE_BEGIN\rcat /data/local/tmp/bootdiag.log 2>&1\recho VM_DIAG_FILE_END\r";
+            "echo VM_DIAG_FILE_BEGIN\rcat /data/local/tmp/bootdiag.log 2>&1\recho VM_DIAG_FILE_END\r"
+            // 알람 드라이버 진단. system_server 의 AlarmManagerService 는 /dev/alarm 이 없으면
+            // timerfd_create(CLOCK_BOOTTIME_ALARM) 로 넘어가는데, 그 clockid 는 CAP_WAKE_ALARM
+            // (비트 35) 이 없으면 EPERM 이다. 실패하면 핸들러로 폴백하고, 그 경로는 리스너
+            // 알람에서 NPE 로 죽어 부팅이 무한 재시작한다(실측). 어느 프로세스에서 상위 32 비트
+            // 능력이 사라졌는지 보려고 init/zygote/system_server 의 Cap 줄을 찍는다.
+            + "echo VM_DIAG_CAPS_BEGIN\r"
+            + "for p in 1 $(pidof zygote) $(pidof system_server); do"
+            + " echo \"== pid $p $(cat /proc/$p/comm 2>/dev/null)\"; grep -E '^Cap' /proc/$p/status 2>&1; done\r"
+            + "ls -l /dev/alarm /dev/rtc0 2>&1\rcat /sys/class/rtc/rtc0/name 2>&1\r"
+            + "dmesg 2>/dev/null | grep -i 'capabilit' | head -5\r"
+            + "echo VM_DIAG_CAPS_END\r";
 
     private static GuestVm instance;
 
