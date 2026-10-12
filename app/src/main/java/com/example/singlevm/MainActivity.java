@@ -659,9 +659,23 @@ public class MainActivity extends Activity {
                 .setTitle(header)
                 .setMessage(tail.isEmpty() ? "(비어 있음)" : tail)
                 .setPositiveButton("복사", (dialog, which) -> copyToClipboard(file.getName(), tail))
-                .setNeutralButton("공유", (dialog, which) -> shareText(file.getName(), tail))
+                .setNeutralButton("파일 공유", (dialog, which) -> shareFile(file))
                 .setNegativeButton("닫기", null)
                 .show();
+    }
+
+    /**
+     * 파일을 통째로 다른 앱에 보낸다. 글자로 복사/공유하면 받는 쪽이 잘라 버리므로(실측: 수 MB
+     * 로그가 복사 중 잘림) content URI 로 파일 자체를 넘긴다.
+     */
+    private void shareFile(File file) {
+        Uri uri = LogFileProvider.uriFor(file);
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType(file.getName().endsWith(".png") ? "image/png" : "text/plain");
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
+        intent.putExtra(Intent.EXTRA_SUBJECT, "singlevm " + file.getName());
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivity(Intent.createChooser(intent, "로그 파일 공유"));
     }
 
     /** Reads at most {@code maxBytes} from the end of the file, trimming the first partial line. */

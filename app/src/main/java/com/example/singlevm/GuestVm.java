@@ -68,7 +68,12 @@ public final class GuestVm {
      * before driver probing, and keep_bootcon stops it being handed off and silenced.
      */
     private static final String DEFAULT_KERNEL_CMDLINE =
-            "console=ttyAMA0 earlycon=pl011,0x09000000 keep_bootcon ignore_loglevel printk.devkmsg=on"
+            // keep_bootcon 은 뺐다: earlycon 과 ttyAMA0 가 같은 UART 라 둘 다 살려 두면 커널 줄이
+            // 전부 두 번씩 찍힌다. 넘겨주기가 되는 것은 실측으로 확인됐다.
+            // audit=0: permissive 라 SELinux 가 막지는 않으면서 거부 기록(avc: denied)을 매 동작마다
+            // 찍고, logd 가 그것을 auditd/프로세스 이름으로 또 찍는다. 부팅 로그의 절반이 그것
+            // 이었다. 감사 서브시스템을 끄면 둘 다 사라지고 동작은 그대로다.
+            "console=ttyAMA0 earlycon=pl011,0x09000000 ignore_loglevel printk.devkmsg=on audit=0"
                 + " qemu=1 qemu.gles=1"
                     + " androidboot.hardware=ranchu androidboot.selinux=permissive"
                     // 시리얼에 루트 셸(init.rc 의 console 서비스)을 띄운다. QEMU 의 stdin 으로

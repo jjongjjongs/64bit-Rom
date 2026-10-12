@@ -35,5 +35,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- 로그 파일을 통째로 공유하기 위한 통로. LogFileProvider 참고. -->
+        <provider
+            android:name="com.example.singlevm.LogFileProvider"
+            android:authorities="com.example.singlevm.logs"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
