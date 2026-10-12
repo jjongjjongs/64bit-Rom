@@ -17,7 +17,6 @@ import android.view.SurfaceView;
 import android.view.WindowManager;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.example.singlevm.engine.Android7GuestEngineAdapter;
@@ -306,9 +305,6 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
     /**
      * 게임 화면만 보인다. 게스트는 가로(800x480)로 그리므로 화면을 가로로 고정하고, 서피스는
      * 게스트와 같은 5:3 비율로 가운데 둔다 — 폰 화면(대략 20:9)에 꽉 채우면 늘어나 보인다.
-     *
-     * <p>로그는 없애지 않고 숨긴다. 폰에는 adb 가 없어서 이 화면의 로그가 부팅 진단의 유일한
-     * 창구다. 구석의 작은 버튼으로 켜고 끈다.
      */
     private void buildUi() {
         enterImmersive();
@@ -337,37 +333,10 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         stage.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
         root.addView(stage, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
 
-        ScrollView logScroll = new ScrollView(this);
-        logScroll.setBackgroundColor(Color.argb(225, 12, 13, 16));
-        logScroll.setVisibility(View.GONE);
-        this.logView = new TextView(this);
-        this.logView.setTextSize(11.0f);
-        this.logView.setTextColor(Color.rgb(222, 222, 222));
-        this.logView.setTypeface(Typeface.MONOSPACE);
-        this.logView.setText(READY_TEXT);
-        this.logView.setPadding(dp(16), dp(16), dp(16), dp(16));
-        logScroll.addView(this.logView, new FrameLayout.LayoutParams(-1, -2));
-        root.addView(logScroll, new FrameLayout.LayoutParams(-1, -1));
-
-        TextView logToggle = new TextView(this);
-        logToggle.setText("로그");
-        logToggle.setTextSize(12.0f);
-        logToggle.setTextColor(Color.argb(200, 255, 255, 255));
-        logToggle.setGravity(Gravity.CENTER);
-        logToggle.setBackgroundColor(Color.argb(90, 0, 0, 0));
-        logToggle.setContentDescription("로그 보기");
-        logToggle.setOnClickListener(v -> {
-            boolean show = logScroll.getVisibility() != View.VISIBLE;
-            logScroll.setVisibility(show ? View.VISIBLE : View.GONE);
-            logToggle.setText(show ? "닫기" : "로그");
-            if (show) {
-                logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
-            }
-        });
-        FrameLayout.LayoutParams toggleParams =
-                new FrameLayout.LayoutParams(dp(56), dp(44), Gravity.TOP | Gravity.END);
-        toggleParams.setMargins(0, dp(8), dp(8), 0);
-        root.addView(logToggle, toggleParams);
+        // 실행 화면에는 게임만 둔다. 로그는 화면에 띄우지 않고 last_run.txt 와
+        // qemu-modern.log 에 계속 쌓이므로, 홈의 "로그" 에서 본다. logView 가 없으면
+        // renderLog() 는 그냥 건너뛴다.
+        this.logView = null;
 
         setContentView(root);
     }

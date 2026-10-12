@@ -282,7 +282,8 @@ public class MainActivity extends Activity {
         }
         tile.addView(icon, new LinearLayout.LayoutParams(dp(56), dp(56)));
         tile.addView(makeTileLabel(label));
-        tile.setOnClickListener(v -> showInstalledAppActions(installId));
+        // 누르면 바로 실행. 스캔·앱 정보·삭제 메뉴는 길게 누르면 나온다.
+        tile.setOnClickListener(v -> launchInstalledApp(installId));
         tile.setOnLongClickListener(v -> {
             showInstalledAppActions(installId);
             return true;
