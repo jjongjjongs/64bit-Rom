@@ -19,10 +19,29 @@ android {
         }
     }
 
+    // 서명 키를 고정한다.
+    //
+    // 설정이 없으면 Gradle 은 ~/.android/debug.keystore 로 서명하는데, GitHub Actions 러너는
+    // 매번 새 기계라 빌드마다 새 키가 생긴다. 그러면 폰에 설치된 것과 키가 달라 업데이트 설치가
+    // 거부되고, 삭제 후 재설치하면 앱 데이터(수 GB 짜리 게스트 이미지까지)가 지워진다.
+    //
+    // 디버그 키라 저장소에 둔다. 비밀번호도 안드로이드 기본 디버그 키와 같다. 이 저장소를 가진
+    // 사람은 누구나 이 앱의 업데이트를 서명할 수 있다는 뜻이므로, 배포용 release 서명은 여기가
+    // 아니라 비밀(secret)로 따로 둬야 한다.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             // 원본 apk가 debuggable=true 였음. 매니페스트 하드코딩 대신 여기서 관리.
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isDebuggable = false
