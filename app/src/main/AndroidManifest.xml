@@ -10,7 +10,9 @@
         <activity
             android:name="com.example.singlevm.GuestRunActivity"
             android:exported="true"
-            android:process=":vm"/>
+            android:process=":vm"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"/>
         <activity
             android:name="com.example.singlevm.MainActivity"
             android:exported="true">

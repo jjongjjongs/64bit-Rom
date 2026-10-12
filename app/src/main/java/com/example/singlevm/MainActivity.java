@@ -13,6 +13,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -152,22 +153,38 @@ public class MainActivity extends Activity {
         root.setPadding(dp(14), dp(22), dp(14), dp(18));
         scrollView.addView(root, new FrameLayout.LayoutParams(-1, -2));
         TextView search = new TextView(this);
-        search.setText("⌕  앱 검색");
-        search.setTextSize(20.0f);
+        search.setText("앱 검색");
+        search.setTextSize(17.0f);
         search.setGravity(Gravity.CENTER);
-        search.setTextColor(Color.rgb(0, 150, 136));
-        search.setPadding(0, dp(18), 0, dp(18));
-        root.addView(search, new LinearLayout.LayoutParams(-1, -2));
-        View divider = new View(this);
-        divider.setBackgroundColor(Color.rgb(0, 150, 136));
-        root.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        search.setTextColor(Color.rgb(0, 121, 107));
+        Drawable searchIcon = getDrawable(R.drawable.ic_cmd_search);
+        if (searchIcon != null) {
+            searchIcon = searchIcon.mutate();
+            searchIcon.setColorFilter(Color.rgb(0, 121, 107), PorterDuff.Mode.SRC_IN);
+            searchIcon.setBounds(0, 0, dp(20), dp(20));
+            search.setCompoundDrawables(searchIcon, null, null, null);
+            search.setCompoundDrawablePadding(dp(10));
+        }
+        // 밑줄 대신 둥근 흰 검색창. 글자와 아이콘은 가운데에 모은다.
+        GradientDrawable searchBg = new GradientDrawable();
+        searchBg.setColor(Color.WHITE);
+        searchBg.setCornerRadius(dp(26));
+        searchBg.setStroke(dp(1), Color.rgb(228, 226, 223));
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setGravity(Gravity.CENTER);
+        searchRow.setBackground(searchBg);
+        searchRow.addView(search, new LinearLayout.LayoutParams(-2, -1));
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(-1, dp(52));
+        searchParams.setMargins(dp(2), dp(14), dp(2), 0);
+        root.addView(searchRow, searchParams);
         this.statusView = makePanelText(15, true);
         this.statusView.setBackgroundColor(0);
-        this.statusView.setTextColor(Color.rgb(72, 72, 72));
-        this.statusView.setPadding(dp(4), dp(12), dp(4), dp(2));
+        this.statusView.setTextColor(Color.rgb(58, 54, 55));
+        this.statusView.setPadding(dp(6), dp(20), dp(6), dp(6));
         root.addView(this.statusView, panelParams(dp(0)));
         this.commandGrid = new GridLayout(this);
-        this.commandGrid.setColumnCount(4);
+        // 다섯 개를 한 줄에. 칸 너비는 가중치로 균등하게 나눈다(makeBaseTile).
+        this.commandGrid.setColumnCount(5);
         this.commandGrid.setPadding(0, dp(8), 0, dp(0));
         root.addView(this.commandGrid, new LinearLayout.LayoutParams(-1, -2));
         this.appGrid = new GridLayout(this);
@@ -224,20 +241,28 @@ public class MainActivity extends Activity {
             return;
         }
         this.commandGrid.removeAllViews();
-        this.commandGrid.addView(makeCommandTile("APK 설치", "↓", Color.rgb(3, 169, 244),
-                v -> openApkPicker()));
-        this.commandGrid.addView(makeCommandTile("ADB 설치", "↓", Color.rgb(0, 150, 136),
-                v -> importAdbGuestApk(true)));
-        this.commandGrid.addView(makeCommandTile("실행 전 스캔", "✓", Color.rgb(96, 125, 139),
-                v -> showRuntimeProbe()));
-        this.commandGrid.addView(makeCommandTile("설정", "⚙", Color.rgb(117, 133, 140),
-                v -> showVmSettings()));
-        this.commandGrid.addView(makeCommandTile("로그", "▤", Color.rgb(120, 80, 150),
-                v -> showLogs()));
+        // 연한 바탕 + 같은 계열의 진한 선 아이콘.
+        this.commandGrid.addView(makeCommandTile("APK 설치", R.drawable.ic_cmd_apk,
+                Color.rgb(227, 240, 253), Color.rgb(31, 111, 209), v -> openApkPicker()));
+        this.commandGrid.addView(makeCommandTile("ADB 설치", R.drawable.ic_cmd_adb,
+                Color.rgb(221, 243, 238), Color.rgb(11, 127, 110), v -> importAdbGuestApk(true)));
+        this.commandGrid.addView(makeCommandTile("실행 전 스캔", R.drawable.ic_cmd_scan,
+                Color.rgb(229, 235, 241), Color.rgb(63, 90, 117), v -> showRuntimeProbe()));
+        this.commandGrid.addView(makeCommandTile("설정", R.drawable.ic_cmd_settings,
+                Color.rgb(236, 235, 234), Color.rgb(85, 80, 79), v -> showVmSettings()));
+        this.commandGrid.addView(makeCommandTile("로그", R.drawable.ic_cmd_log,
+                Color.rgb(238, 231, 248), Color.rgb(107, 72, 176), v -> showLogs()));
         this.appGrid.removeAllViews();
         Set<String> installed = getInstalledPackages();
         for (String installId : installed) {
             this.appGrid.addView(makeInstalledAppTile(installId));
+        }
+        // 칸은 가중치로 폭을 나누므로, 마지막 줄이 덜 차면 있는 아이콘이 벌어진다.
+        // 빈 칸으로 다섯을 채워 위의 명령 아이콘과 줄을 맞춘다.
+        int columns = this.appGrid.getColumnCount();
+        int remainder = installed.size() % columns;
+        for (int i = 0; remainder != 0 && i < columns - remainder; i++) {
+            this.appGrid.addView(makeBaseTile(""));
         }
     }
 
@@ -253,6 +278,7 @@ public class MainActivity extends Activity {
             icon = imageView;
         } else {
             icon = makeGlyphIcon(firstLetter(label), Color.rgb(63, 81, 181), false);
+            ((TextView) icon).setTextSize(22.0f);
         }
         tile.addView(icon, new LinearLayout.LayoutParams(dp(56), dp(56)));
         tile.addView(makeTileLabel(label));
@@ -264,9 +290,18 @@ public class MainActivity extends Activity {
         return tile;
     }
 
-    private View makeCommandTile(String label, String glyph, int color, View.OnClickListener listener) {
+    private View makeCommandTile(String label, int iconRes, int tint, int ink, View.OnClickListener listener) {
         LinearLayout tile = makeBaseTile(label);
-        tile.addView(makeGlyphIcon(glyph, color, true), new LinearLayout.LayoutParams(dp(56), dp(56)));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(ink, PorterDuff.Mode.SRC_IN);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        icon.setPadding(dp(14), dp(14), dp(14), dp(14));
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(tint);
+        background.setCornerRadius(dp(18));
+        icon.setBackground(background);
+        tile.addView(icon, new LinearLayout.LayoutParams(dp(56), dp(56)));
         tile.addView(makeTileLabel(label));
         tile.setOnClickListener(listener);
         return tile;
@@ -278,10 +313,13 @@ public class MainActivity extends Activity {
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(0, 0, 0, 0);
         tile.setContentDescription(label);
-        GridLayout.LayoutParams params = new GridLayout.LayoutParams();
-        params.width = dp(76);
-        params.height = dp(112);
-        params.setMargins(dp(2), dp(10), dp(2), dp(10));
+        // 너비 0 + 가중치 1: 다섯 칸이 화면 폭을 똑같이 나눠 가진다. 고정 76dp 였을 때는
+        // 넷째 칸 뒤에 다섯째가 들어갈 자리가 없어 로그가 둘째 줄로 밀렸다.
+        GridLayout.LayoutParams params = new GridLayout.LayoutParams(
+                GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(GridLayout.UNDEFINED, 1f));
+        params.width = 0;
+        params.height = dp(104);
+        params.setMargins(0, dp(10), 0, dp(6));
         tile.setLayoutParams(params);
         return tile;
     }
@@ -296,7 +334,7 @@ public class MainActivity extends Activity {
         GradientDrawable background = new GradientDrawable();
         background.setColor(backgroundColor);
         background.setShape(circular ? GradientDrawable.OVAL : GradientDrawable.RECTANGLE);
-        background.setCornerRadius(dp(12));
+        background.setCornerRadius(dp(18));
         icon.setBackground(background);
         return icon;
     }
@@ -304,8 +342,8 @@ public class MainActivity extends Activity {
     private TextView makeTileLabel(String label) {
         TextView text = new TextView(this);
         text.setText(label);
-        text.setTextSize(13.0f);
-        text.setTextColor(Color.rgb(85, 85, 85));
+        text.setTextSize(12.0f);
+        text.setTextColor(Color.rgb(58, 54, 55));
         text.setGravity(Gravity.CENTER);
         text.setMaxLines(2);
         text.setEllipsize(TextUtils.TruncateAt.END);

@@ -99,6 +99,19 @@ SDL 보일러플레이트의 deprecation과 `PackageInfo.versionCode` 레거시 
 | `libsinglevm_qemu.so` | `GuestRunActivity.nativeBuildQemuArgs` / `nativeQemuProbe` / `nativeStartAndroid7Guest` | ⚠️ **자바 쪽에 대응 선언이 없음 — 죽은 바이너리** |
 | `libemugl_host_android.so` | (JNI export 없음) | `libemugl_probe.so`가 **dlopen으로 로드** (확인됨: probe가 `dlopen`/`dlsym`을 import하고 emugl 심볼을 정적으로 참조하지 않음) |
 
+**`libemugl_host_android.so` 는 원본에서 두 명령어를 고쳤습니다.** 렌더러 크기가
+`emugl_android_smoke_test` 안에 `initRenderer(480, 800, …)` 로 박혀 있어서(가상 주소
+`0xfec48`/`0xfec4c`, 파일 오프셋 동일), 게스트가 세로 화면밖에 될 수 없었습니다. 게임은
+가로로 돌기 때문에 두 `mov` 의 즉치값을 맞바꿔 `initRenderer(800, 480, …)` 로 만들었습니다.
+
+| | 명령어 | sha256 |
+|---|---|---|
+| 원본 | `mov w1,#480` (`52803c01`) / `mov w2,#800` (`52806402`) | `506d9ed3…021bdb5416` |
+| 패치 | `mov w1,#800` (`52806401`) / `mov w2,#480` (`52803c02`) | `e2f1b8e5…4d02ff1` |
+
+이 크기는 QEMU 의 `virtio-gpu-device,xres=800,yres=480`(앱의 `GuestRunActivity` 와
+`guest-image.yml`) 과 늘 같아야 합니다.
+
 **`libsinglevm_qemu.so`가 죽은 이유**: 자바 코드가 JNI로 QEMU를 띄우던 방식에서
 `ProcessBuilder`로 QEMU 실행파일을 exec하는 방식(`buildModernQemuCommand` +
 `startAndroid7Guest`)으로 이미 옮겨갔기 때문입니다. 그런데

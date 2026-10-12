@@ -383,7 +383,7 @@ jobs:
                 -accel tcg,thread=multi,tb-size=256 -smp 2 -m 1024
                 -global virtio-mmio.force-legacy=false
                 -display none -no-reboot
-                -device virtio-gpu-device,xres=480,yres=800
+                -device virtio-gpu-device,xres=800,yres=480
                 -device virtio-serial-device)
           # 개수는 GuestRunActivity.TRANSPORT_PIPE_COUNT 와 맞춰야 한다. 8 은 모자란다 —
           # boot-properties, adb, SurfaceFlinger, bootanimation, system_server 만으로

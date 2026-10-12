@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 홈 명령 아이콘. 24x24 선 아이콘, 색은 코드에서 입힌다(setColorFilter). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M4,8V5.5A1.5,1.5 0,0 1,5.5 4H8M16,4h2.5A1.5,1.5 0,0 1,20 5.5V8M20,16v2.5a1.5,1.5 0,0 1,-1.5 1.5H16M8,20H5.5A1.5,1.5 0,0 1,4 18.5V16"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M8.5,12.2l2.4,2.4 4.6,-5"/>
+</vector>

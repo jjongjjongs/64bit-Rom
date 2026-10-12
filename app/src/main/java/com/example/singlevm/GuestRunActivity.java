@@ -14,8 +14,9 @@ import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.WindowManager;
+import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import com.example.singlevm.engine.Android7GuestEngineAdapter;
@@ -68,6 +69,13 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
      * virtio-serial-device allows 31 ports, so 24 leaves room and stays clear of the limit.
      */
     private static final int TRANSPORT_PIPE_COUNT = 24;
+    /**
+     * 게스트 화면 크기. 게임은 가로로 돈다. libemugl_host_android.so 가 렌더러를 이 크기로
+     * 만들도록 패치돼 있으므로(원래 480x800 이 하드코딩돼 있었다) 셋이 맞아야 한다:
+     * 여기, QEMU 의 virtio-gpu, 그리고 그 라이브러리.
+     */
+    private static final int GUEST_WIDTH = 800;
+    private static final int GUEST_HEIGHT = 480;
     private static final long GUEST_DIAGNOSTICS_DELAY_MS = 60_000L;
     /** Drop a one-line kernel cmdline here to override the default without rebuilding the app. */
     private static final String KERNEL_CMDLINE_FILE = "kernel_cmdline.txt";
@@ -252,44 +260,94 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         super.onPause();
     }
 
+    /**
+     * 게임 화면만 보인다. 게스트는 가로(800x480)로 그리므로 화면을 가로로 고정하고, 서피스는
+     * 게스트와 같은 5:3 비율로 가운데 둔다 — 폰 화면(대략 20:9)에 꽉 채우면 늘어나 보인다.
+     *
+     * <p>로그는 없애지 않고 숨긴다. 폰에는 adb 가 없어서 이 화면의 로그가 부팅 진단의 유일한
+     * 창구다. 구석의 작은 버튼으로 켜고 끈다.
+     */
     private void buildUi() {
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(Color.rgb(18, 18, 18));
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(22), dp(18), dp(18));
-        scrollView.addView(root, new FrameLayout.LayoutParams(-1, -2));
-        TextView title = new TextView(this);
-        title.setText(getExtra(EXTRA_LABEL, "게임"));
-        title.setTextSize(24.0f);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        title.setTextColor(Color.WHITE);
-        title.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(title, new LinearLayout.LayoutParams(-1, -2));
-        TextView subtitle = new TextView(this);
-        subtitle.setText(this.engineAdapter.displayName());
-        subtitle.setTextSize(14.0f);
-        subtitle.setTextColor(Color.rgb(155, 155, 155));
-        subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
-        subtitle.setPadding(0, dp(6), 0, dp(18));
-        root.addView(subtitle, new LinearLayout.LayoutParams(-1, -2));
+        enterImmersive();
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+
+        FrameLayout stage = new FrameLayout(this) {
+            @Override
+            protected void onMeasure(int widthSpec, int heightSpec) {
+                int w = MeasureSpec.getSize(widthSpec);
+                int h = MeasureSpec.getSize(heightSpec);
+                // 게스트 비율 그대로(800:480 = 5:3). 남는 쪽은 검은 띠가 된다.
+                if (w * GUEST_HEIGHT > h * GUEST_WIDTH) {
+                    w = h * GUEST_WIDTH / GUEST_HEIGHT;
+                } else {
+                    h = w * GUEST_HEIGHT / GUEST_WIDTH;
+                }
+                super.onMeasure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+            }
+        };
         SurfaceView surfaceView = new SurfaceView(this);
         surfaceView.setBackgroundColor(Color.BLACK);
-        surfaceView.setZOrderOnTop(true);
         surfaceView.getHolder().setFormat(PixelFormat.RGBA_8888);
         surfaceView.getHolder().addCallback(this);
-        LinearLayout.LayoutParams surfaceParams = new LinearLayout.LayoutParams(-1, dp(320));
-        surfaceParams.setMargins(0, 0, 0, dp(14));
-        root.addView(surfaceView, surfaceParams);
+        stage.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(stage, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+
+        ScrollView logScroll = new ScrollView(this);
+        logScroll.setBackgroundColor(Color.argb(225, 12, 13, 16));
+        logScroll.setVisibility(View.GONE);
         this.logView = new TextView(this);
-        this.logView.setTextSize(13.0f);
+        this.logView.setTextSize(11.0f);
         this.logView.setTextColor(Color.rgb(222, 222, 222));
         this.logView.setTypeface(Typeface.MONOSPACE);
         this.logView.setText(READY_TEXT);
-        this.logView.setPadding(dp(12), dp(12), dp(12), dp(12));
-        root.addView(this.logView, new LinearLayout.LayoutParams(-1, -2));
-        setContentView(scrollView);
+        this.logView.setPadding(dp(16), dp(16), dp(16), dp(16));
+        logScroll.addView(this.logView, new FrameLayout.LayoutParams(-1, -2));
+        root.addView(logScroll, new FrameLayout.LayoutParams(-1, -1));
+
+        TextView logToggle = new TextView(this);
+        logToggle.setText("로그");
+        logToggle.setTextSize(12.0f);
+        logToggle.setTextColor(Color.argb(200, 255, 255, 255));
+        logToggle.setGravity(Gravity.CENTER);
+        logToggle.setBackgroundColor(Color.argb(90, 0, 0, 0));
+        logToggle.setContentDescription("로그 보기");
+        logToggle.setOnClickListener(v -> {
+            boolean show = logScroll.getVisibility() != View.VISIBLE;
+            logScroll.setVisibility(show ? View.VISIBLE : View.GONE);
+            logToggle.setText(show ? "닫기" : "로그");
+            if (show) {
+                logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+            }
+        });
+        FrameLayout.LayoutParams toggleParams =
+                new FrameLayout.LayoutParams(dp(56), dp(44), Gravity.TOP | Gravity.END);
+        toggleParams.setMargins(0, dp(8), dp(8), 0);
+        root.addView(logToggle, toggleParams);
+
+        setContentView(root);
+    }
+
+    @Override // android.app.Activity
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            enterImmersive();
+        }
+    }
+
+    /** 상태바와 내비게이션 바를 숨긴다. 가장자리에서 쓸면 잠깐 나타난다. */
+    @SuppressWarnings("deprecation")
+    private void enterImmersive() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
     }
 
     private void startGuestRuntime() {
@@ -462,7 +520,7 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         command.add("-global");
         command.add("virtio-mmio.force-legacy=false");
         command.add("-device");
-        command.add("virtio-gpu-device,xres=480,yres=800");
+        command.add("virtio-gpu-device,xres=" + GUEST_WIDTH + ",yres=" + GUEST_HEIGHT);
         File transportDir = new File(vmRootPath, "transport");
         if (!transportDir.exists()) {
             transportDir.mkdirs();
