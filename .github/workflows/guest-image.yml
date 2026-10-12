@@ -16,6 +16,7 @@ on:
     paths:
       - "guest/**"
       - ".github/workflows/guest-image.yml"
+      - ".github/scripts/publish-latest.sh"
   workflow_dispatch:
     inputs:
       api_level:
@@ -30,6 +31,10 @@ on:
 concurrency:
   group: guest-image-${{ github.ref }}
   cancel-in-progress: true
+
+# 결과를 "latest" 릴리스에 올리려면 쓰기 권한이 필요하다.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -484,6 +489,29 @@ jobs:
             guest-out/cache.img
           if-no-files-found: error
           compression-level: 6
+
+      # 폰에서 받기 쉽게 릴리스에도 올린다.
+      #
+      # 릴리스 파일은 하나에 2 GiB 미만이어야 하는데 userdata.img 가 정확히 2 GiB 라
+      # 낱개로는 못 올린다. 여섯 개를 ZIP 하나로 묶는다 — 이미지가 대부분 빈 공간이라
+      # 크게 줄고, 임포터가 그대로 읽는 형식이다(basename 으로 찾으므로 -j 로 경로를 뺀다).
+      # 4 GB 넘는 입력이라 zip64 가 되는데, 안드로이드 7 이상의 java.util.zip 은 읽는다.
+      - name: Publish to latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zipf="$RUNNER_TEMP/android7-guest.zip"
+          rm -f "$zipf"
+          (cd guest-out && zip -j -6 "$zipf" guest-image.prop kernel ramdisk.img system.img cache.img userdata.img)
+          size=$(stat -c %s "$zipf")
+          echo "android7-guest.zip: $size bytes"
+          if [ "$size" -ge 2147483648 ]; then
+            echo "::error::android7-guest.zip 이 2 GiB 이상이라 릴리스에 올릴 수 없다 ($size bytes). 아티팩트로 받을 것."
+            exit 1
+          fi
+          .github/scripts/publish-latest.sh guest "게스트 이미지 (android7-guest.zip)" "$zipf"
+          rm -f "$zipf"
 
       # 커널 빌드 로그만 수천 줄이라, 정작 필요한 결론이 로그 한가운데 묻힌다.
       # job 마지막에 다시 찍어서 tail 만 봐도 판정이 서게 한다.
