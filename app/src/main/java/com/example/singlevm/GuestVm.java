@@ -105,6 +105,7 @@ public final class GuestVm {
     private final Context app;
     private volatile Process qemuProcess;
     private volatile Process bridgeLogProcess;
+    private volatile QmpClient qmp;
     private volatile boolean probed = false;
     /** 우리가 껐을 때의 사유. null 이면 게스트가 스스로 끝난 것이다. */
     private volatile String stopReason = null;
@@ -285,12 +286,21 @@ public final class GuestVm {
             if (pipeSocket.exists()) {
                 pipeSocket.delete();
             }
-            String pipeId = "singlevmpipe" + pipeIndex;
+            String pipeId = QmpClient.CHARDEV_ID_PREFIX + pipeIndex;
             command.add("-chardev");
             command.add("socket,id=" + pipeId + ",path=" + pipeSocket.getAbsolutePath() + ",server=on,wait=off");
+            // 포트에 id 를 주어야 QEMU 가 게스트의 열기/닫기를 VSERPORT_CHANGE 로 알린다.
+            // QmpClient 가 그 닫기마다 chardev 를 새로 만들어 브리지 연결을 초기화한다.
             command.add("-device");
-            command.add("virtserialport,chardev=" + pipeId + ",name=org.singlevm.pipe." + pipeIndex);
+            command.add("virtserialport,chardev=" + pipeId + ",id=" + QmpClient.PORT_ID_PREFIX + pipeIndex
+                    + ",name=org.singlevm.pipe." + pipeIndex);
         }
+        File qmpSocket = new File(transportDir, "qmp.sock");
+        if (qmpSocket.exists()) {
+            qmpSocket.delete();
+        }
+        command.add("-qmp");
+        command.add("unix:" + qmpSocket.getAbsolutePath() + ",server=on,wait=off");
         command.add("-monitor");
         command.add("none");
         command.add("-nic");
@@ -415,6 +425,11 @@ public final class GuestVm {
         this.qemuProcess = process;
         final Process started = process;
         final long startedAt = SystemClock.elapsedRealtime();
+        File transportDir = new File(vmRootPath, "transport");
+        QmpClient monitor = new QmpClient(new File(transportDir, "qmp.sock"), transportDir,
+                text -> appendLog("\n" + text));
+        this.qmp = monitor;
+        monitor.start();
         new Thread(() -> {
             String result;
             try {
@@ -441,6 +456,11 @@ public final class GuestVm {
                 result = "QEMU_SESSION_FAILED: " + e.getMessage();
             }
             appendLog("\n\n" + result);
+            QmpClient qmpClient = this.qmp;
+            if (qmpClient != null) {
+                qmpClient.close();
+                this.qmp = null;
+            }
             Process logcat = this.bridgeLogProcess;
             if (logcat != null) {
                 logcat.destroy();

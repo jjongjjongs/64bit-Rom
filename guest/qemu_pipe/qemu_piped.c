@@ -264,6 +264,9 @@ struct pipe_slot {
     pthread_mutex_t scrub_lock;
     uint32_t scrub_size;    // 바꿔 쓸 응답 전체 길이 (NUL 포함)
     uint32_t scrub_off;     // 그중 이미 지나간 바이트
+
+    // 포트 재사용 유예 (아래 "포트 재사용" 참고). 첫 write 전에 이 시각까지 기다린다.
+    long reuse_wait_until_ms;
 };
 
 // 호스트가 실제로 답할 수 있는 서비스 목록.
@@ -442,8 +445,35 @@ static void scrub_host_stream(struct pipe_slot *s, unsigned char *buf, size_t n)
     pthread_mutex_unlock(&s->scrub_lock);
 }
 
+// ---------------------------------------------------------------------------
+// 포트 재사용
+//
+// 게스트가 포트를 닫아도 호스트 쪽 소켓 연결은 그대로다. 그 연결에 붙은 브리지는 처음 받은
+// "pipe:<서비스>" 헤더로 모드를 정하고, opengles 였다면 그 뒤 바이트를 전부 렌더러에 넘긴다.
+// 다음 프로세스가 같은 포트를 열고 헤더를 쓰면 그것이 이전 스트림의 "명령" 으로 들어가고,
+// 렌더러는 "pipe" 네 글자를 길이로 읽어 2 GB 를 할당하려다 죽는다. 실측(폰):
+//
+//   pipe 11 [opengles] closed ... → 370 ms 뒤 pipe 11: 서비스 'opengles'
+//   W/libc: malloc(18446744072818318950) failed
+//   pipe 11: read 가 5초째 대기 중 (호스트가 조용하다)
+//
+// 호스트 앱이 QEMU 의 VSERPORT_CHANGE(닫힘) 를 받아 chardev-change 로 소켓을 새로 만들고,
+// 브리지가 다시 붙어 렌더러 파이프가 새로 열린다. 그 교체가 끝나기 전에 새 헤더가 옛 연결로
+// 나가면 안 되므로 여기서 두 가지를 한다: (1) 빈 포트 중 가장 오래전에 닫힌 것을 고르고,
+// (2) 방금 닫힌 포트를 다시 써야 할 때는 첫 write 를 유예 시간이 지날 때까지 미룬다.
+// 유예는 쓰기 워커에서 기다리므로 디스패처는 막히지 않는다.
+// ---------------------------------------------------------------------------
+#define PORT_REUSE_COOLDOWN_MS 1000L
+
+static long now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
 static char g_ports[MAX_PIPES][288];
 static int g_port_taken[MAX_PIPES];
+static long g_port_freed_ms[MAX_PIPES];   // 0 = 아직 한 번도 닫힌 적 없음
 static int g_port_count = 0;
 static struct pipe_slot g_slots[MAX_PIPES];
 static pthread_mutex_t g_pool_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -599,6 +629,16 @@ static void *worker_main(void *arg) {
                 reply(r->unique, 0, buf, (size_t)n);
             }
         } else {
+            if (s->reuse_wait_until_ms) {
+                long wait = s->reuse_wait_until_ms - now_ms();
+                s->reuse_wait_until_ms = 0;
+                if (wait > 0) {
+                    put("pipe %d: 방금 닫힌 포트 재사용 - 호스트가 연결을 새로 맺도록 %ld ms 기다린다",
+                        s->slot_no, wait);
+                    struct timespec ts = { wait / 1000, (wait % 1000) * 1000000L };
+                    while (nanosleep(&ts, &ts) < 0 && errno == EINTR) {}
+                }
+            }
             size_t done = 0;
             int failed = 0;
             while (done < r->size) {
@@ -653,11 +693,14 @@ static int slot_alloc(void) {
     }
     if (idx < 0) { pthread_mutex_unlock(&g_pool_lock); return -1; }
 
+    // 빈 포트 중 가장 오래전에 닫힌 것. 한 번도 안 쓴 포트(0)가 먼저 온다.
     int port = -1;
     for (int p = 0; p < g_port_count; p++) {
-        if (!g_port_taken[p]) { port = p; break; }
+        if (g_port_taken[p]) continue;
+        if (port < 0 || g_port_freed_ms[p] < g_port_freed_ms[port]) port = p;
     }
     if (port < 0) { pthread_mutex_unlock(&g_pool_lock); return -2; }
+    long reuse_wait_until = g_port_freed_ms[port] ? g_port_freed_ms[port] + PORT_REUSE_COOLDOWN_MS : 0;
 
     int fd = open(g_ports[port], O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0) {
@@ -678,6 +721,7 @@ static int slot_alloc(void) {
     s->header_seen = 0;
     s->rejected = 0;
     s->service[0] = '\0';
+    s->reuse_wait_until_ms = reuse_wait_until;
     pthread_mutex_init(&s->scrub_lock, NULL);
     pthread_mutex_init(&s->rq.lock, NULL);
     pthread_cond_init(&s->rq.cv, NULL);
@@ -721,6 +765,7 @@ static void slot_free(struct pipe_slot *s) {
     pthread_mutex_lock(&g_pool_lock);
     close(s->fd);
     g_port_taken[s->port_index] = 0;
+    g_port_freed_ms[s->port_index] = now_ms();
     put("pipe %d [%s] closed, %s freed (보냄 %lu, 받음 %lu 바이트)",
         s->slot_no, s->service[0] ? s->service : "?", g_ports[s->port_index],
         s->tx, s->rx);

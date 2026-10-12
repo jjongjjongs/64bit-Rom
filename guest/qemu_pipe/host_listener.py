@@ -66,8 +66,11 @@ def watch(path: str) -> None:
         while True:
             data = sock.recv(65536)
             if not data:
-                log(f"[{name}] 게스트가 닫음 (총 {total} 바이트)")
-                return
+                # 게스트가 포트를 닫으면 qmp_portswap.py 가 chardev 를 새로 만들고, 그러면
+                # 이 연결이 끊긴다. 앱의 브리지가 하듯 새 소켓에 다시 붙는다.
+                log(f"[{name}] 호스트 소켓이 닫힘 (총 {total} 바이트) - 다시 붙는다")
+                sock.close()
+                return watch(path)
             total += len(data)
             if not header_done:
                 # goldfish pipe 의 첫 쓰기는 NUL 로 끝나는 서비스 이름이다.

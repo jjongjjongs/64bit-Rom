@@ -1057,6 +1057,42 @@ EGL 은 그 타입을 `eglWaitClient()`(glFinish) 로 흉내 내 즉시 신호�
 같은 종류의 누출이 GL 쪽(`rcGetGLString(GL_EXTENSIONS)`, 폰의 GLES 확장 목록)에도
 있을 수 있습니다. 게임이 돌기 시작하면 그쪽도 봐야 합니다.
 
+### 7.14 포트를 다시 쓰면 렌더러가 죽습니다 — 닫힌 포트의 호스트 소켓은 살아 있습니다
+
+같은 로그의 두 번째 문제입니다. system_server 가 AssetAtlas 를 올리고 파이프 11 을
+닫은 뒤 370 ms 만에 다시 열자, 호스트에서 곧바로 이것이 찍히고 그 파이프는 영영 답을
+못 받았습니다:
+
+```
+qemu_piped: pipe 11 [opengles] closed, /dev/vport3p11 freed (보냄 1339369 ...)
+qemu_piped: pipe 11: 서비스 'opengles'
+W/libc: malloc(18446744072818318950) failed: returning null pointer
+qemu_piped: pipe 11: read 가 5초째 대기 중 (호스트가 조용하다)
+```
+
+게스트가 virtio-serial 포트를 닫아도 QEMU 는 그 포트의 호스트 소켓 연결을 끊지
+않습니다. 소켓에 붙어 있는 브리지는 처음 받은 `pipe:<서비스>` 헤더로 모드를 정하고,
+opengles 였다면 이후 바이트를 모두 렌더러에 넘깁니다. 새 프로세스의 `pipe:opengles\0`
+헤더가 그 스트림의 "명령" 으로 들어가고, 렌더러의 ReadBuffer 는 `"pipe"` 네 글자를 명령
+길이로 읽어 2 GB 가 넘는 버퍼를 잡으려다 실패(그 malloc 이 바로 위 줄)하고 렌더 스레드가
+빠져나갑니다. 채널은 열린 채라 브리지는 끊김을 모르고, 게스트는 답을 기다립니다. 진짜
+goldfish 호스트에서는 파이프의 열기/닫기가 그대로 보이므로 이런 일이 없습니다.
+
+고친 자리는 양쪽입니다.
+
+- **앱(QmpClient.java)**: QEMU 에 `-qmp` 모니터를 붙이고 포트마다 `id=singlevmportN` 을
+  줍니다. 게스트가 포트를 닫으면 QEMU 가 `VSERPORT_CHANGE` 를 보내고, 앱은
+  `chardev-change` 로 그 포트의 chardev 를 같은 경로의 새 소켓 서버로 바꿉니다. QEMU 가
+  옛 소켓을 닫으므로 브리지는 끊김을 보고 다시 붙고(실측: `disconnected` 직후
+  `connected`), 렌더러 파이프도 새로 열립니다. 이전 프로세스의 렌더 스레드는 그때 함께
+  정리됩니다. `chardev-change` 는 포트의 백엔드가 켜져 있을 때(게스트 드라이버가
+  DRIVER_OK 를 쓴 뒤)만 받아들여지므로, 게스트 없이 띄운 QEMU 에서는 "Chardev user does
+  not support chardev hotswap" 으로 거절됩니다 — CI 는 실제 부팅 중에 시험합니다
+  (`qmp_portswap.py`).
+- **게스트(qemu_piped)**: 빈 포트 중 가장 오래전에 닫힌 것을 고르고, 방금 닫힌 포트를
+  다시 써야 하면 첫 write 를 1 초 미룹니다. 교체가 끝나기 전에 새 헤더가 옛 연결로 새어
+  나가지 않게 하기 위해서입니다.
+
 ---
 
 ## 8. 폰으로 옮긴 뒤

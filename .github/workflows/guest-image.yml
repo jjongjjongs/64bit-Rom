@@ -390,8 +390,10 @@ jobs:
           # 다섯이고 렌더링하는 앱마다 자기 파이프가 하나씩 더 필요하다.
           for i in $(seq 0 23); do
             ARGS+=(-chardev "socket,id=singlevmpipe$i,path=$BOOT/transport/pipe$i.sock,server=on,wait=off")
-            ARGS+=(-device "virtserialport,chardev=singlevmpipe$i,name=org.singlevm.pipe.$i")
+            ARGS+=(-device "virtserialport,chardev=singlevmpipe$i,id=singlevmport$i,name=org.singlevm.pipe.$i")
           done
+          # 앱과 같은 QMP 모니터. 게스트가 포트를 닫을 때 chardev-change 가 받아들여지는지 본다.
+          ARGS+=(-qmp "unix:$BOOT/transport/qmp.sock,server=on,wait=off")
           ARGS+=(-monitor none -nic none
                  -initrd "$WORK/ramdisk.img"
                  -drive "if=none,id=system,format=raw,readonly=on,file=$WORK/system.img"
@@ -423,10 +425,26 @@ jobs:
             python3 guest/qemu_pipe/host_listener.py "$BOOT/transport" \
               > "$BOOT/pipe-listener.log" 2>&1 &
             local listener=$!
+            python3 guest/qemu_pipe/qmp_portswap.py "$BOOT/transport/qmp.sock" "$BOOT/transport" \
+              > "$BOOT/qmp-portswap.log" 2>&1 &
+            local portswap=$!
 
             timeout "$BOOT_SECONDS" qemu-system-aarch64 "${ARGS[@]}" \
               -serial "file:$serial" -kernel "$kern" > "$stdout" 2>&1 || true
-            kill "$listener" 2>/dev/null || true
+            kill "$listener" "$portswap" 2>/dev/null || true
+            {
+              echo "### 포트 닫힘 → chardev 교체 (qmp_portswap.py)"
+              echo '```'
+              cat "$BOOT/qmp-portswap.log" 2>/dev/null || echo "(기록 없음)"
+              echo '```'
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            if grep -q "^.*FAIL" "$BOOT/qmp-portswap.log" 2>/dev/null; then
+              echo "::error::QMP chardev-change 가 거절됐다. 앱에서 포트 재사용 때 브리지가 초기화되지 않는다."
+              exit 1
+            fi
+            if ! grep -q "OK pipe.* chardev 교체됨" "$BOOT/qmp-portswap.log" 2>/dev/null; then
+              echo "::warning::게스트가 포트를 닫는 것을 보지 못했다 - chardev-change 가 시험되지 않았다."
+            fi
             local size
             size=$(stat -c%s "$serial" 2>/dev/null || echo 0)
             {
@@ -469,6 +487,7 @@ jobs:
             /tmp/boot/serial-*.log
             /tmp/boot/qemu-*.log
             /tmp/boot/pipe-listener.log
+            /tmp/boot/qmp-portswap.log
           if-no-files-found: warn
 
       - name: Show disk space after

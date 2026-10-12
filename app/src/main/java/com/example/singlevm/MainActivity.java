@@ -674,13 +674,40 @@ public class MainActivity extends Activity {
         EngineReadiness primaryState = primaryEngine.inspect(this, this.vmRoot);
         EngineReadiness legacyState = EngineRegistry.legacy().inspect(this, this.vmRoot);
         String message = "가상롬 루트:\n" + this.vmRoot.getAbsolutePath() + "\n\nADB 설치 경로:\n" + this.externalGuestApk.getAbsolutePath() + "\n\n기본 엔진: " + primaryEngine.displayName() + "\n상태: " + primaryState.summary + "\n\n" + primaryState.details + "\n\n기존 시험 엔진: " + legacyState.summary + "\n\n설치된 게임 수: " + getInstalledPackages().size();
-        new AlertDialog.Builder(this)
-                .setTitle("설정")
-                .setMessage(message)
-                .setPositiveButton("확인", null)
-                .setNeutralButton("Android 7 구성 가져오기", (dialog, which) -> openAndroid7ImagePicker())
-                .setNegativeButton("가상롬 초기화", (dialog, which) -> confirmReset())
-                .show();
+        // AlertDialog 의 기본 버튼은 글자가 한 줄에 안 들어가면 세로로 쌓이고, 그러면 긴 본문
+        // 아래로 스크롤해야 버튼이 보인다. 본문만 스크롤하고 버튼은 항상 한 줄로 바닥에 둔다.
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        TextView body = new TextView(this);
+        body.setText(message);
+        body.setTextSize(14f);
+        body.setTextIsSelectable(true);
+        body.setPadding(dp(24), dp(8), dp(24), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(body);
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(dp(8), dp(4), dp(8), dp(4));
+        root.addView(actions, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("설정").setView(root).create();
+        addDialogAction(actions, "구성 가져오기", () -> { dialog.dismiss(); openAndroid7ImagePicker(); });
+        addDialogAction(actions, "가상롬 초기화", () -> { dialog.dismiss(); confirmReset(); });
+        addDialogAction(actions, "확인", dialog::dismiss);
+        dialog.show();
+    }
+
+    /** 대화상자 바닥의 버튼 한 칸. 세 개가 폭을 똑같이 나눠 가져 어떤 글자 길이에도 한 줄이다. */
+    private void addDialogAction(LinearLayout row, String label, Runnable action) {
+        Button button = new Button(this, null, android.R.attr.borderlessButtonStyle);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setTextSize(13f);
+        button.setSingleLine(true);
+        button.setOnClickListener(v -> action.run());
+        row.addView(button, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     }
 
     private void openAndroid7ImagePicker() {
