@@ -3,12 +3,16 @@ package com.example.singlevm;
 import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
 import android.os.SystemClock;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.util.SparseIntArray;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -55,6 +59,10 @@ final class QmpClient implements Runnable {
     private volatile LocalSocket socket;
     private volatile boolean closed = false;
     private int swaps = 0;
+    /** 보낸 chardev-change 의 파이프 번호. QMP 는 응답을 보낸 순서대로 돌려준다. */
+    private final ArrayDeque<Integer> pending = new ArrayDeque<>();
+    /** 파이프마다 지금까지 만든 소켓 세대. 경로는 pipeN.g<세대>.sock 이다. */
+    private final SparseIntArray generation = new SparseIntArray();
 
     QmpClient(File socketFile, File transportDir, Log log) {
         this.socketFile = socketFile;
@@ -140,12 +148,19 @@ final class QmpClient implements Runnable {
     }
 
     private void handle(JSONObject message, OutputStream out) throws IOException, JSONException {
-        if (message.has("error")) {
-            this.log.line("[qmp] 오류 응답: " + message.getJSONObject("error").optString("desc"));
+        if (message.has("error") || message.has("return")) {
+            Integer pipeIndex = this.pending.pollFirst();
+            if (message.has("error")) {
+                this.log.line("[qmp] 오류 응답" + (pipeIndex == null ? "" : " (pipe" + pipeIndex + ")") + ": "
+                        + message.getJSONObject("error").optString("desc"));
+            } else if (pipeIndex != null) {
+                // chardev-change 가 끝났다. 옛 chardev 는 사라지며 자기 소켓 파일을 지웠고, 새
+                // chardev 는 새 경로에 있다. 브리지가 아는 경로를 그리로 돌린다.
+                pointBridgePath(pipeIndex);
+            }
             return;
         }
         if (!message.has("event")) {
-            // "return" 은 chardev-change 의 승인이다. 성공은 조용히 지나간다.
             return;
         }
         if (!"VSERPORT_CHANGE".equals(message.getString("event"))) {
@@ -162,13 +177,20 @@ final class QmpClient implements Runnable {
         } catch (NumberFormatException e) {
             return;
         }
-        File pipeSocket = new File(this.transportDir, "pipe" + pipeIndex + ".sock");
         // 폴더가 없으면 QEMU 의 bind 가 ENOENT 로 실패한다(실측: 가상롬이 도는 중에 초기화를 눌러
         // 루트가 지워졌을 때). 다시 만들어 두면 교체는 된다.
         if (!this.transportDir.isDirectory() && !this.transportDir.mkdirs()) {
             this.log.line("[qmp] 전송 폴더가 없어 pipe" + pipeIndex + " 교체를 건너뛴다");
             return;
         }
+        // 같은 경로로 바꾸면 안 된다. QEMU 는 새 chardev 를 먼저 만들고(경로를 지우고 다시 bind)
+        // 옛 chardev 를 없애는데, 옛것이 사라지면서 "자기" 경로를 unlink 한다 — 그 경로가 새
+        // 소켓의 경로이기도 해서 새 소켓 파일이 함께 사라진다. 실측: 교체 뒤 브리지가 "QEMU GLES
+        // socket connection timed out", CI 의 listener 가 "소켓이 생기지 않음". 그래서 세대마다
+        // 다른 경로에 만들고, 브리지가 아는 pipeN.sock 은 그리로 가는 심볼릭 링크로 바꾼다.
+        int nextGeneration = this.generation.get(pipeIndex, 0) + 1;
+        this.generation.put(pipeIndex, nextGeneration);
+        File pipeSocket = new File(this.transportDir, "pipe" + pipeIndex + ".g" + nextGeneration + ".sock");
         JSONObject addr = new JSONObject()
                 .put("type", "unix")
                 .put("data", new JSONObject().put("path", pipeSocket.getAbsolutePath()));
@@ -179,11 +201,36 @@ final class QmpClient implements Runnable {
                 .put("id", CHARDEV_ID_PREFIX + pipeIndex)
                 .put("backend", backend);
         send(out, new JSONObject().put("execute", "chardev-change").put("arguments", arguments));
+        this.pending.addLast(pipeIndex);
         this.swaps++;
         // 처음 몇 번만 남긴다. 그 뒤로는 평범한 일이라 로그를 채울 필요가 없다.
         if (this.swaps <= 5) {
             this.log.line("[qmp] 게스트가 pipe" + pipeIndex + " 를 닫음 - 호스트 소켓을 새로 만든다"
                     + (this.swaps == 5 ? " (이후 생략)" : ""));
+        }
+    }
+
+    /**
+     * pipeN.sock 을 현재 세대의 소켓으로 가는 심볼릭 링크로 바꾼다. 브리지는 끊긴 뒤 같은 경로로
+     * 다시 붙으려 하므로(실측: 약 15 초 동안 재시도) 그 사이에 링크가 생기면 된다. 임시 이름으로
+     * 만들어 rename 하므로 브리지가 보기에 경로는 "없음" 아니면 "새 소켓" 둘 중 하나다.
+     */
+    private void pointBridgePath(int pipeIndex) {
+        int currentGeneration = this.generation.get(pipeIndex, 0);
+        File link = new File(this.transportDir, "pipe" + pipeIndex + ".sock");
+        File temp = new File(this.transportDir, "pipe" + pipeIndex + ".sock.tmp");
+        String target = "pipe" + pipeIndex + ".g" + currentGeneration + ".sock";
+        try {
+            temp.delete();
+            Os.symlink(target, temp.getAbsolutePath());
+            Os.rename(temp.getAbsolutePath(), link.getAbsolutePath());
+        } catch (ErrnoException e) {
+            this.log.line("[qmp] pipe" + pipeIndex + " 링크 실패: " + e.getMessage());
+            return;
+        }
+        // 지난 세대의 소켓 파일은 QEMU 가 지우지만, 혹시 남았으면 치운다.
+        if (currentGeneration > 1) {
+            new File(this.transportDir, "pipe" + pipeIndex + ".g" + (currentGeneration - 1) + ".sock").delete();
         }
     }
 

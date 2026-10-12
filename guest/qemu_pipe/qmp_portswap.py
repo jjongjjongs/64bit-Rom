@@ -46,6 +46,7 @@ def main() -> int:
     sock.sendall(b'{"execute":"qmp_capabilities"}\n')
     log("OK qmp 연결됨")
     pending = []   # 보낸 chardev-change 의 파이프 번호, 응답 순서대로
+    generation = {}
     while True:
         line = f.readline()
         if not line:
@@ -58,8 +59,18 @@ def main() -> int:
             n = pending.pop(0)
             if "error" in msg:
                 log(f"FAIL pipe{n} chardev-change: {msg['error'].get('desc')}")
-            else:
-                log(f"OK pipe{n} chardev 교체됨")
+                continue
+            # 옛 chardev 가 사라지며 자기 경로(이전 세대 소켓)를 지웠다. 브리지/listener 가 아는
+            # pipeN.sock 을 새 세대 소켓으로 가는 링크로 바꾼다 (QmpClient.pointBridgePath 와 동일).
+            link = os.path.join(transport, f"pipe{n}.sock")
+            tmp = link + ".tmp"
+            try:
+                os.remove(tmp)
+            except FileNotFoundError:
+                pass
+            os.symlink(f"pipe{n}.g{generation[n]}.sock", tmp)
+            os.rename(tmp, link)
+            log(f"OK pipe{n} chardev 교체됨 -> pipe{n}.g{generation[n]}.sock")
             continue
         if msg.get("event") != "VSERPORT_CHANGE":
             continue
@@ -68,7 +79,8 @@ def main() -> int:
         if data.get("open", True) or not port_id.startswith(PORT_ID_PREFIX):
             continue
         n = int(port_id[len(PORT_ID_PREFIX):])
-        path = os.path.join(transport, f"pipe{n}.sock")
+        generation[n] = generation.get(n, 0) + 1
+        path = os.path.join(transport, f"pipe{n}.g{generation[n]}.sock")
         cmd = {"execute": "chardev-change", "arguments": {
             "id": f"{CHARDEV_ID_PREFIX}{n}",
             "backend": {"type": "socket", "data": {

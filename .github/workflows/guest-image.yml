@@ -445,6 +445,12 @@ jobs:
             if ! grep -q "OK pipe.* chardev 교체됨" "$BOOT/qmp-portswap.log" 2>/dev/null; then
               echo "::warning::게스트가 포트를 닫는 것을 보지 못했다 - chardev-change 가 시험되지 않았다."
             fi
+            # 교체 뒤 listener 가 새 소켓에 다시 붙어야 한다. 앱의 브리지가 하는 일과 같다.
+            if grep -q "연결 실패" "$BOOT/pipe-listener.log" 2>/dev/null; then
+              echo "::error::포트 교체 뒤 listener 가 다시 붙지 못했다. 앱에서도 브리지가 끊긴 채 남는다."
+              grep "연결 실패\|다시 붙는다" "$BOOT/pipe-listener.log" | head -20
+              exit 1
+            fi
             local size
             size=$(stat -c%s "$serial" 2>/dev/null || echo 0)
             {

@@ -2,6 +2,7 @@ package com.example.singlevm;
 
 import android.content.Context;
 import android.os.SystemClock;
+import android.util.Base64;
 import android.view.Surface;
 import com.example.singlevm.engine.Android7GuestEngineAdapter;
 import com.example.singlevm.engine.EngineAdapter;
@@ -70,8 +71,26 @@ public final class GuestVm {
             "console=ttyAMA0 earlycon=pl011,0x09000000 keep_bootcon ignore_loglevel printk.devkmsg=on"
                 + " qemu=1 qemu.gles=1"
                     + " androidboot.hardware=ranchu androidboot.selinux=permissive"
+                    // 시리얼에 루트 셸(init.rc 의 console 서비스)을 띄운다. QEMU 의 stdin 으로
+                    // 명령을 넣고 stdout 으로 결과를 받는다 — captureGuestScreen 이 그 통로로
+                    // screencap 을 실행한다. 이게 없으면 init 이 "service 'console' requires
+                    // console" 하고 셸을 띄우지 않는다.
+                    + " androidboot.console=ttyAMA0"
                     + " binder.devices=binder,hwbinder,vndbinder"
                     + " rdinit=/init.wrapper root=/dev/ram0 rw";
+    /**
+     * 게스트 화면 캡처. 콘솔 셸에서 screencap 을 찍고 base64 로 시리얼에 흘린다. 표식은 셸이
+     * 되돌려 주는 명령 echo 와 구분되도록 따옴표로 쪼개 쓴다: echo 된 줄에는 BE''GIN 이 그대로
+     * 남고, 실제 출력에만 SVMSHOT_BEGIN 이 나온다. 줄마다 붙는 SVMB64: 는 시리얼에 섞여 드는
+     * logcat 줄과 가르기 위한 것이다.
+     */
+    private static final String SHOT_BEGIN = "SVMSHOT_BEGIN";
+    private static final String SHOT_END = "SVMSHOT_END";
+    private static final String SHOT_LINE = "SVMB64:";
+    private static final String SHOT_COMMAND =
+            "\rscreencap -p /data/local/tmp/svm.png && echo SVMSHOT_BE''GIN"
+                    + " && base64 /data/local/tmp/svm.png | sed 's/^/SVMB64:/' && echo SVMSHOT_E''ND\r";
+    private static final long SHOT_TIMEOUT_MS = 40_000L;
     /** How many trailing QEMU output lines are kept in last_run.txt. */
     private static final int QEMU_LOG_TAIL_LINES = 120;
     /** How often the running log is mirrored somewhere a file manager can open. */
@@ -106,6 +125,14 @@ public final class GuestVm {
     private volatile Process qemuProcess;
     private volatile Process bridgeLogProcess;
     private volatile QmpClient qmp;
+    /** 캡처 중이면 base64 조각이 쌓인다. 아니면 null. */
+    private volatile StringBuilder shotBuffer;
+    private volatile ShotCallback shotCallback;
+
+    public interface ShotCallback {
+        /** {@code png} 가 null 이면 {@code error} 에 이유가 있다. 임의의 스레드에서 불린다. */
+        void onResult(File png, String error);
+    }
     private volatile boolean probed = false;
     /** 우리가 껐을 때의 사유. null 이면 게스트가 스스로 끝난 것이다. */
     private volatile String stopReason = null;
@@ -209,6 +236,90 @@ public final class GuestVm {
         }
     }
 
+    /**
+     * 게스트의 화면을 PNG 로 받아 온다. 게스트 SurfaceFlinger 가 보는 화면이라, 호스트 렌더러의
+     * 출력(실행 화면)과 비교하면 검은 화면이 어느 쪽 탓인지 가를 수 있다.
+     */
+    public void captureGuestScreen(ShotCallback callback) {
+        Process process = this.qemuProcess;
+        if (process == null || !process.isAlive()) {
+            callback.onResult(null, "가상롬이 꺼져 있습니다.");
+            return;
+        }
+        if (this.shotCallback != null) {
+            callback.onResult(null, "이미 캡처 중입니다.");
+            return;
+        }
+        this.shotBuffer = null;
+        this.shotCallback = callback;
+        try {
+            process.getOutputStream().write(SHOT_COMMAND.getBytes(StandardCharsets.US_ASCII));
+            process.getOutputStream().flush();
+        } catch (IOException e) {
+            this.shotCallback = null;
+            callback.onResult(null, "콘솔에 쓸 수 없습니다: " + e.getMessage());
+            return;
+        }
+        appendLog("\n[화면 캡처] 게스트 콘솔에 screencap 요청");
+        new Thread(() -> {
+            SystemClock.sleep(SHOT_TIMEOUT_MS);
+            ShotCallback waiting = this.shotCallback;
+            if (waiting == callback) {
+                this.shotCallback = null;
+                this.shotBuffer = null;
+                appendLog("\n[화면 캡처] 응답 없음");
+                callback.onResult(null, "게스트가 " + (SHOT_TIMEOUT_MS / 1000) + "초 안에 답하지 않았습니다. "
+                        + "콘솔 셸이 아직 안 떴거나(부팅 중) screencap 이 실패한 것입니다.");
+            }
+        }, "single-vm-shot-timeout").start();
+    }
+
+    /** QEMU 출력 한 줄을 캡처 상태 기계에 넣는다. 캡처 중이 아니면 거의 공짜다. */
+    private void handleShotLine(String line) {
+        if (this.shotCallback == null) {
+            return;
+        }
+        if (this.shotBuffer == null) {
+            if (line.contains(SHOT_BEGIN) && !line.contains("BE''GIN")) {
+                this.shotBuffer = new StringBuilder();
+            }
+            return;
+        }
+        if (line.contains(SHOT_END) && !line.contains("E''ND")) {
+            finishShot();
+            return;
+        }
+        int at = line.indexOf(SHOT_LINE);
+        if (at >= 0) {
+            this.shotBuffer.append(line.substring(at + SHOT_LINE.length()).trim());
+        }
+    }
+
+    private void finishShot() {
+        ShotCallback callback = this.shotCallback;
+        StringBuilder encoded = this.shotBuffer;
+        this.shotCallback = null;
+        this.shotBuffer = null;
+        if (callback == null || encoded == null) {
+            return;
+        }
+        File out = new File(new File(this.app.getFilesDir(), "single_vm/logs"), "guest-screen.png");
+        try {
+            byte[] png = Base64.decode(encoded.toString(), Base64.DEFAULT);
+            if (png.length < 8) {
+                throw new IllegalArgumentException("PNG 가 비어 있음 (" + png.length + " bytes)");
+            }
+            try (FileOutputStream stream = new FileOutputStream(out)) {
+                stream.write(png);
+            }
+            appendLog("\n[화면 캡처] " + out.getName() + " 저장 (" + png.length + " bytes)");
+            callback.onResult(out, null);
+        } catch (IOException | IllegalArgumentException e) {
+            appendLog("\n[화면 캡처] 실패: " + e.getMessage());
+            callback.onResult(null, "PNG 복원 실패: " + e.getMessage());
+        }
+    }
+
     /** 실행 화면의 서피스를 렌더러 출력으로 붙인다. 가상롬은 그 전부터 돌고 있어도 된다. */
     public void attachSurface(Surface surface) {
         ensureProbed();
@@ -281,11 +392,17 @@ public final class GuestVm {
         // outright on the mmio device ("Property 'virtio-serial-device.disable-legacy' not found").
         command.add("-device");
         command.add("virtio-serial-device");
+        // 지난 실행이 남긴 소켓과 세대별 소켓(pipeN.gK.sock, QmpClient 참고), 링크를 치운다.
+        File[] stale = transportDir.listFiles();
+        if (stale != null) {
+            for (File file : stale) {
+                if (file.getName().startsWith("pipe") && file.getName().contains(".sock")) {
+                    file.delete();
+                }
+            }
+        }
         for (int pipeIndex = 0; pipeIndex < TRANSPORT_PIPE_COUNT; pipeIndex++) {
             File pipeSocket = new File(transportDir, "pipe" + pipeIndex + ".sock");
-            if (pipeSocket.exists()) {
-                pipeSocket.delete();
-            }
             String pipeId = QmpClient.CHARDEV_ID_PREFIX + pipeIndex;
             command.add("-chardev");
             command.add("socket,id=" + pipeId + ",path=" + pipeSocket.getAbsolutePath() + ",server=on,wait=off");
@@ -494,6 +611,7 @@ public final class GuestVm {
                 logWriter.write(line);
                 logWriter.write('\n');
                 logWriter.flush();
+                handleShotLine(line);
                 synchronized (this.qemuTail) {
                     this.qemuTail.addLast(line);
                     while (this.qemuTail.size() > QEMU_LOG_TAIL_LINES) {

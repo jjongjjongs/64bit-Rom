@@ -12,6 +12,8 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
@@ -568,6 +570,7 @@ public class MainActivity extends Activity {
                     .setMessage("아직 로그가 없습니다.\n\n" + logDir.getAbsolutePath()
                             + "\n\n게임을 한 번 실행하면 QEMU 부팅 로그가 여기에 쌓입니다.")
                     .setPositiveButton("확인", null)
+                    .setNeutralButton("화면 캡처", (dialog, which) -> captureGuestScreen())
                     .show();
             return;
         }
@@ -586,7 +589,42 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("로그")
                 .setItems(labels, (dialog, which) -> showLogFile(files[which]))
+                .setNeutralButton("화면 캡처", (dialog, which) -> captureGuestScreen())
                 .setNegativeButton("닫기", null)
+                .show();
+    }
+
+    /** 게스트 안에서 screencap 을 찍어 보여 준다. 실행 화면이 검을 때 어느 쪽 문제인지 가른다. */
+    private void captureGuestScreen() {
+        GuestVm vm = GuestVm.get(this);
+        if (!vm.isRunning()) {
+            showToast("가상롬이 꺼져 있습니다.");
+            return;
+        }
+        showToast("게스트 화면을 캡처하는 중입니다 (몇 초 걸립니다).");
+        vm.captureGuestScreen((png, error) -> runOnUiThread(() -> {
+            if (png == null) {
+                showError("화면 캡처 실패", error);
+            } else {
+                showImageFile(png);
+            }
+        }));
+    }
+
+    private void showImageFile(File file) {
+        Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+        if (bitmap == null) {
+            showError("이미지 열기 실패", file.getName() + " 을 그림으로 읽을 수 없습니다.");
+            return;
+        }
+        ImageView view = new ImageView(this);
+        view.setImageBitmap(bitmap);
+        view.setAdjustViewBounds(true);
+        view.setPadding(dp(8), dp(8), dp(8), dp(8));
+        new AlertDialog.Builder(this)
+                .setTitle(file.getName() + " (" + bitmap.getWidth() + "x" + bitmap.getHeight() + ")")
+                .setView(view)
+                .setPositiveButton("닫기", null)
                 .show();
     }
 
@@ -608,6 +646,10 @@ public class MainActivity extends Activity {
     }
 
     private void showLogFile(final File file) {
+        if (file.getName().endsWith(".png")) {
+            showImageFile(file);
+            return;
+        }
         final String tail = readTail(file, LOG_VIEW_TAIL_BYTES);
         String header = file.getName() + "  (" + humanSize(file.length()) + ")";
         if (file.length() > LOG_VIEW_TAIL_BYTES) {
