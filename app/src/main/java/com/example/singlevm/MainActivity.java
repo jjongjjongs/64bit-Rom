@@ -688,6 +688,8 @@ public class MainActivity extends Activity {
                 ZipEntry system = findZipEntry(zip, "system.img");
                 ZipEntry userdata = findZipEntry(zip, "userdata.img");
                 ZipEntry cache = findZipEntry(zip, "cache.img");
+                // 우리 빌드가 넣어 주는 표식. 없으면 이 ZIP 은 우리 것이 아니다.
+                ZipEntry stamp = findZipEntry(zip, "guest-image.prop");
                 if (kernel == null || ramdisk == null || system == null) {
                     throw new IOException("ZIP에 kernel-ranchu/kernel-qemu, ramdisk.img, system.img가 필요합니다.");
                 }
@@ -706,9 +708,27 @@ public class MainActivity extends Activity {
                 if (cache != null) {
                     extractZipEntry(zip, cache, new File(this.android7ImageDir, "cache.img"));
                 }
+                // 표식을 같이 심는다. 남겨 두면 부팅 전 점검이 어느 빌드인지 말해 주고,
+                // 없으면 거절할 수 있다. 이전 임포트의 표식이 남아 새 이미지를 우리
+                // 빌드로 둔갑시키지 않도록, 없을 때는 지운다.
+                File stampFile = new File(this.android7ImageDir, "guest-image.prop");
+                if (stamp != null) {
+                    extractZipEntry(zip, stamp, stampFile);
+                } else if (stampFile.exists() && !stampFile.delete()) {
+                    stampFile.deleteOnExit();
+                }
                 zip.close();
                 if (bundle.exists() && !bundle.delete()) {
                     bundle.deleteOnExit();
+                }
+                if (stamp == null) {
+                    // 구글 SDK 의 system-image ZIP 을 집어넣으면 여기로 온다. 임포터가
+                    // kernel-qemu 를 kernel 로 받아들이기 때문에 "완료"처럼 보이지만,
+                    // 그 커널은 -machine virt 에서 시리얼 한 줄 못 찍고 죽고, 스톡
+                    // 램디스크에는 cmdline 이 요구하는 /init.wrapper 가 없다.
+                    return "가져왔지만 이 ZIP 은 이 앱의 게스트 이미지가 아닙니다"
+                            + " (guest-image.prop 없음). SDK 원본 ZIP 으로는 부팅하지"
+                            + " 않습니다. guest-image 빌드 아티팩트를 넣어 주세요.";
                 }
                 return "Android 7 ARM32 구성 가져오기 완료";
             } catch (Throwable th) {

@@ -326,6 +326,27 @@ jobs:
           # 개별 파일을 올려서 아티팩트 zip 자체가 곧 임포트 가능한 ZIP 이 되게 한다.
           rm -rf "$WORK/rd"
 
+          # 이 ZIP 이 우리 빌드임을 말해 주는 표식.
+          #
+          # 임포터는 ZIP 에서 kernel-ranchu / kernel-qemu / kernel 을 순서대로 찾는다.
+          # 그래서 구글 SDK 의 system-image ZIP 을 그대로 집어넣어도 "가져오기 완료"가
+          # 뜨고, 좋은 커널이 조용히 goldfish kernel-qemu 로 덮인다. 실측으로 한 번
+          # 당했다: kernel 2.7MB / ramdisk 1.2MB / cache.img 없음 / userdata 550MB 가
+          # 들어가 있었고, 게스트는 시리얼 한 줄 없이 3.7초 만에 죽었다. 커널 cmdline 이
+          # rdinit=/init.wrapper 를 요구하는데 스톡 램디스크에는 그 파일이 없다.
+          #
+          # 표식이 있으면 앱이 어느 빌드가 올라가 있는지 말할 수 있고, 없으면 부팅 전에
+          # 거절할 수 있다.
+          {
+            echo "build=$GITHUB_RUN_ID"
+            echo "commit=$GITHUB_SHA"
+            echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for f in kernel ramdisk.img system.img cache.img userdata.img; do
+              [ -f "$WORK/$f" ] && echo "size.$f=$(stat -c %s "$WORK/$f")"
+            done
+          } > "$WORK/guest-image.prop"
+          cat "$WORK/guest-image.prop"
+
           {
             echo "## 결과"
             echo '```'
@@ -455,6 +476,7 @@ jobs:
         with:
           name: android7-guest
           path: |
+            guest-out/guest-image.prop
             guest-out/kernel
             guest-out/ramdisk.img
             guest-out/system.img

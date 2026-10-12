@@ -1,7 +1,12 @@
 package com.example.singlevm.engine;
 
 import android.content.Context;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -76,6 +81,26 @@ public final class Android7GuestEngineAdapter implements EngineAdapter {
                 missing.add(image.getName());
             }
         }
+        // 이 이미지 묶음이 우리 빌드인지 본다.
+        //
+        // 커널 cmdline 이 rdinit=/init.wrapper 를 요구하므로, 우리 램디스크가 아니면
+        // 어떤 커널이든 부팅할 수 없다. 그런데 임포터는 ZIP 에서 kernel-qemu 도 kernel
+        // 로 받아들이기 때문에, 구글 SDK 의 system-image ZIP 을 넣어도 "가져오기 완료"가
+        // 떴고 이 점검은 "부팅 준비 완료"라고 답했다. 그 뒤 게스트는 시리얼 한 줄 없이
+        // 3.7초 만에 죽었고, 진단은 처음부터 다시 시작해야 했다. 폰만 쓰는 상황에서
+        // 잘못된 이미지 한 번은 왕복 한 번이다 — 부팅 전에 말해 주는 편이 싸다.
+        File stamp = new File(imageDir, "guest-image.prop");
+        String stampLine = "없음 — 이 앱의 빌드가 아닙니다";
+        if (stamp.isFile() && stamp.length() > 0) {
+            String build = readProperty(stamp, "build");
+            String commit = readProperty(stamp, "commit");
+            stampLine = (build == null ? "확인됨" : "build " + build)
+                    + (commit == null ? "" : " / " + commit.substring(0, Math.min(7, commit.length())));
+        } else {
+            missing.add("guest-image.prop (게스트 이미지가 이 앱의 빌드가 아님)");
+        }
+        details.append("- 게스트 이미지 빌드: ").append(stampLine).append('\n');
+
         File cache = new File(imageDir, "cache.img");
         details.append("- cache.img: ").append((!cache.isFile() || cache.length() <= 0)
                 ? "없음 (fstab 이 vdb=/cache 를 기대하므로 권장)" : humanSize(cache.length())).append('\n');
@@ -102,6 +127,24 @@ public final class Android7GuestEngineAdapter implements EngineAdapter {
             summary = "준비 필요: " + join(missing);
         }
         return new EngineReadiness(ready, summary, details.toString());
+    }
+
+    /** guest-image.prop 에서 키 하나를 읽는다. 읽히지 않으면 null. */
+    private static String readProperty(File file, String key) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            String line;
+            String prefix = key + "=";
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith(prefix)) {
+                    String value = line.substring(prefix.length()).trim();
+                    return value.isEmpty() ? null : value;
+                }
+            }
+        } catch (IOException e) {
+            // 표식을 못 읽는 것은 없는 것과 같다. 호출한 쪽이 그렇게 다룬다.
+        }
+        return null;
     }
 
     private static String join(List<String> values) {
