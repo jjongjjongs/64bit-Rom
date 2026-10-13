@@ -55,6 +55,25 @@ for expect in \
 done
 echo "바인더 uapi 를 32비트 ABI(프로토콜 7)로 되돌렸다"
 
+# --- 알람 timerfd 의 CAP_WAKE_ALARM 요구 해제 (사용자 승인 — docs/GUEST-IMAGE.md 7.15) ---
+#
+# Android 7 의 AlarmManagerService 는 /dev/alarm(5.10 에는 없다)이 없으면
+# timerfd_create(CLOCK_REALTIME_ALARM / CLOCK_BOOTTIME_ALARM) 로 넘어간다. 커널은 그 두
+# clockid 에 CAP_WAKE_ALARM(비트 35)을 요구하고 없으면 EPERM 을 준다. 그러면 자바 핸들러로
+# 폴백하는데, 그 경로는 리스너 알람에서 NPE 로 죽어(AlarmManagerService.java:2616)
+# system_server 가 약 60 초마다 재시작하고 런처가 영영 뜨지 않는다(실측).
+#
+# 이 커널은 한 사람이 혼자 쓰는 게스트 VM 전용이다. 깨우기 알람을 아무 프로세스나 만들어도
+# 잃을 것이 없으므로 요구 조건만 지운다. 알람 자체는 hrtimer 로 동작해 RTC 와 무관하다.
+TIMERFD=fs/timerfd.c
+sed -i 's/!capable(CAP_WAKE_ALARM))/0 \/* CAP_WAKE_ALARM 불필요: Mini Rom 게스트 전용 *\/)/' "$TIMERFD"
+if grep -q 'capable(CAP_WAKE_ALARM)' "$TIMERFD" || ! grep -q 'Mini Rom' "$TIMERFD"; then
+  echo "::error::timerfd CAP_WAKE_ALARM 패치 실패. 해당 부분:"
+  grep -n -B3 -A2 'CAP_WAKE_ALARM\|Mini Rom' "$TIMERFD"
+  exit 1
+fi
+echo "timerfd 알람 clockid 의 CAP_WAKE_ALARM 요구를 지웠다"
+
 make -s multi_v7_defconfig
 
 # 안드로이드가 요구하는 것 + 우리 가상 하드웨어. 실측에서 나온 목록 그대로.
@@ -101,6 +120,7 @@ make -s multi_v7_defconfig
   --enable ASHMEM \
   --enable POWER_SUPPLY --enable TEST_POWER \
   --enable PM_WAKELOCKS --enable PM_SLEEP --enable SUSPEND \
+  --enable RTC_CLASS --enable RTC_DRV_PL031 --enable RTC_HCTOSYS \
   --enable VIRTIO --enable VIRTIO_MMIO --enable VIRTIO_BLK \
   --enable VIRTIO_CONSOLE --enable VIRTIO_NET \
   --enable SERIAL_AMBA_PL011 --enable SERIAL_AMBA_PL011_CONSOLE \
@@ -137,13 +157,15 @@ for opt in CONFIG_VIRTIO_CONSOLE CONFIG_SECURITY_SELINUX CONFIG_ANDROID_BINDER_I
            CONFIG_ASHMEM CONFIG_LSM CONFIG_KALLSYMS \
            CONFIG_IP_NF_FILTER CONFIG_IP6_NF_FILTER \
            CONFIG_DRM_VIRTIO_GPU CONFIG_DRM_FBDEV_EMULATION CONFIG_FB \
-           CONFIG_FUSE_FS CONFIG_CUSE; do
+           CONFIG_FUSE_FS CONFIG_CUSE CONFIG_RTC_CLASS CONFIG_RTC_DRV_PL031; do
   printf '%-34s %s\n' "$opt" "$(grep -E "^$opt=" .config || echo '(설정 안 됨)')"
 done | tee "$(dirname "$OUT")/kernel-config.txt"
 
 # 바인더 ABI 는 .config 에 안 나오므로 헤더에서 직접 확인해 같이 남긴다.
 grep -E 'binder_size_t;|binder_uintptr_t;|BINDER_CURRENT_PROTOCOL_VERSION' "$BINDER_UAPI" \
   | sed 's/^/binder uapi: /' | tee -a "$(dirname "$OUT")/kernel-config.txt"
+grep -c 'Mini Rom' "$TIMERFD" | sed 's/^/timerfd CAP_WAKE_ALARM 패치 자리 수: /' \
+  | tee -a "$(dirname "$OUT")/kernel-config.txt"
 
 make -j"$(nproc)" zImage
 cp arch/arm/boot/zImage "$OUT"

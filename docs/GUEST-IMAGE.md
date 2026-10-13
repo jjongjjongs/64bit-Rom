@@ -1093,7 +1093,7 @@ goldfish 호스트에서는 파이프의 열기/닫기가 그대로 보이므로
   다시 써야 하면 첫 write 를 1 초 미룹니다. 교체가 끝나기 전에 새 헤더가 옛 연결로 새어
   나가지 않게 하기 위해서입니다.
 
-### 7.15 런처가 영영 안 뜨는 이유 — system_server 가 60 초마다 죽습니다 (진단 중)
+### 7.15 런처가 영영 안 뜨는 이유 — system_server 가 60 초마다 죽습니다
 
 7.13·7.14 를 고친 뒤 렌더러는 프레임을 받지만 전부 검은색입니다(`nonBlack=0`). 폰 로그를
 보면 부팅 약 60 초 뒤에 system_server 가 죽고 zygote 가 다시 뜨기를 반복합니다:
@@ -1121,9 +1121,12 @@ preload 중에 커널 경고 ``capability: warning: `main' uses 32-bit capabilit
 의 `/proc/<pid>/status` Cap 줄과 `/dev/alarm`, `/dev/rtc0` 을 콘솔로 찍도록 했습니다
 (`VM_DIAG_CAPS_BEGIN` … `END`). `CapEff` 에 비트 35 가 없으면 능력 문제, 있으면 다른 원인입니다.
 
-고치는 길은 두 가지입니다. (1) 능력이 사라진 자리를 찾아 되돌린다. (2) 이 게스트 전용
-커널에서 timerfd 의 `CAP_WAKE_ALARM` 요구를 지운다 — 한 사람이 혼자 쓰는 VM 이라 잃을 것은
-없지만 커널의 권한 검사를 빼는 일이므로 사용자 확인 뒤에 한다.
+고치는 길은 두 가지였습니다. (1) 능력이 사라진 자리를 찾아 되돌린다. (2) 이 게스트 전용
+커널에서 timerfd 의 `CAP_WAKE_ALARM` 요구를 지운다. 사용자 승인으로 (2)를 택했습니다:
+`build-kernel.sh` 가 `fs/timerfd.c` 의 `!capable(CAP_WAKE_ALARM)` 두 자리(timerfd_create,
+timerfd_settime)를 거짓으로 바꾸고, 치환이 안 먹으면 빌드를 멈춥니다. 한 사람이 혼자 쓰는
+VM 이라 깨우기 알람을 누구나 만들 수 있어도 잃을 것이 없습니다. 게스트 이미지의
+`kernel-config.txt` 에 "timerfd CAP_WAKE_ALARM 패치 자리 수: 2" 가 남습니다.
 
 ---
 
