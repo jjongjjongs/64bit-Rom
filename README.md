@@ -117,6 +117,11 @@ SDL 보일러플레이트의 deprecation과 `PackageInfo.versionCode` 레거시 
 분기 하나를 무조건 점프로 바꿨다. `0x108320`: `cbz w8, 0x1083ec` (`68060034`) →
 `b 0x1083ec` (`33000014`). 결과 sha256 `782ec8bc…`(아래 명령으로 확인).
 
+**네 번째 패치 — 동기 경로의 세로 뒤집기를 끈다.** 세 번째 패치 뒤 화면은 나왔지만 위아래가
+뒤집혀 있었다(폰 실측: 런처 글자가 거꾸로, 상태 표시줄이 아래). post 콜백은 `ydir < 0` 이면
+줄 순서를 뒤집는데, 동기 경로의 `ColorBuffer::readback` 은 이미 위에서 아래 순서로 준다.
+`0x1083fc`: `mov w3, #-1` (`03008012`) → `mov w3, #1` (`23008052`). 결과 sha256 `dbf0cae5…`.
+
 ```
 sha256sum app/src/main/jniLibs/arm64-v8a/libemugl_host_android.so
 ```
