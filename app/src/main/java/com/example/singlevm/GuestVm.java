@@ -349,6 +349,21 @@ public final class GuestVm {
         }
     }
 
+    /**
+     * 실행 화면의 터치 한 점을 게스트 터치스크린에 넣는다. 좌표는 0..1 로 정규화한 값이다.
+     * QEMU 의 절대 좌표 범위는 0..32767 이고 게스트 쪽에서 화면 크기로 다시 맞춘다.
+     *
+     * @param slot    손가락 번호(0..9)
+     * @param phase   {@link QmpClient#TOUCH_BEGIN}, {@link QmpClient#TOUCH_UPDATE},
+     *                {@link QmpClient#TOUCH_END}
+     */
+    public void sendTouch(int slot, int phase, float x, float y) {
+        QmpClient monitor = this.qmp;
+        if (monitor != null) {
+            monitor.sendTouch(slot, phase, x, y);
+        }
+    }
+
     /** 실행 화면이 사라질 때. 가상롬은 계속 돈다. */
     public void detachSurface() {
         if (!this.probed) {
@@ -397,6 +412,12 @@ public final class GuestVm {
         command.add("virtio-mmio.force-legacy=false");
         command.add("-device");
         command.add("virtio-gpu-device,xres=" + GUEST_WIDTH + ",yres=" + GUEST_HEIGHT);
+        // 터치 화면. QEMU 의 virtio-multitouch 는 슬롯(ABS_MT_SLOT)·추적 id 를 쓰는 B 형
+        // 멀티터치 장치로 보이고 INPUT_PROP_DIRECT 가 붙어 Android 가 터치스크린으로 분류한다.
+        // 이벤트는 실행 화면의 터치를 QMP input-send-event 로 넣는다(sendTouch). 게스트 커널에
+        // CONFIG_VIRTIO_INPUT 이 있어야 /dev/input/eventN 이 생긴다(build-kernel.sh).
+        command.add("-device");
+        command.add("virtio-multitouch-device");
         File transportDir = new File(vmRootPath, "transport");
         if (!transportDir.exists()) {
             transportDir.mkdirs();

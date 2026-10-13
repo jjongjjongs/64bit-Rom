@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -48,6 +49,14 @@ final class QmpClient implements Runnable {
     /** chardev id 접두사. 뒤에 파이프 번호가 붙는다. */
     static final String CHARDEV_ID_PREFIX = "singlevmpipe";
     private static final long CONNECT_TIMEOUT_MS = 20_000L;
+    /** QMU 절대 좌표 축의 최댓값(INPUT_EVENT_ABS_MAX). */
+    private static final int ABS_MAX = 0x7fff;
+    /** pending 큐에서 chardev-change 가 아닌 명령(입력 이벤트)을 뜻하는 표시. */
+    private static final int PENDING_INPUT = -1;
+    static final int TOUCH_BEGIN = 0;
+    static final int TOUCH_UPDATE = 1;
+    static final int TOUCH_END = 2;
+    private static final String[] TOUCH_TYPES = {"begin", "update", "end"};
 
     interface Log {
         void line(String text);
@@ -57,8 +66,10 @@ final class QmpClient implements Runnable {
     private final File transportDir;
     private final Log log;
     private volatile LocalSocket socket;
+    private volatile OutputStream out;
     private volatile boolean closed = false;
     private int swaps = 0;
+    private int inputErrors = 0;
     /** 보낸 chardev-change 의 파이프 번호. QMP 는 응답을 보낸 순서대로 돌려준다. */
     private final ArrayDeque<Integer> pending = new ArrayDeque<>();
     /** 파이프마다 지금까지 만든 소켓 세대. 경로는 pipeN.g<세대>.sock 이다. */
@@ -104,6 +115,12 @@ final class QmpClient implements Runnable {
                 return;
             }
             send(out, new JSONObject().put("execute", "qmp_capabilities"));
+            // 능력 협상 응답은 pending 없이 온다. 그 뒤부터 터치 이벤트를 받는다.
+            String first = reader.readLine();
+            if (first == null) {
+                return;
+            }
+            this.out = out;
             String line;
             while (!this.closed && (line = reader.readLine()) != null) {
                 handle(new JSONObject(line), out);
@@ -113,6 +130,7 @@ final class QmpClient implements Runnable {
                 this.log.line("[qmp] 끊김: " + e.getMessage());
             }
         } finally {
+            this.out = null;
             try {
                 connected.close();
             } catch (IOException ignored) {
@@ -147,9 +165,61 @@ final class QmpClient implements Runnable {
         return null;
     }
 
+    /**
+     * 터치 한 점을 virtio-multitouch 장치에 넣는다. 실행 화면(UI 스레드)에서 부른다. 모니터가
+     * 아직 안 붙었으면 조용히 버린다 — 부팅 중의 터치는 어차피 받을 곳이 없다.
+     */
+    void sendTouch(int slot, int phase, float x, float y) {
+        OutputStream current = this.out;
+        if (current == null || phase < 0 || phase >= TOUCH_TYPES.length) {
+            return;
+        }
+        int ax = Math.max(0, Math.min(ABS_MAX, Math.round(x * ABS_MAX)));
+        int ay = Math.max(0, Math.min(ABS_MAX, Math.round(y * ABS_MAX)));
+        try {
+            JSONArray events = new JSONArray();
+            // 슬롯 하나의 x, y 를 각각 한 이벤트로 보낸다. QEMU 는 같은 슬롯·추적 id 의 begin 을
+            // 터치 다운으로, end 를 터치 업으로 만든다. 추적 id 는 슬롯 번호로 충분하다 — 한 손가락이
+            // 떼어지고 다시 닿으면 end 뒤 begin 이 오므로 게스트가 새 터치로 본다.
+            events.put(touchEvent(TOUCH_TYPES[phase], slot, "x", ax));
+            events.put(touchEvent(TOUCH_TYPES[phase], slot, "y", ay));
+            JSONObject command = new JSONObject()
+                    .put("execute", "input-send-event")
+                    .put("arguments", new JSONObject().put("events", events));
+            synchronized (this.pending) {
+                this.pending.addLast(PENDING_INPUT);
+                send(current, command);
+            }
+        } catch (IOException | JSONException e) {
+            if (this.inputErrors++ == 0) {
+                this.log.line("[qmp] 터치 전송 실패: " + e.getMessage());
+            }
+        }
+    }
+
+    private static JSONObject touchEvent(String type, int slot, String axis, int value) throws JSONException {
+        JSONObject data = new JSONObject()
+                .put("type", type)
+                .put("slot", slot)
+                .put("tracking-id", slot)
+                .put("axis", axis)
+                .put("value", value);
+        return new JSONObject().put("type", "mtt").put("data", data);
+    }
+
     private void handle(JSONObject message, OutputStream out) throws IOException, JSONException {
         if (message.has("error") || message.has("return")) {
-            Integer pipeIndex = this.pending.pollFirst();
+            Integer pipeIndex;
+            synchronized (this.pending) {
+                pipeIndex = this.pending.pollFirst();
+            }
+            if (pipeIndex != null && pipeIndex == PENDING_INPUT) {
+                // 터치 이벤트의 응답. 오류는 처음 몇 번만 남긴다.
+                if (message.has("error") && this.inputErrors++ < 3) {
+                    this.log.line("[qmp] 터치 이벤트 거절: " + message.getJSONObject("error").optString("desc"));
+                }
+                return;
+            }
             if (message.has("error")) {
                 this.log.line("[qmp] 오류 응답" + (pipeIndex == null ? "" : " (pipe" + pipeIndex + ")") + ": "
                         + message.getJSONObject("error").optString("desc"));
@@ -200,8 +270,10 @@ final class QmpClient implements Runnable {
         JSONObject arguments = new JSONObject()
                 .put("id", CHARDEV_ID_PREFIX + pipeIndex)
                 .put("backend", backend);
-        send(out, new JSONObject().put("execute", "chardev-change").put("arguments", arguments));
-        this.pending.addLast(pipeIndex);
+        synchronized (this.pending) {
+            this.pending.addLast(pipeIndex);
+            send(out, new JSONObject().put("execute", "chardev-change").put("arguments", arguments));
+        }
         this.swaps++;
         // 처음 몇 번만 남긴다. 그 뒤로는 평범한 일이라 로그를 채울 필요가 없다.
         if (this.swaps <= 5) {

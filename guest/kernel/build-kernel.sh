@@ -104,6 +104,10 @@ make -s multi_v7_defconfig
 # 포트 하나이므로 open 마다 빈 포트를 배정해 줄 무언가가 필요한데, 커널 밖에서 문자
 # 장치를 만드는 방법이 CUSE 다. guest/qemu_pipe/qemu_piped.c 가 그 데몬이다.
 #
+# VIRTIO_INPUT 을 켜는 이유: 터치 입력. 앱이 QEMU 에 virtio-multitouch-device 를 붙이고
+# 실행 화면의 터치를 QMP input-send-event 로 넣는다. 드라이버가 없으면 장치가 그냥 놀고
+# 게스트는 터치를 받지 못한다.
+#
 # netfilter 를 켜는 이유: netd 가 부팅할 때마다
 #   "iptables v1.4.20: can't initialize iptables table `filter': Table does not exist"
 # 로 방화벽 규칙 설치에 전부 실패한다. multi_v7_defconfig 에는 iptables 테이블이 없다.
@@ -123,6 +127,7 @@ make -s multi_v7_defconfig
   --enable RTC_CLASS --enable RTC_DRV_PL031 --enable RTC_HCTOSYS \
   --enable VIRTIO --enable VIRTIO_MMIO --enable VIRTIO_BLK \
   --enable VIRTIO_CONSOLE --enable VIRTIO_NET \
+  --enable VIRTIO_INPUT \
   --enable SERIAL_AMBA_PL011 --enable SERIAL_AMBA_PL011_CONSOLE \
   --enable SERIAL_EARLYCON --enable BLK_DEV_INITRD \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT \
@@ -157,7 +162,8 @@ for opt in CONFIG_VIRTIO_CONSOLE CONFIG_SECURITY_SELINUX CONFIG_ANDROID_BINDER_I
            CONFIG_ASHMEM CONFIG_LSM CONFIG_KALLSYMS \
            CONFIG_IP_NF_FILTER CONFIG_IP6_NF_FILTER \
            CONFIG_DRM_VIRTIO_GPU CONFIG_DRM_FBDEV_EMULATION CONFIG_FB \
-           CONFIG_FUSE_FS CONFIG_CUSE CONFIG_RTC_CLASS CONFIG_RTC_DRV_PL031; do
+           CONFIG_FUSE_FS CONFIG_CUSE CONFIG_RTC_CLASS CONFIG_RTC_DRV_PL031 \
+           CONFIG_VIRTIO_INPUT; do
   printf '%-34s %s\n' "$opt" "$(grep -E "^$opt=" .config || echo '(설정 안 됨)')"
 done | tee "$(dirname "$OUT")/kernel-config.txt"
 

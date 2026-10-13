@@ -1143,6 +1143,22 @@ VM 이라 깨우기 알람을 누구나 만들 수 있어도 잃을 것이 없�
 남은 것: 부팅 애니메이션(GLES1 로 그린다) 구간은 여전히 검습니다. 부팅 뒤 약 50 초 동안은
 검은 화면이 정상입니다.
 
+### 7.17 프레임은 정상인데 화면이 검은 이유 — SurfaceView 의 배경색
+
+7.16 뒤에도 폰 화면은 검었습니다(`nonBlack=5703`, 즉 거의 모든 샘플에 색이 있는데도).
+실행 화면의 `SurfaceView` 에 `setBackgroundColor(BLACK)` 이 걸려 있었습니다. `SurfaceView.draw()`
+는 뷰 계층에 구멍을 뚫은 뒤 `View.draw()` 로 배경을 그리므로, 불투명한 배경은 서피스를 덮습니다.
+배경을 지우고 띠 색은 바깥 `FrameLayout` 이 맡게 했습니다.
+
+### 7.18 터치 입력 — virtio-multitouch + QMP
+
+앱이 QEMU 에 `-device virtio-multitouch-device` 를 붙이고(커널 `CONFIG_VIRTIO_INPUT`),
+실행 화면의 `MotionEvent` 를 `QmpClient.sendTouch` 가 `input-send-event` 의 `mtt` 이벤트로
+넣습니다. 슬롯은 pointer id, 좌표는 0..32767 로 정규화합니다. 게스트에서는
+`/dev/input/eventN` 이 "QEMU Virtio MultiTouch" 로 보이고 INPUT_PROP_DIRECT 가 있어
+Android 가 터치스크린으로 분류합니다. CI 의 스모크 부팅에도 같은 장치를 붙입니다
+(ubuntu-latest 의 QEMU 8.2 는 이 장치를 압니다).
+
 ---
 
 ## 8. 폰으로 옮긴 뒤

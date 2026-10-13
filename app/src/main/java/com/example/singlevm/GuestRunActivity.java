@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -217,9 +218,12 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
             }
         };
         SurfaceView surfaceView = new SurfaceView(this);
-        surfaceView.setBackgroundColor(Color.BLACK);
+        // 배경색을 주면 안 된다. SurfaceView.draw() 는 먼저 뷰 계층에 구멍을 뚫고 나서 View.draw()
+        // 로 배경을 그리므로, 불투명한 배경은 서피스를 덮어 검은 화면만 남는다(실측: 렌더러는
+        // nonBlack=5703 짜리 프레임을 올리는데 화면은 검었다). 띠 색은 root 가 맡는다.
         surfaceView.getHolder().setFormat(PixelFormat.RGBA_8888);
         surfaceView.getHolder().addCallback(this);
+        surfaceView.setOnTouchListener(this::forwardTouch);
         stage.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
         root.addView(stage, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
         setContentView(root);
@@ -323,6 +327,54 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
                 }
             });
         }, "single-vm-frame-tick").start();
+    }
+
+    /**
+     * 실행 화면의 터치를 게스트 터치스크린으로 보낸다. 서피스는 게스트와 같은 비율이므로 뷰 안
+     * 좌표를 0..1 로 나누기만 하면 된다. 손가락마다 pointer id 를 슬롯으로 쓴다(최대 10 개).
+     */
+    private boolean forwardTouch(View view, MotionEvent event) {
+        if (!isAndroid7() || view.getWidth() <= 0 || view.getHeight() <= 0) {
+            return false;
+        }
+        GuestVm vm = GuestVm.get(this);
+        int action = event.getActionMasked();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN: {
+                int index = event.getActionIndex();
+                sendPointer(vm, view, event, index, QmpClient.TOUCH_BEGIN);
+                return true;
+            }
+            case MotionEvent.ACTION_MOVE:
+                for (int index = 0; index < event.getPointerCount(); index++) {
+                    sendPointer(vm, view, event, index, QmpClient.TOUCH_UPDATE);
+                }
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP: {
+                int index = event.getActionIndex();
+                sendPointer(vm, view, event, index, QmpClient.TOUCH_END);
+                return true;
+            }
+            case MotionEvent.ACTION_CANCEL:
+                for (int index = 0; index < event.getPointerCount(); index++) {
+                    sendPointer(vm, view, event, index, QmpClient.TOUCH_END);
+                }
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static void sendPointer(GuestVm vm, View view, MotionEvent event, int index, int phase) {
+        int slot = event.getPointerId(index);
+        if (slot < 0 || slot >= 10) {
+            return;
+        }
+        float x = event.getX(index) / view.getWidth();
+        float y = event.getY(index) / view.getHeight();
+        vm.sendTouch(slot, phase, x, y);
     }
 
     @Override // android.view.SurfaceHolder.Callback
