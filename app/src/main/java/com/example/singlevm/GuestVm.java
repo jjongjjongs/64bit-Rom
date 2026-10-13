@@ -247,6 +247,13 @@ public final class GuestVm {
         try {
             appendLog("\n\nAOSP emugl host probe\n" + GuestRunActivity.nativeProbeEmugl());
             this.probed = true;
+            // 게스트의 ES1 앱만 검게 나온다. 폰 드라이버가 ES1+ES3 공유 컨텍스트로 그릴 수 있는지를
+            // 호스트에서 바로 재 둔다(실패 지점이 곧 원인이다). 렌더러와 같은 프로세스·같은 드라이버다.
+            try {
+                appendLog("\n" + Es1Probe.run());
+            } catch (RuntimeException | UnsatisfiedLinkError e) {
+                appendLog("\nES1 self-test: crashed " + e);
+            }
         } catch (RuntimeException | UnsatisfiedLinkError e) {
             appendLog("\n\nAOSP emugl host probe failed: " + e.getMessage());
         }
@@ -464,6 +471,13 @@ public final class GuestVm {
         if (error == null) {
             appendLog("\n[게임 실행] 게임 화면이 떴습니다");
             target.onReady();
+            // 게스트가 보는 게임 화면을 8 초 뒤 한 장 남긴다(logs/guest-screen.png). 호스트 쪽
+            // 프레임이 검을 때 게스트 합성 결과와 비교하는 용도다.
+            new Thread(() -> {
+                SystemClock.sleep(8_000);
+                captureGuestScreen((file, err) -> appendLog("\n[게임 실행] 게스트 화면 캡처: "
+                        + (file != null ? file.getName() : "실패 - " + err)));
+            }, "single-vm-game-shot").start();
         } else {
             appendLog("\n[게임 실행] 실패: " + error);
             target.onFailed(error);
