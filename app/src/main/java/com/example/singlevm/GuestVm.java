@@ -39,17 +39,25 @@ public final class GuestVm {
     /**
      * Number of virtio-serial pipes wired between host and guest.
      *
-     * <p>Eight was not enough. One goldfish pipe is one virtio-serial port, and a normal boot
-     * already needs five before any app runs: qemud:boot-properties, qemud:adb, and one
-     * pipe:opengles each for SurfaceFlinger, bootanimation and system_server. Every process
-     * that renders wants its own, so a game adds at least one more.
+     * <p>Eight was not enough, and neither was 24. One goldfish pipe is one virtio-serial port.
+     * Every process that touches the screen holds at least two for as long as it lives: gralloc
+     * opens one per process and hwui's RenderThread another, and a GL game adds one per GL
+     * thread. Cached background processes keep theirs. On the phone the ports ran out about 95s
+     * after boot with the game up (실측: "open refused (-2): no free pipe (24 ports, all busy)").
+     * The next process to need a buffer then hangs in gralloc, and system_server's RenderThread
+     * aborts with "Failed to choose config, error = EGL_NOT_INITIALIZED" - the whole framework
+     * restarts, the game freezes on its last frame and touches go nowhere. That was the "touch
+     * does not work" the user saw.
      *
-     * <p>The shortage only shows up on a fast boot. With /data already populated there is no
-     * dexopt, system_server starts around 13s instead of 56s, and everything overlaps instead
-     * of arriving spread out. Keep this in step with the loop in guest-image.yml.
-     * virtio-serial-device allows 31 ports, so 24 leaves room and stays clear of the limit.
+     * <p>Plenty of spare ports also spreads port reuse out (qemu_piped picks the port freed
+     * longest ago), which keeps a fresh "pipe:opengles" header from landing on a socket whose
+     * chardev-change has not finished. Keep this in step with the loop in guest-image.yml and
+     * MAX_PIPES in qemu_piped.c. virtio-serial-device defaults to 31 ports and reserves id 0, so
+     * the device gets an explicit max_ports (see {@link #VIRTIO_SERIAL_MAX_PORTS}).
      */
-    static final int TRANSPORT_PIPE_COUNT = 24;
+    static final int TRANSPORT_PIPE_COUNT = 64;
+    /** virtserialport ids start at 1 (QEMU keeps 0 for a console), so the device needs one more. */
+    static final int VIRTIO_SERIAL_MAX_PORTS = TRANSPORT_PIPE_COUNT + 2;
     /**
      * 게스트 화면 크기. 게임은 가로로 돈다. libemugl_host_android.so 가 렌더러를 이 크기로
      * 만들도록 패치돼 있으므로(원래 480x800 이 하드코딩돼 있었다) 셋이 맞아야 한다:
@@ -382,10 +390,14 @@ public final class GuestVm {
         String haveCheck = request.reinstall
                 ? install
                 : "if pm path " + request.packageName + " >/dev/null 2>&1; then echo SVMG:''have; else " + install + "; fi";
+        // am start 는 이미 떠 있는 액티비티면 "brought to the front" 라고만 하고 Displayed 줄이 안
+        // 나온다. 그 경우를 front 로 구분해 20초 예비 대기 없이 바로 화면을 연다.
+        String run = "if o=$(" + start + " 2>&1); then case \"$o\" in *Error*) echo SVMG:''startfail;;"
+                + " *front*) echo SVMG:''front;; *) echo SVMG:''started;; esac; else echo SVMG:''startfail; fi";
         return "\r( until [ \"$(getprop sys.boot_completed)\" = 1 ]; do sleep 2; done; echo SVMG:''boot;"
                 + " [ -f " + apk + " ] && echo SVMG:''share || echo SVMG:''noshare;"
                 + " " + haveCheck + ";"
-                + " " + start + " >/dev/null 2>&1 && echo SVMG:''started || echo SVMG:''startfail ) &\r";
+                + " " + run + " ) &\r";
     }
 
     /** QEMU 출력 한 줄을 실행 상태 기계에 넣는다. 실행 중이 아니면 거의 공짜다. */
@@ -451,6 +463,10 @@ public final class GuestVm {
                 this.gameStartedAt = SystemClock.elapsedRealtime();
                 listener.onStatus("게임 화면을 기다리는 중…");
                 break;
+            case "front":
+                // 이미 떠 있던 게임을 앞으로 가져왔다. 화면은 이미 그려지고 있다.
+                finishLaunch(listener, null);
+                break;
             case "startfail":
                 finishLaunch(listener, "게임을 띄우지 못했습니다 (" + request.packageName + "). 설치는 됐지만 "
                         + "실행 액티비티를 찾지 못한 것일 수 있습니다.");
@@ -485,6 +501,23 @@ public final class GuestVm {
     }
 
     /** 9p 로 내보내는 폴더·파일을 게스트의 shell uid 가 읽을 수 있게 한다. */
+    /**
+     * 게스트 vCPU 수. TCG 는 vCPU 마다 호스트 스레드를 하나 쓴다(thread=multi). 부팅은 zygote
+     * 예열 같은 단일 스레드 구간이 길지만, 패키지 검사·서비스 기동·앱 시작은 나란히 돌므로
+     * 코어가 넉넉한 폰에서는 4개가 2개보다 눈에 띄게 빠르다. 코어가 적으면 호스트 앱과
+     * 렌더러가 쓸 몫을 남겨 둔다.
+     */
+    static int guestCpuCount() {
+        int cores = Runtime.getRuntime().availableProcessors();
+        if (cores >= 8) {
+            return 4;
+        }
+        if (cores >= 6) {
+            return 3;
+        }
+        return 2;
+    }
+
     private static void shareReadable(File dir) {
         if (dir.isDirectory()) {
             dir.setReadable(true, false);
@@ -639,7 +672,7 @@ public final class GuestVm {
         command.add("-accel");
         command.add("tcg,thread=multi,tb-size=256");
         command.add("-smp");
-        command.add("2");
+        command.add(Integer.toString(guestCpuCount()));
         command.add("-m");
         command.add("1024");
         command.add("-display");
@@ -681,7 +714,7 @@ public final class GuestVm {
         // disable-legacy is deliberately absent: it is a virtio-pci property and QEMU rejects it
         // outright on the mmio device ("Property 'virtio-serial-device.disable-legacy' not found").
         command.add("-device");
-        command.add("virtio-serial-device");
+        command.add("virtio-serial-device,max_ports=" + VIRTIO_SERIAL_MAX_PORTS);
         // 지난 실행이 남긴 소켓과 세대별 소켓(pipeN.gK.sock, QmpClient 참고), 링크를 치운다.
         File[] stale = transportDir.listFiles();
         if (stale != null) {

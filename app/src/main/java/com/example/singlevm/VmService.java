@@ -37,12 +37,12 @@ public class VmService extends Service {
         }
     }
 
-    /** 가상롬을 끈다. 꺼져 있으면 아무 일도 없다. 앱을 닫을 때 부른다. */
+    /** 가상롬을 끈다. 꺼져 있으면 아무 일도 없다. 이미지를 바꾸거나 초기화할 때 부른다. */
     public static void stop(Context context) {
         try {
             context.startService(new Intent(context, VmService.class).setAction(ACTION_STOP));
         } catch (RuntimeException e) {
-            // 앱이 이미 백그라운드로 판정돼 startService 가 막히면 onTaskRemoved 가 대신 끈다.
+            // 앱이 이미 백그라운드로 판정돼 startService 가 막힌 경우. 알림의 "끄기" 가 남아 있다.
         }
     }
 
@@ -71,15 +71,12 @@ public class VmService extends Service {
     }
 
     /**
-     * 사용자가 최근 앱 목록에서 앱을 밀어 치우면 여기로 온다. 앱이 없는데 가상롬만 백그라운드에서
-     * 메모리 1 GB 를 쥐고 돌면 안 되므로 같이 끈다. ":vm" 프로세스는 앱 프로세스와 별개라 앱이
-     * 죽어도 저절로 따라 죽지 않는다 — 그래서 명시적으로 끈다.
+     * 사용자가 최근 앱 목록에서 앱을 밀어 치워도 가상롬은 그대로 둔다. 부팅에 1~2분이 들고, 그
+     * 시간을 게임을 열 때마다 다시 겪는 것이 가장 큰 불만이었다. 알림의 "끄기" 가 끄는 길이고,
+     * 메모리가 모자라면 시스템이 ":vm" 프로세스를 거둔다 — 그때는 다음에 앱을 열 때 다시 켠다.
      */
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        GuestVm.get(this).stop("앱 종료");
-        stopForegroundCompat();
-        stopSelf();
         super.onTaskRemoved(rootIntent);
     }
 
@@ -136,7 +133,7 @@ public class VmService extends Service {
         return builder
                 .setSmallIcon(R.drawable.ic_cmd_scan)
                 .setContentTitle("Mini Rom 실행 중")
-                .setContentText("Android 7 · 게임을 바로 실행할 수 있습니다")
+                .setContentText("켜 둔 동안은 게임이 바로 열립니다 · 끄면 다음에 다시 부팅합니다")
                 .setContentIntent(open)
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(null, "끄기", stop).build())

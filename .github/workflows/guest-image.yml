@@ -355,6 +355,9 @@ jobs:
           {
             echo "build=$GITHUB_RUN_ID"
             echo "commit=$GITHUB_SHA"
+            # 앱의 Android7GuestEngineAdapter.GUEST_GENERATION_REQUIRED 와 맞춘다. 앱과 게스트가
+            # 같이 바뀌어야 하는 변경마다 하나 올린다(그 목록은 그 상수의 주석에).
+            echo "generation=2"
             echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             for f in kernel ramdisk.img system.img cache.img userdata.img; do
               [ -f "$WORK/$f" ] && echo "size.$f=$(stat -c %s "$WORK/$f")"
@@ -397,11 +400,14 @@ jobs:
                 -device virtio-multitouch-device
                 -fsdev local,id=games,path=$BOOT/games,security_model=none,readonly=on
                 -device virtio-9p-device,fsdev=games,mount_tag=games
-                -device virtio-serial-device)
-          # 개수는 GuestRunActivity.TRANSPORT_PIPE_COUNT 와 맞춰야 한다. 8 은 모자란다 —
-          # boot-properties, adb, SurfaceFlinger, bootanimation, system_server 만으로
-          # 다섯이고 렌더링하는 앱마다 자기 파이프가 하나씩 더 필요하다.
-          for i in $(seq 0 23); do
+                -device virtio-serial-device,max_ports=66)
+          # 개수는 GuestVm.TRANSPORT_PIPE_COUNT(64) 와, max_ports 는 VIRTIO_SERIAL_MAX_PORTS 와
+          # 맞춰야 한다. 8 은 모자란다 — boot-properties, adb, SurfaceFlinger, bootanimation,
+          # system_server 만으로 다섯이고 렌더링하는 앱마다 자기 파이프가 하나씩 더 필요하다.
+          # 24 도 모자랐다 — 화면을 가진 프로세스마다 gralloc 과 RenderThread 가 하나씩 끝까지
+          # 쥐어 폰에서 부팅 95초 만에 다 찼고 system_server 가 EGL 초기화 실패로 죽었다.
+          # QEMU 는 포트 0 을 콘솔용으로 예약하므로 max_ports 는 개수보다 커야 한다.
+          for i in $(seq 0 63); do
             ARGS+=(-chardev "socket,id=singlevmpipe$i,path=$BOOT/transport/pipe$i.sock,server=on,wait=off")
             ARGS+=(-device "virtserialport,chardev=singlevmpipe$i,id=singlevmport$i,name=org.singlevm.pipe.$i")
           done

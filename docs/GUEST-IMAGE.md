@@ -252,7 +252,7 @@ goldfish pipe는 **열 때마다 새 채널**이 생깁니다. HAL 여러 개가
 
 **동시에 열리는 파이프가 실제로 몇 개인지 먼저 측정**하는 게 순서입니다. 8개로
 충분하다면 분배만 해주면 되고, 그렇지 않다면 파이프 수를
-`TRANSPORT_PIPE_COUNT`에서 늘리면 됩니다.
+`TRANSPORT_PIPE_COUNT`에서 늘리면 됩니다. (실측: 8 → 24 → 64. 7.20 참고.)
 
 ### 4.3 램디스크 재패킹
 
@@ -1190,6 +1190,63 @@ QEMU 의 9p(`-fsdev local,path=apps,security_model=none,readonly=on` +
 바뀌면) 다시 설치합니다.
 
 게스트 언어는 램디스크 `default.prop` 의 `ro.product.locale=ko-KR` 로 한국어입니다.
+
+`am start` 가 이미 떠 있는 액티비티를 앞으로만 가져오면 `Displayed` 줄이 없으므로, 그 출력의
+"brought to the front" 를 `SVMG:front` 로 돌려 바로 화면을 엽니다(이전에는 20초를 그냥
+기다렸습니다).
+
+### 7.20 파이프 24개가 바닥나 system_server 가 죽었다 — 64개로, 그리고 가상롬은 끄지 않는다
+
+터치를 고친 뒤에도 "터치가 안 된다" 는 보고가 왔습니다. 로그를 보니 터치는 게스트에 **들어가고
+있었습니다** — `InputDispatcher: Application is not responding: Window{… ch.seed.two.me/…}
+Waiting to send non-key event because the touched window has not finished processing certain
+input events`. 게임의 메인 스레드가 멈춰 있어서 받은 터치를 처리하지 못한 것입니다. 왜 멈췄는가:
+
+```
+[   95.586736] qemu_piped: open refused (-2): no free pipe (24 ports, all busy)
+10-13 23:43:19.183   376  1478 E         : Failed to connect to host (QemuPipeStream)!!!
+10-13 23:43:19.186   146   652 D gralloc_ranchu: gralloc_alloc: failed to create host cb! -EIO
+10-13 23:43:19.187   376  1478 F OpenGLRenderer: Failed to choose config, error = EGL_NOT_INITIALIZED
+10-13 23:43:19.208   376  1478 F libc    : Fatal signal 6 (SIGABRT), code -6 in tid 1478 (RenderThread)
+10-13 23:43:19.529  1481  1481 F DEBUG   : pid: 376, tid: 1478, name: RenderThread  >>> system_server <<<
+```
+
+부팅 95초쯤, 게임이 뜬 직후에 포트 24개가 전부 찼습니다. 그 뒤로 파이프가 필요한 모든 것이
+실패합니다: 게임이 대화상자 창의 버퍼를 받으려다(gralloc) 막혀 ANR, SurfaceFlinger 의 버퍼
+할당 실패, 그리고 system_server 의 RenderThread 가 EGL 초기화 실패로 abort — 프레임워크 전체가
+다시 뜹니다. 화면은 마지막 프레임에 멈추고 터치는 갈 곳이 없습니다. `screencap` 이 0 바이트를
+돌려준 것도 같은 이유입니다(새 프로세스가 파이프를 못 엽니다).
+
+**왜 24개가 모자란가.** 화면을 가진 프로세스마다 goldfish 파이프를 둘 이상 끝까지 쥡니다:
+gralloc 의 HostConnection 하나, hwui RenderThread 하나, GL 게임은 GL 스레드마다 하나 더.
+Android 는 뒤로 간 프로세스를 캐시에 남기므로 그것들도 놓지 않습니다. system_server,
+SystemUI, 런처, 키보드, 설정(FallbackHome), 게임… 으로 금방 20개를 넘깁니다. 진짜 에뮬레이터의
+goldfish 파이프는 개수 제한이 없습니다.
+
+**고친 것.**
+
+- `GuestVm.TRANSPORT_PIPE_COUNT` 24 → **64**, `virtio-serial-device,max_ports=66`. QEMU 의
+  기본 `max_ports` 는 31 이고 포트 0 은 콘솔용으로 예약돼 있어(`mark_port_added(vser, 0)`),
+  64개를 쓰려면 명시해야 합니다. 한도는 `VIRTIO_QUEUE_MAX / 2 - 1` 이라 여유가 큽니다.
+- `qemu_piped.c` 의 `MAX_PIPES` 32 → **96**(게스트 이미지를 다시 받아야 적용됩니다),
+  포트 재사용 유예 1초 → 2.5초. 포트가 넉넉하면 "가장 오래전에 닫힌 포트" 를 고르므로 헤더가
+  옛 연결로 새는 경주(`malloc(18446744072818318950) failed`)도 사실상 사라집니다.
+- CI(`guest-image.yml`)도 같은 64개 + `max_ports=66`.
+- `guest-image.prop` 에 `generation=2` 를 적고, 앱(`GUEST_GENERATION_REQUIRED`)이 낮은 세대를
+  보면 홈 화면에서 새 구성 내려받기를 권합니다. 앱만 새로 깔면 겉으로는 아무 차이가 없어 사용자가
+  알 수 없기 때문입니다.
+
+**그리고 가상롬을 끄지 않습니다.** "게임을 열 때마다 1~2분씩 기다린다" 의 원인은 홈 화면에서
+뒤로가기로 나갈 때 `MainActivity.onDestroy` 가 가상롬을 껐고, 최근 앱에서 밀어 치워도
+`onTaskRemoved` 가 껐기 때문입니다. 다음에 게임을 누르면 처음부터 부팅합니다. 이제는 알림의
+"끄기" 로만 끕니다. 부팅은 가상롬이 꺼져 있을 때 한 번만 겪고, 켜 둔 동안은 게임이 바로
+열립니다. 메모리가 모자라면 시스템이 `:vm` 프로세스를 거두고, 그때는 다음에 앱을 열 때 다시
+켭니다. 부팅 자체도 코어가 8개 이상인 폰에서는 vCPU 4개(`guestCpuCount`)로 돕니다.
+
+인앱 결제 대화상자("Problem setting up in-app billing: Billing service unavailable (response
+3)")는 게임이 구글 플레이 결제 서비스를 찾다 못 찾은 것입니다. 구글 SDK 의 `default` 시스템
+이미지에는 플레이 서비스가 없습니다. OK 를 누르면 닫힙니다 — 위 수정 전에는 그 OK 도 멈춘
+메인 스레드가 받지 못했을 뿐입니다.
 
 ---
 

@@ -173,7 +173,11 @@ CHECK_SIZE(fuse_release_in, 24);
 #define CUSE_DEV "/dev/cuse"
 #define PIPE_DEV "/dev/qemu_pipe"
 #define DEV_NAME "qemu_pipe"
-#define MAX_PIPES 32
+// 앱의 GuestVm.TRANSPORT_PIPE_COUNT(64) 보다 커야 한다. 24개일 때 부팅 95초 만에 다 찼다 —
+// 화면을 가진 프로세스마다 gralloc 하나, RenderThread 하나를 끝까지 쥐고, 캐시된 백그라운드
+// 프로세스도 놓지 않는다. 다 차면 다음 프로세스는 버퍼를 못 받아 멈추고 system_server 는
+// EGL_NOT_INITIALIZED 로 죽는다(실측). 여유분은 포트 재사용 간격도 벌려 준다.
+#define MAX_PIPES 96
 #define MAX_WRITE (64 * 1024)
 #define REQ_BUF (MAX_WRITE + 8192)
 
@@ -463,7 +467,10 @@ static void scrub_host_stream(struct pipe_slot *s, unsigned char *buf, size_t n)
 // (2) 방금 닫힌 포트를 다시 써야 할 때는 첫 write 를 유예 시간이 지날 때까지 미룬다.
 // 유예는 쓰기 워커에서 기다리므로 디스패처는 막히지 않는다.
 // ---------------------------------------------------------------------------
-#define PORT_REUSE_COOLDOWN_MS 1000L
+// 1초로는 모자란 적이 있었다(포트가 하나만 남아 같은 포트를 연달아 쓸 때 "pipe:opengles"
+// 헤더가 옛 연결로 새어 malloc(18446744072818318950) 실패, 실측). 포트가 넉넉하면 가장
+// 오래전에 닫힌 포트를 고르므로 이 유예는 거의 안 기다리지만, 궁할 때는 더 길게 기다린다.
+#define PORT_REUSE_COOLDOWN_MS 2500L
 
 static long now_ms(void) {
     struct timespec ts;

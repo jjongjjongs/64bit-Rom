@@ -125,6 +125,7 @@ public class MainActivity extends Activity {
         handleStartupIntent(getIntent());
         requestNotificationPermission();
         offerGuestImageIfMissing();
+        offerGuestImageIfOutdated();
     }
 
     /**
@@ -139,15 +140,11 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 뒤로가기로 앱을 나가면 가상롬도 끈다. 홈 버튼이나 다른 앱으로 전환은 {@code isFinishing()}
-     * 이 아니므로 그대로 둔다 — 그때는 알림의 "끄기" 로 끌 수 있다. 최근 앱에서 밀어 치우는 경우는
-     * {@link VmService#onTaskRemoved} 가 맡는다.
+     * 뒤로가기로 앱을 나가도 가상롬은 끄지 않는다. 예전에는 여기서 껐고, 그래서 게임을 열 때마다
+     * 1~2분 부팅을 다시 기다려야 했다. 가상롬은 알림의 "끄기" 로만 끈다({@link VmService}).
      */
     @Override // android.app.Activity
     protected void onDestroy() {
-        if (isFinishing()) {
-            VmService.stop(this);
-        }
         super.onDestroy();
     }
 
@@ -799,6 +796,31 @@ public class MainActivity extends Activity {
                 .setTitle("가상롬 구성이 필요합니다")
                 .setMessage("게임을 돌릴 가상롬 구성(약 " + humanSize(GUEST_IMAGE_APPROX_BYTES) + ")을 지금 내려받을까요? "
                         + "한 번만 받으면 됩니다. 나중에는 설정 → 구성 가져오기에서 할 수 있습니다.")
+                .setPositiveButton("내려받기", (d, w) -> downloadGuestImageAsync())
+                .setNegativeButton("나중에", null)
+                .show();
+    }
+
+    /**
+     * 깔린 가상롬 구성이 이 앱이 요구하는 세대보다 낮으면 새로 내려받기를 권한다. 앱만 새로 깔고
+     * 구성은 옛것이면 고친 것이 적용되지 않는데(예: 파이프 64개), 겉으로는 아무 차이가 없어 사용자는
+     * 알 길이 없다. 그래서 세대가 맞을 때까지 앱을 열 때마다 묻는다 — "나중에" 는 이번 한 번만 미룬다.
+     */
+    private void offerGuestImageIfOutdated() {
+        EngineAdapter engine = EngineRegistry.primary();
+        if (!Android7GuestEngineAdapter.ID.equals(engine.id()) || !engine.inspect(this, this.vmRoot).ready) {
+            return;
+        }
+        int installed = Android7GuestEngineAdapter.installedGeneration(this.vmRoot);
+        if (installed >= Android7GuestEngineAdapter.GUEST_GENERATION_REQUIRED) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("가상롬 구성을 새로 받아야 합니다")
+                .setMessage("지금 깔린 가상롬 구성은 이 앱보다 오래된 것입니다(세대 " + installed + ", 필요 "
+                        + Android7GuestEngineAdapter.GUEST_GENERATION_REQUIRED + "). 새 구성(약 "
+                        + humanSize(GUEST_IMAGE_APPROX_BYTES) + ")을 내려받아야 터치와 게임 실행이 고쳐집니다. "
+                        + "게임 설치 목록은 그대로 남습니다.")
                 .setPositiveButton("내려받기", (d, w) -> downloadGuestImageAsync())
                 .setNegativeButton("나중에", null)
                 .show();

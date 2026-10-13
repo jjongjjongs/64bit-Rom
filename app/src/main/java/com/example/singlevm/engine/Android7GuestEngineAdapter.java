@@ -96,6 +96,11 @@ public final class Android7GuestEngineAdapter implements EngineAdapter {
             String commit = readProperty(stamp, "commit");
             stampLine = (build == null ? "확인됨" : "build " + build)
                     + (commit == null ? "" : " / " + commit.substring(0, Math.min(7, commit.length())));
+            int generation = installedGeneration(vmRoot);
+            if (generation < GUEST_GENERATION_REQUIRED) {
+                stampLine += " (세대 " + generation + ", 이 앱은 " + GUEST_GENERATION_REQUIRED
+                        + " 필요 — 설정에서 새 구성을 내려받으세요)";
+            }
         } else {
             missing.add("guest-image.prop (게스트 이미지가 이 앱의 빌드가 아님)");
         }
@@ -127,6 +132,36 @@ public final class Android7GuestEngineAdapter implements EngineAdapter {
             summary = "준비 필요: " + join(missing);
         }
         return new EngineReadiness(ready, summary, details.toString());
+    }
+
+    /**
+     * 이 앱이 요구하는 게스트 이미지 세대. guest-image.yml 이 guest-image.prop 에 generation= 으로
+     * 적는다. 앱과 게스트가 같이 바뀌어야 하는 변경(파이프 개수, 공유 폴더, 터치 장치 등)마다 하나
+     * 올린다. 폰에 깔린 이미지가 이보다 낮으면 홈 화면이 새 구성 내려받기를 권한다.
+     *
+     * <ul>
+     * <li>1 — 9p 공유 폴더, 멀티터치, 한국어 로캘, timerfd 커널 패치</li>
+     * <li>2 — 파이프 64개(qemu_piped MAX_PIPES 96). 24개로는 부팅 95초 만에 바닥나 system_server 가
+     *     죽었다.</li>
+     * </ul>
+     */
+    public static final int GUEST_GENERATION_REQUIRED = 2;
+
+    /** 깔린 게스트 이미지의 세대. 표식이 없거나 세대 키가 없으면 0. */
+    public static int installedGeneration(File vmRoot) {
+        File stamp = new File(new File(vmRoot, IMAGE_DIRECTORY), "guest-image.prop");
+        if (!stamp.isFile()) {
+            return 0;
+        }
+        String value = readProperty(stamp, "generation");
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** guest-image.prop 에서 키 하나를 읽는다. 읽히지 않으면 null. */
