@@ -66,6 +66,11 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private static final String ACTION_IMPORT_ADB_GUEST = "com.example.singlevm.IMPORT_ADB_GUEST";
     private static final String KEY_ACTIVE_PACKAGE = "active_package";
+    private static final String KEY_OFFERED_GUEST_DOWNLOAD = "offered_guest_download";
+    /** 작업 브랜치의 최신 빌드. 빌드할 때마다 같은 이름으로 덮어쓴다(.github/workflows/guest-image.yml). */
+    private static final String GUEST_IMAGE_URL =
+            "https://github.com/jjongjjongs/64bit-Rom/releases/download/latest/android7-guest.zip";
+    private static final long GUEST_IMAGE_APPROX_BYTES = 290L * 1024 * 1024;
     private static final String KEY_INSTALLED_PACKAGES = "installed_packages";
     private static final int MANIFEST_SCHEMA_VERSION = 1;
     /** Buffer used when unpacking multi-hundred-MB guest images out of a bundle zip. */
@@ -119,6 +124,7 @@ public class MainActivity extends Activity {
         refreshState();
         handleStartupIntent(getIntent());
         requestNotificationPermission();
+        offerGuestImageIfMissing();
     }
 
     /**
@@ -750,7 +756,7 @@ public class MainActivity extends Activity {
         root.addView(actions, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("설정").setView(root).create();
-        addDialogAction(actions, "구성 가져오기", () -> { dialog.dismiss(); openAndroid7ImagePicker(); });
+        addDialogAction(actions, "구성 가져오기", () -> { dialog.dismiss(); chooseAndroid7ImageSource(); });
         addDialogAction(actions, "가상롬 초기화", () -> { dialog.dismiss(); confirmReset(); });
         addDialogAction(actions, "확인", dialog::dismiss);
         dialog.show();
@@ -765,6 +771,121 @@ public class MainActivity extends Activity {
         button.setSingleLine(true);
         button.setOnClickListener(v -> action.run());
         row.addView(button, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    }
+
+    /** 가상롬 구성을 어디서 가져올지. 보통은 앱이 알아서 내려받는다. 파일 선택은 직접 받아 둔 ZIP 용이다. */
+    private void chooseAndroid7ImageSource() {
+        new AlertDialog.Builder(this)
+                .setTitle("가상롬 구성 가져오기")
+                .setMessage("최신 구성(약 " + humanSize(GUEST_IMAGE_APPROX_BYTES) + ")을 인터넷에서 내려받아 설치합니다. "
+                        + "설치한 게임은 그대로 남습니다.")
+                .setPositiveButton("내려받기", (d, w) -> downloadGuestImageAsync())
+                .setNeutralButton("파일 선택", (d, w) -> openAndroid7ImagePicker())
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    /** 처음 열었을 때 구성이 없으면 한 번 묻는다. 다시 묻지 않도록 표시를 남긴다. */
+    private void offerGuestImageIfMissing() {
+        EngineAdapter engine = EngineRegistry.primary();
+        if (!Android7GuestEngineAdapter.ID.equals(engine.id()) || engine.inspect(this, this.vmRoot).ready) {
+            return;
+        }
+        if (this.prefs.getBoolean(KEY_OFFERED_GUEST_DOWNLOAD, false)) {
+            return;
+        }
+        this.prefs.edit().putBoolean(KEY_OFFERED_GUEST_DOWNLOAD, true).apply();
+        new AlertDialog.Builder(this)
+                .setTitle("가상롬 구성이 필요합니다")
+                .setMessage("게임을 돌릴 가상롬 구성(약 " + humanSize(GUEST_IMAGE_APPROX_BYTES) + ")을 지금 내려받을까요? "
+                        + "한 번만 받으면 됩니다. 나중에는 설정 → 구성 가져오기에서 할 수 있습니다.")
+                .setPositiveButton("내려받기", (d, w) -> downloadGuestImageAsync())
+                .setNegativeButton("나중에", null)
+                .show();
+    }
+
+    /**
+     * 최신 게스트 이미지를 내려받아 설치한다. GitHub 릴리스의 고정 주소라 앱을 안 바꿔도 늘 최신이다.
+     * 진행률은 대화상자 한 줄로 보여 주고, 받는 동안 가상롬은 끈다(system.img 를 바꿔 끼우므로).
+     */
+    private void downloadGuestImageAsync() {
+        ensureVmDirs();
+        final TextView progress = new TextView(this);
+        progress.setPadding(dp(24), dp(16), dp(24), dp(16));
+        progress.setText("연결하는 중…");
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("가상롬 구성 내려받기")
+                .setView(progress)
+                .setCancelable(false)
+                .create();
+        dialog.show();
+        final File bundle = new File(this.vmRoot, "android7-import.zip");
+        new Thread(() -> {
+            try {
+                stopVmBlocking("게스트 이미지 교체");
+                downloadFile(GUEST_IMAGE_URL, bundle, (done, total) -> runOnUiThread(() -> progress.setText(
+                        total > 0
+                                ? humanSize(done) + " / " + humanSize(total) + " (" + (done * 100 / total) + "%)"
+                                : humanSize(done) + " 받음")));
+                runOnUiThread(() -> progress.setText("압축을 푸는 중… (1~2분)"));
+                final String result = importAndroid7BundleFile(bundle);
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showToast(result);
+                    refreshState();
+                    startVmIfReady();
+                });
+            } catch (IOException e) {
+                bundle.delete();
+                final String message = e.getMessage();
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showError("가상롬 구성 내려받기 실패", message + "\n\n인터넷 연결을 확인한 뒤 설정 → 구성 가져오기에서 다시 시도하세요.");
+                });
+            }
+        }, "guest-image-download").start();
+    }
+
+    private interface DownloadProgress {
+        void update(long done, long total);
+    }
+
+    private void downloadFile(String url, File destination, DownloadProgress progress) throws IOException {
+        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        connection.setInstanceFollowRedirects(true);
+        connection.setConnectTimeout(20_000);
+        connection.setReadTimeout(60_000);
+        try {
+            int code = connection.getResponseCode();
+            if (code != 200) {
+                throw new IOException("서버 응답 " + code);
+            }
+            long total = connection.getContentLengthLong();
+            if (total > 0 && destination.getParentFile() != null
+                    && destination.getParentFile().getUsableSpace() < total + IMAGE_EXTRACT_HEADROOM_BYTES) {
+                throw new IOException("저장 공간이 부족합니다. 내려받기에 " + humanSize(total) + "가 더 필요합니다.");
+            }
+            long done = 0;
+            long lastReport = 0;
+            byte[] buffer = new byte[256 * 1024];
+            try (InputStream in = connection.getInputStream();
+                 OutputStream out = new FileOutputStream(destination)) {
+                int read;
+                while ((read = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, read);
+                    done += read;
+                    if (done - lastReport >= 2L * 1024 * 1024) {
+                        lastReport = done;
+                        progress.update(done, total);
+                    }
+                }
+            }
+            if (total > 0 && done != total) {
+                throw new IOException("내려받기가 중간에 끊겼습니다 (" + humanSize(done) + " / " + humanSize(total) + ")");
+            }
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private void openAndroid7ImagePicker() {
@@ -856,6 +977,11 @@ public class MainActivity extends Activity {
         }
         File bundle = new File(this.vmRoot, "android7-import.zip");
         copyUriToFile(uri, bundle);
+        return importAndroid7BundleFile(bundle);
+    }
+
+    /** 이미 vmRoot 에 있는 ZIP(파일 선택으로 복사했거나 내려받은 것)을 풀어 넣는다. 끝나면 ZIP 은 지운다. */
+    private String importAndroid7BundleFile(File bundle) throws IOException {
         try {
             ZipFile zip = new ZipFile(bundle);
             try {
