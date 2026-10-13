@@ -1128,6 +1128,21 @@ timerfd_settime)를 거짓으로 바꾸고, 치환이 안 먹으면 빌드를 �
 VM 이라 깨우기 알람을 누구나 만들 수 있어도 잃을 것이 없습니다. 게스트 이미지의
 `kernel-config.txt` 에 "timerfd CAP_WAKE_ALARM 패치 자리 수: 2" 가 남습니다.
 
+### 7.16 게스트는 그리는데 화면이 검은 이유 — 렌더러의 비동기 readback 이 0 만 돌려줍니다
+
+7.15 뒤 게스트 부팅은 끝까지 가는데(`Boot is finished`, 키가드 표시) 렌더러의 post 콜백은
+1700 프레임 넘게 `nonBlack=0` 이었습니다. 렌더러(`libemugl_host_android.so`,
+`FrameBuffer::postImpl`)는 post 콜백이 있으면 `m_asyncReadbackSupported` 에 따라 두 경로 중
+하나로 픽셀을 받습니다. Adreno 840 은 "Async readback supported" 로 판정돼
+`ReadbackWorker` 경로(다른 스레드·컨텍스트에서 PBO 를 `glMapBufferRange`)를 탔고, 그 결과가
+전부 0 이었습니다. `0x108320` 의 분기 하나를 무조건 점프로 바꿔 동기 경로
+(`ColorBuffer::readback` → 같은 스레드 `glReadPixels`)만 타게 하자(README 의 세 번째 패치)
+폰 실측으로 SystemUI 가 뜨는 시점부터 `sampledRgb=940346 nonBlack=3520` 이 나왔습니다.
+합성(SurfaceFlinger → 컬러버퍼 blit)은 정상이었고, 문제는 readback 뿐이었습니다.
+
+남은 것: 부팅 애니메이션(GLES1 로 그린다) 구간은 여전히 검습니다. 부팅 뒤 약 50 초 동안은
+검은 화면이 정상입니다.
+
 ---
 
 ## 8. 폰으로 옮긴 뒤
