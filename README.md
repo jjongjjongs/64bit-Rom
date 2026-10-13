@@ -109,6 +109,18 @@ SDL 보일러플레이트의 deprecation과 `PackageInfo.versionCode` 레거시 
 | 원본 | `mov w1,#480` (`52803c01`) / `mov w2,#800` (`52806402`) | `506d9ed3…021bdb5416` |
 | 패치 | `mov w1,#800` (`52806401`) / `mov w2,#480` (`52803c02`) | `e2f1b8e5…4d02ff1` |
 
+**세 번째 패치 — post 의 비동기 readback 을 끈다.** `FrameBuffer::postImpl` 은 post 콜백이
+있으면 `m_asyncReadbackSupported`(Adreno 840 에서 "Async readback supported") 에 따라
+`ReadbackWorker` 의 PBO 경로(다른 스레드·컨텍스트에서 `glMapBufferRange`)로 픽셀을 받는다.
+폰 실측에서는 그 경로로 받은 프레임이 전부 0 이었다(`guest frame posted ... nonBlack=0`,
+1700 프레임 넘게). 동기 경로(`ColorBuffer::readback` → 같은 스레드에서 `glReadPixels`)만 타도록
+분기 하나를 무조건 점프로 바꿨다. `0x108320`: `cbz w8, 0x1083ec` (`68060034`) →
+`b 0x1083ec` (`33000014`). 결과 sha256 `782ec8bc…`(아래 명령으로 확인).
+
+```
+sha256sum app/src/main/jniLibs/arm64-v8a/libemugl_host_android.so
+```
+
 이 크기는 QEMU 의 `virtio-gpu-device,xres=800,yres=480`(앱의 `GuestRunActivity` 와
 `guest-image.yml`) 과 늘 같아야 합니다.
 
