@@ -108,6 +108,9 @@ make -s multi_v7_defconfig
 # 실행 화면의 터치를 QMP input-send-event 로 넣는다. 드라이버가 없으면 장치가 그냥 놀고
 # 게스트는 터치를 받지 못한다.
 #
+# 9P 를 켜는 이유: 게임 APK 공유 폴더. 앱이 -fsdev/virtio-9p-device 로 apps/ 폴더를 내보내고
+# init.wrapper 가 /games 에 마운트한다. 게스트의 pm install 이 그 안의 base.apk 를 읽는다.
+#
 # netfilter 를 켜는 이유: netd 가 부팅할 때마다
 #   "iptables v1.4.20: can't initialize iptables table `filter': Table does not exist"
 # 로 방화벽 규칙 설치에 전부 실패한다. multi_v7_defconfig 에는 iptables 테이블이 없다.
@@ -128,6 +131,7 @@ make -s multi_v7_defconfig
   --enable VIRTIO --enable VIRTIO_MMIO --enable VIRTIO_BLK \
   --enable VIRTIO_CONSOLE --enable VIRTIO_NET \
   --enable VIRTIO_INPUT \
+  --enable NET_9P --enable NET_9P_VIRTIO --enable 9P_FS \
   --enable SERIAL_AMBA_PL011 --enable SERIAL_AMBA_PL011_CONSOLE \
   --enable SERIAL_EARLYCON --enable BLK_DEV_INITRD \
   --enable DEVTMPFS --enable DEVTMPFS_MOUNT \
@@ -163,7 +167,7 @@ for opt in CONFIG_VIRTIO_CONSOLE CONFIG_SECURITY_SELINUX CONFIG_ANDROID_BINDER_I
            CONFIG_IP_NF_FILTER CONFIG_IP6_NF_FILTER \
            CONFIG_DRM_VIRTIO_GPU CONFIG_DRM_FBDEV_EMULATION CONFIG_FB \
            CONFIG_FUSE_FS CONFIG_CUSE CONFIG_RTC_CLASS CONFIG_RTC_DRV_PL031 \
-           CONFIG_VIRTIO_INPUT; do
+           CONFIG_VIRTIO_INPUT CONFIG_NET_9P_VIRTIO CONFIG_9P_FS; do
   printf '%-34s %s\n' "$opt" "$(grep -E "^$opt=" .config || echo '(설정 안 됨)')"
 done | tee "$(dirname "$OUT")/kernel-config.txt"
 

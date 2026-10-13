@@ -600,6 +600,33 @@ static void fixup_fstab(const char *path) {
 // devtmpfs 를 /dev 가 아니라 스크래치 경로에 붙인다. 안드로이드 first-stage init 은
 // /dev 에 tmpfs 를 새로 마운트하고 ueventd 로 노드를 만들기 때문에, 여기서 /dev 를
 // 점유하면 덮이거나 방해가 된다. 확인만 하고 원상복구한다.
+// 게임 APK 공유 폴더. 호스트(앱)가 -fsdev local,...,mount_tag=games 로 내보내는 9p 를 루트의
+// /games 에 읽기 전용으로 건다. 안드로이드 init 이 /mnt 를 tmpfs 로 덮으므로 /mnt 아래는 못 쓴다.
+// 여기서 걸어 두면 exec 뒤에도 같은 마운트 네임스페이스라 그대로 남는다. 커널에
+// CONFIG_NET_9P_VIRTIO, CONFIG_9P_FS 가 있어야 하고, 없거나 호스트가 장치를 안 붙였으면 실패를
+// 적고 넘어간다 — 게임 실행 쪽이 "/games 에 파일이 없다"로 알아차린다.
+#define GAMES_MOUNT "/games"
+#define GAMES_WAIT_MS 3000
+static void mount_games(void) {
+    if (mkdir(GAMES_MOUNT, 0755) != 0 && errno != EEXIST) {
+        put_line("WARN mkdir " GAMES_MOUNT " failed: ", strerror(errno));
+        return;
+    }
+    int waited = 0;
+    while (1) {
+        if (mount("games", GAMES_MOUNT, "9p", MS_RDONLY,
+                  "trans=virtio,version=9p2000.L,cache=loose") == 0) {
+            put_num("OK games share mounted at " GAMES_MOUNT ", waited_ms=", waited);
+            return;
+        }
+        if (waited >= GAMES_WAIT_MS) break;
+        sleep_ms(100);
+        waited += 100;
+    }
+    put_line("WARN games share mount failed: ", strerror(errno));
+    put_line("  -> check CONFIG_NET_9P_VIRTIO/CONFIG_9P_FS and the host -fsdev/virtio-9p-device", NULL);
+}
+
 static int scratch_mount(void) {
     if (mkdir(SCRATCH_DEV, 0755) != 0 && errno != EEXIST) return -1;
     if (mount("devtmpfs", SCRATCH_DEV, "devtmpfs", MS_NOSUID, NULL) != 0) return -1;
@@ -643,6 +670,7 @@ int main(int argc, char **argv, char **envp) {
         int disk_wait = wait_for_disks(3000);
         put_fmt("disks visible=%d waited_ms=%d", count_disks(), disk_wait);
         fixup_fstab("/fstab.ranchu");
+        mount_games();
 
         scratch_unmount();
     }

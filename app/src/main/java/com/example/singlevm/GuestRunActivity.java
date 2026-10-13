@@ -17,6 +17,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import com.example.singlevm.engine.Android7GuestEngineAdapter;
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +47,7 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
     private String engineId;
     private boolean runtimeStarted = false;
     private boolean surfaceAttached = false;
+    private TextView launchOverlay;
     private boolean frameLoopRunning = false;
     private int frameTicks = 0;
     private final Handler frameHandler = new Handler(Looper.getMainLooper());
@@ -158,7 +160,16 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
             } catch (RuntimeException e) {
                 appendRuntimeLog("\n가상롬 서비스 시작 실패: " + e.getMessage());
             }
+            startGameLaunch();
         }
+    }
+
+    @Override // android.app.Activity
+    protected void onDestroy() {
+        if (isAndroid7()) {
+            GuestVm.get(this).cancelLaunchListener(this.launchListener);
+        }
+        super.onDestroy();
     }
 
     @Override // android.app.Activity
@@ -226,7 +237,87 @@ public class GuestRunActivity extends Activity implements SurfaceHolder.Callback
         surfaceView.setOnTouchListener(this::forwardTouch);
         stage.addView(surfaceView, new FrameLayout.LayoutParams(-1, -1));
         root.addView(stage, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        // 게임이 뜨기 전까지 가상롬의 바탕화면이 비치지 않게 덮는 안내. 게임 화면이 오면 치운다.
+        TextView overlay = new TextView(this);
+        overlay.setBackgroundColor(Color.BLACK);
+        overlay.setTextColor(Color.WHITE);
+        overlay.setTextSize(18f);
+        overlay.setGravity(Gravity.CENTER);
+        overlay.setText("게임을 준비하는 중…");
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+        this.launchOverlay = overlay;
         setContentView(root);
+    }
+
+    /** 게임 설치·실행 진행을 안내문으로 보여 주고, 게임 화면이 오면 안내를 치운다. */
+    private final GuestVm.GameListener launchListener = new GuestVm.GameListener() {
+        @Override
+        public void onStatus(String status) {
+            runOnUiThread(() -> {
+                if (launchOverlay != null) {
+                    launchOverlay.setText(status);
+                }
+            });
+        }
+
+        @Override
+        public void onInstalled() {
+            // 다음에 열 때 다시 설치하지 않도록 APK 의 도장을 남긴다.
+            getSharedPreferences("singlevm", MODE_PRIVATE).edit()
+                    .putString(installStampKey(), apkStamp()).apply();
+        }
+
+        @Override
+        public void onReady() {
+            runOnUiThread(() -> {
+                if (launchOverlay != null) {
+                    launchOverlay.setVisibility(View.GONE);
+                }
+                enterImmersive();
+            });
+        }
+
+        @Override
+        public void onFailed(String reason) {
+            runOnUiThread(() -> {
+                if (launchOverlay != null) {
+                    launchOverlay.setText("게임을 띄우지 못했습니다");
+                }
+                if (isFinishing()) {
+                    return;
+                }
+                new AlertDialog.Builder(GuestRunActivity.this)
+                        .setTitle("게임 실행 실패")
+                        .setMessage(reason)
+                        .setPositiveButton("닫기", (dialog, which) -> finish())
+                        .setOnDismissListener(dialog -> enterImmersive())
+                        .show();
+            });
+        }
+    };
+
+    private String installStampKey() {
+        return "guest_installed." + getExtra(EXTRA_INSTALL_ID, "");
+    }
+
+    /** APK 파일의 크기·수정 시각. 바뀌면 다시 가져온 것이므로 게스트에도 다시 설치한다. */
+    private String apkStamp() {
+        File apk = new File(getExtra(EXTRA_APK_PATH, ""));
+        return apk.length() + ":" + apk.lastModified();
+    }
+
+    private void startGameLaunch() {
+        String installId = getExtra(EXTRA_INSTALL_ID, "");
+        String packageName = getExtra(EXTRA_PACKAGE, "");
+        if (installId.isEmpty() || packageName.isEmpty()) {
+            this.launchListener.onFailed("설치 정보가 없습니다. 홈에서 게임을 다시 가져와 주세요.");
+            return;
+        }
+        String stored = getSharedPreferences("singlevm", MODE_PRIVATE).getString(installStampKey(), "");
+        boolean reinstall = !stored.equals(apkStamp());
+        GuestVm.get(this).launchGame(
+                new GuestVm.GameLaunch(installId, packageName, getExtra(EXTRA_LAUNCHER, ""), reinstall),
+                this.launchListener);
     }
 
     @Override // android.app.Activity

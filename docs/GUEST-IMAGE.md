@@ -1168,6 +1168,25 @@ zygote(`main`) 는 전체 능력을 가지고 있으므로 system_server 를 만
 Android 가 터치스크린으로 분류합니다. CI 의 스모크 부팅에도 같은 장치를 붙입니다
 (ubuntu-latest 의 QEMU 8.2 는 이 장치를 압니다).
 
+### 7.19 게임 APK 를 게스트에 넣고 바로 띄우기 — 9p 공유 폴더 + 콘솔 스크립트
+
+앱의 "APK 설치" 는 `single_vm/apps/<설치 id>/base.apk` 에 파일을 둡니다. 가상롬 안으로는
+QEMU 의 9p(`-fsdev local,path=apps,security_model=none,readonly=on` +
+`virtio-9p-device,mount_tag=games`)로 보이고, `init.wrapper` 가 `/games` 에 읽기 전용으로
+마운트합니다(커널 `CONFIG_NET_9P_VIRTIO`, `CONFIG_9P_FS`). `security_model=none` 이라 호스트
+권한이 그대로 보이므로 앱이 폴더와 APK 를 모두에게 읽히게(a+rx / a+r) 바꿉니다 — 게스트의
+`pm` 은 shell uid 로 파일을 엽니다.
+
+게임 타일을 누르면 `GuestVm.launchGame` 이 콘솔 셸에 한 줄 스크립트를 넣습니다: 부팅 완료를
+기다리고(`sys.boot_completed`) → `/games/<id>/base.apk` 가 보이는지 → `pm path` 로 이미 있는지
+→ 없으면 `pm install -r` → `am start -n`(런처 액티비티를 모르면 `monkey`). 진행은 `SVMG:`
+표식으로 돌아오고(명령 echo 와 구분하려고 `SVMG:''boot` 처럼 쪼개 쓴다), 게임이 실제로
+그려진 것은 `ActivityManager: Displayed <패키지>/` 줄로 압니다. 실행 화면은 그때까지 검은
+안내문으로 서피스를 덮어 바탕화면이 비치지 않게 합니다. APK 를 다시 가져오면(크기·수정 시각이
+바뀌면) 다시 설치합니다.
+
+게스트 언어는 램디스크 `default.prop` 의 `ro.product.locale=ko-KR` 로 한국어입니다.
+
 ---
 
 ## 8. 폰으로 옮긴 뒤

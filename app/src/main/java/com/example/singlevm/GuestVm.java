@@ -252,6 +252,232 @@ public final class GuestVm {
         }
     }
 
+    // ------------------------------------------------------------------------------------
+    // 게임 실행
+    //
+    // 실행 화면이 게임 타일로 열리면 여기로 온다. 게스트 콘솔 셸(uid shell)에 한 줄짜리 스크립트를
+    // 넣어, 부팅이 끝나기를 기다리고 → 공유 폴더의 APK 를 pm install 하고 → am start 로 띄운다.
+    // 진행은 SVMG: 표식으로 콘솔에 되돌아오고, 게임이 실제로 그려진 것은 ActivityManager 의
+    // "Displayed <패키지>/" 줄로 안다. 실행 화면은 그때까지 안내문만 보여 준다.
+    // ------------------------------------------------------------------------------------
+
+    /** 게임 실행 요청. 값은 앱의 설치 기록(prefs "app.<id>.*")에서 온다. */
+    public static final class GameLaunch {
+        public final String installId;
+        public final String packageName;
+        /** 런처 액티비티. 비어 있으면 monkey 로 LAUNCHER 인텐트를 보낸다. */
+        public final String activity;
+        /** APK 가 바뀌었으면 true — 게스트에 이미 있어도 다시 설치한다. */
+        public final boolean reinstall;
+
+        public GameLaunch(String installId, String packageName, String activity, boolean reinstall) {
+            this.installId = installId;
+            this.packageName = packageName;
+            this.activity = activity == null ? "" : activity;
+            this.reinstall = reinstall;
+        }
+    }
+
+    public interface GameListener {
+        /** 진행 단계가 바뀔 때. 실행 화면의 안내문이 된다. */
+        void onStatus(String status);
+        /** 게임이 설치됐을 때(새로 설치했을 때만). 앱이 설치 도장을 남기는 용도다. */
+        void onInstalled();
+        /** 게임 화면이 떴다. 안내문을 치우면 된다. */
+        void onReady();
+        /** 더 못 간다. 이유를 보여 주고 끝낸다. */
+        void onFailed(String reason);
+    }
+
+    private static final String LAUNCH_MARK = "SVMG:";
+    /** 콘솔 셸이 뜨는 것을 보지 못했어도 이만큼 지나면 그냥 명령을 넣는다. */
+    private static final long CONSOLE_WAIT_MS = 120_000L;
+    /** am start 뒤 "Displayed" 줄이 이만큼 안 오면 떴다고 친다(이미 떠 있던 게임은 그 줄이 없다). */
+    private static final long DISPLAYED_WAIT_MS = 20_000L;
+    private volatile GameLaunch launch;
+    private volatile GameListener launchListener;
+    private volatile boolean consoleSeen = false;
+    private volatile long qemuStartedAt = 0L;
+    private volatile long gameStartedAt = 0L;
+    private final StringBuilder installOutput = new StringBuilder();
+
+    public void launchGame(GameLaunch request, GameListener listener) {
+        if (this.launchListener != null) {
+            // 같은 게임을 다시 열었거나 두 번 눌렀다. 새 화면이 진행을 이어받는다.
+            this.launchListener = listener;
+            this.launch = request;
+            listener.onStatus("게임을 시작하는 중…");
+            return;
+        }
+        this.launch = request;
+        this.launchListener = listener;
+        this.gameStartedAt = 0L;
+        synchronized (this.installOutput) {
+            this.installOutput.setLength(0);
+        }
+        // 게스트 pm 이 shell uid 로 읽을 수 있게 호스트 쪽 권한을 연다(9p 는 호스트 권한 그대로).
+        File appsDir = new File(new File(this.app.getFilesDir(), "single_vm"), "apps");
+        File appDir = new File(appsDir, request.installId);
+        shareReadable(appsDir);
+        shareReadable(appDir);
+        File apk = new File(appDir, "base.apk");
+        if (!apk.isFile()) {
+            finishLaunch(null, "게임 파일이 없습니다: " + apk.getAbsolutePath());
+            return;
+        }
+        apk.setReadable(true, false);
+        listener.onStatus(isRunning() ? "가상롬 부팅을 기다리는 중…" : "가상롬을 켜는 중…");
+        new Thread(() -> {
+            // 콘솔 셸이 뜨기 전에 쓴 글자는 tty 에 쌓였다가 셸이 읽지만, 확실히 하려고 init 이
+            // console 서비스를 띄우는 줄을 기다린다.
+            long deadline = SystemClock.elapsedRealtime() + CONSOLE_WAIT_MS;
+            while (!this.consoleSeen && SystemClock.elapsedRealtime() < deadline) {
+                if (this.launchListener == null) {
+                    return;
+                }
+                SystemClock.sleep(500);
+            }
+            SystemClock.sleep(1500);
+            Process process = this.qemuProcess;
+            if (process == null || !process.isAlive()) {
+                finishLaunch(null, "가상롬이 꺼져 있습니다. 홈으로 돌아가 다시 열어 주세요.");
+                return;
+            }
+            try {
+                process.getOutputStream().write(launchCommand(request).getBytes(StandardCharsets.US_ASCII));
+                process.getOutputStream().flush();
+                appendLog("\n[게임 실행] " + request.packageName + " 설치·실행 명령을 콘솔에 보냄");
+            } catch (IOException e) {
+                finishLaunch(null, "콘솔에 쓸 수 없습니다: " + e.getMessage());
+            }
+        }, "single-vm-game-launch").start();
+    }
+
+    /** 실행 화면이 닫히면 알림만 끊는다. 게스트 쪽 설치·실행은 그대로 간다. */
+    public void cancelLaunchListener(GameListener listener) {
+        if (this.launchListener == listener) {
+            this.launchListener = null;
+            this.launch = null;
+        }
+    }
+
+    /**
+     * 게스트 셸에 넣는 한 줄. 표식은 echo 된 명령줄과 구분되도록 SVMG:''xxx 로 쪼개 쓴다 — 실제
+     * 출력에만 SVMG:xxx 가 붙는다. 전부 백그라운드(&)로 돌려 콘솔 셸을 막지 않는다.
+     */
+    static String launchCommand(GameLaunch request) {
+        String apk = "/games/" + request.installId + "/base.apk";
+        String start = request.activity.isEmpty()
+                ? "monkey -p " + request.packageName + " -c android.intent.category.LAUNCHER 1"
+                : "am start -n " + request.packageName + "/" + request.activity;
+        String install = "pm install -r " + apk + " >/data/local/tmp/svm.pm 2>&1"
+                + " && echo SVMG:''installed || { echo SVMG:''installfail; cat /data/local/tmp/svm.pm; }";
+        String haveCheck = request.reinstall
+                ? install
+                : "if pm path " + request.packageName + " >/dev/null 2>&1; then echo SVMG:''have; else " + install + "; fi";
+        return "\r( until [ \"$(getprop sys.boot_completed)\" = 1 ]; do sleep 2; done; echo SVMG:''boot;"
+                + " [ -f " + apk + " ] && echo SVMG:''share || echo SVMG:''noshare;"
+                + " " + haveCheck + ";"
+                + " " + start + " >/dev/null 2>&1 && echo SVMG:''started || echo SVMG:''startfail ) &\r";
+    }
+
+    /** QEMU 출력 한 줄을 실행 상태 기계에 넣는다. 실행 중이 아니면 거의 공짜다. */
+    private void handleLaunchLine(String line) {
+        if (!this.consoleSeen && line.contains("service 'console'")) {
+            this.consoleSeen = true;
+        }
+        synchronized (this.installOutput) {
+            if (this.installOutput.length() > 0 && this.installOutput.length() < 600
+                    && !line.contains(LAUNCH_MARK) && !line.isEmpty()) {
+                this.installOutput.append('\n').append(line.trim());
+            }
+        }
+        GameListener listener = this.launchListener;
+        GameLaunch request = this.launch;
+        if (listener == null || request == null) {
+            return;
+        }
+        if (this.gameStartedAt == 0L && line.contains("ActivityManager: Displayed " + request.packageName + "/")) {
+            finishLaunch(listener, null);
+            return;
+        }
+        int at = line.indexOf(LAUNCH_MARK);
+        if (at < 0 || line.contains("SVMG:''")) {
+            if (this.gameStartedAt != 0L
+                    && SystemClock.elapsedRealtime() - this.gameStartedAt > DISPLAYED_WAIT_MS) {
+                finishLaunch(listener, null);
+            }
+            return;
+        }
+        String mark = line.substring(at + LAUNCH_MARK.length()).trim();
+        switch (mark) {
+            case "boot":
+                listener.onStatus("게임을 준비하는 중…");
+                break;
+            case "noshare":
+                finishLaunch(listener, "가상롬 안에서 게임 파일이 보이지 않습니다. 게스트 이미지가 공유 폴더(9p)를 "
+                        + "모르는 옛 버전일 수 있습니다. 설정에서 새 구성을 가져와 주세요.");
+                break;
+            case "have":
+                listener.onStatus("게임을 시작하는 중…");
+                break;
+            case "installed":
+                listener.onInstalled();
+                listener.onStatus("게임을 시작하는 중…");
+                break;
+            case "installfail":
+                // 다음 줄들이 pm 의 설명이다. 조금 모아서 보여 준다.
+                synchronized (this.installOutput) {
+                    this.installOutput.setLength(0);
+                    this.installOutput.append("설치 실패");
+                }
+                new Thread(() -> {
+                    SystemClock.sleep(1500);
+                    String reason;
+                    synchronized (this.installOutput) {
+                        reason = this.installOutput.toString();
+                    }
+                    finishLaunch(this.launchListener, reason);
+                }, "single-vm-install-fail").start();
+                break;
+            case "started":
+                this.gameStartedAt = SystemClock.elapsedRealtime();
+                listener.onStatus("게임 화면을 기다리는 중…");
+                break;
+            case "startfail":
+                finishLaunch(listener, "게임을 띄우지 못했습니다 (" + request.packageName + "). 설치는 됐지만 "
+                        + "실행 액티비티를 찾지 못한 것일 수 있습니다.");
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void finishLaunch(GameListener listener, String error) {
+        GameListener target = listener != null ? listener : this.launchListener;
+        this.launchListener = null;
+        this.launch = null;
+        this.gameStartedAt = 0L;
+        if (target == null) {
+            return;
+        }
+        if (error == null) {
+            appendLog("\n[게임 실행] 게임 화면이 떴습니다");
+            target.onReady();
+        } else {
+            appendLog("\n[게임 실행] 실패: " + error);
+            target.onFailed(error);
+        }
+    }
+
+    /** 9p 로 내보내는 폴더·파일을 게스트의 shell uid 가 읽을 수 있게 한다. */
+    private static void shareReadable(File dir) {
+        if (dir.isDirectory()) {
+            dir.setReadable(true, false);
+            dir.setExecutable(true, false);
+        }
+    }
+
     /**
      * 게스트의 화면을 PNG 로 받아 온다. 게스트 SurfaceFlinger 가 보는 화면이라, 호스트 렌더러의
      * 출력(실행 화면)과 비교하면 검은 화면이 어느 쪽 탓인지 가를 수 있다.
@@ -418,6 +644,19 @@ public final class GuestVm {
         // CONFIG_VIRTIO_INPUT 이 있어야 /dev/input/eventN 이 생긴다(build-kernel.sh).
         command.add("-device");
         command.add("virtio-multitouch-device");
+        // 게임 APK 공유 폴더. 앱이 "APK 설치" 로 넣어 둔 apps/<설치 id>/base.apk 를 9p 로 게스트에
+        // 보인다(init.wrapper 가 /games 에 읽기 전용으로 마운트). security_model=none 이라 호스트
+        // 권한이 그대로 보이므로 launchGame 이 폴더와 파일을 모두에게 읽히게 바꾼다 — 게스트의
+        // pm 은 shell uid 로 파일을 연다.
+        File appsDir = new File(vmRootPath, "apps");
+        if (!appsDir.exists()) {
+            appsDir.mkdirs();
+        }
+        shareReadable(appsDir);
+        command.add("-fsdev");
+        command.add("local,id=games,path=" + appsDir.getAbsolutePath() + ",security_model=none,readonly=on");
+        command.add("-device");
+        command.add("virtio-9p-device,fsdev=games,mount_tag=games");
         File transportDir = new File(vmRootPath, "transport");
         if (!transportDir.exists()) {
             transportDir.mkdirs();
@@ -577,6 +816,8 @@ public final class GuestVm {
         // 여기서 바로 세운다. 백그라운드 스레드에서 세우면 그 사이에 들어온 두 번째
         // ensureStarted() 가 꺼져 있는 줄 알고 QEMU 를 하나 더 띄운다.
         this.qemuProcess = process;
+        this.consoleSeen = false;
+        this.qemuStartedAt = SystemClock.elapsedRealtime();
         final Process started = process;
         final long startedAt = SystemClock.elapsedRealtime();
         File transportDir = new File(vmRootPath, "transport");
@@ -649,6 +890,7 @@ public final class GuestVm {
                 logWriter.write('\n');
                 logWriter.flush();
                 handleShotLine(line);
+                handleLaunchLine(line);
                 synchronized (this.qemuTail) {
                     this.qemuTail.addLast(line);
                     while (this.qemuTail.size() > QEMU_LOG_TAIL_LINES) {
