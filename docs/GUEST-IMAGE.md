@@ -1163,7 +1163,11 @@ zygote(`main`) 는 전체 능력을 가지고 있으므로 system_server 를 만
 
 앱이 QEMU 에 `-device virtio-multitouch-device` 를 붙이고(커널 `CONFIG_VIRTIO_INPUT`),
 실행 화면의 `MotionEvent` 를 `QmpClient.sendTouch` 가 `input-send-event` 의 `mtt` 이벤트로
-넣습니다. 슬롯은 pointer id, 좌표는 0..32767 로 정규화합니다. 게스트에서는
+넣습니다. 슬롯은 pointer id, 좌표는 0..32767 로 정규화합니다. QEMU 의 규칙(virtio-input-hid.c)은
+`mtt` 중 `data` 만 좌표가 되고 `begin/update/end` 는 슬롯과 추적 id 만 보내므로, 손가락이 닿으면
+`btn touch` + `begin` + `data x/y`, 움직이면 `update`(슬롯 선택) + `data x/y`, 떨어지면 추적 id
+-1 인 `end`(+ 마지막 손가락이면 `btn touch` 해제)를 보냅니다. 처음 구현은 begin/update 에 좌표를
+실었고 end 에도 슬롯 번호를 넣어, 게스트가 좌표도 손 뗌도 받지 못했습니다. 게스트에서는
 `/dev/input/eventN` 이 "QEMU Virtio MultiTouch" 로 보이고 INPUT_PROP_DIRECT 가 있어
 Android 가 터치스크린으로 분류합니다. CI 의 스모크 부팅에도 같은 장치를 붙입니다
 (ubuntu-latest 의 QEMU 8.2 는 이 장치를 압니다).

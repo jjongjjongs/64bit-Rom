@@ -165,9 +165,18 @@ final class QmpClient implements Runnable {
         return null;
     }
 
+    /** 지금 눌려 있는 손가락 수. BTN_TOUCH 는 첫 손가락이 닿을 때와 마지막 손가락이 떨어질 때만 보낸다. */
+    private int fingersDown = 0;
+
     /**
      * 터치 한 점을 virtio-multitouch 장치에 넣는다. 실행 화면(UI 스레드)에서 부른다. 모니터가
      * 아직 안 붙었으면 조용히 버린다 — 부팅 중의 터치는 어차피 받을 곳이 없다.
+     *
+     * <p>QEMU(virtio-input-hid.c)의 규칙: mtt 이벤트 중 type 이 data 인 것만 좌표(ABS_MT_POSITION_X/Y)
+     * 가 되고, begin/update/end 는 ABS_MT_SLOT 과 ABS_MT_TRACKING_ID 를 그대로 보낸다. 그래서 손가락이
+     * 닿으면 begin(슬롯, 추적 id) 뒤에 data x, data y 를, 움직이면 update(슬롯 고르기) 뒤에 data x, y 를,
+     * 떨어지면 end 에 추적 id -1 을 보내야 한다. 추적 id 의 최댓값이 슬롯 수라 슬롯 번호를 그대로 쓴다.
+     * BTN_TOUCH 는 btn "touch" 이벤트로 따로 보낸다.
      */
     void sendTouch(int slot, int phase, float x, float y) {
         OutputStream current = this.out;
@@ -178,15 +187,35 @@ final class QmpClient implements Runnable {
         int ay = Math.max(0, Math.min(ABS_MAX, Math.round(y * ABS_MAX)));
         try {
             JSONArray events = new JSONArray();
-            // 슬롯 하나의 x, y 를 각각 한 이벤트로 보낸다. QEMU 는 같은 슬롯·추적 id 의 begin 을
-            // 터치 다운으로, end 를 터치 업으로 만든다. 추적 id 는 슬롯 번호로 충분하다 — 한 손가락이
-            // 떼어지고 다시 닿으면 end 뒤 begin 이 오므로 게스트가 새 터치로 본다.
-            events.put(touchEvent(TOUCH_TYPES[phase], slot, "x", ax));
-            events.put(touchEvent(TOUCH_TYPES[phase], slot, "y", ay));
-            JSONObject command = new JSONObject()
-                    .put("execute", "input-send-event")
-                    .put("arguments", new JSONObject().put("events", events));
             synchronized (this.pending) {
+                switch (phase) {
+                    case TOUCH_BEGIN:
+                        if (this.fingersDown == 0) {
+                            events.put(buttonEvent(true));
+                        }
+                        this.fingersDown++;
+                        events.put(touchEvent("begin", slot, slot, "x", ax));
+                        events.put(touchEvent("data", slot, slot, "x", ax));
+                        events.put(touchEvent("data", slot, slot, "y", ay));
+                        break;
+                    case TOUCH_UPDATE:
+                        events.put(touchEvent("update", slot, slot, "x", ax));
+                        events.put(touchEvent("data", slot, slot, "x", ax));
+                        events.put(touchEvent("data", slot, slot, "y", ay));
+                        break;
+                    default:
+                        events.put(touchEvent("end", slot, -1, "x", ax));
+                        if (this.fingersDown > 0) {
+                            this.fingersDown--;
+                        }
+                        if (this.fingersDown == 0) {
+                            events.put(buttonEvent(false));
+                        }
+                        break;
+                }
+                JSONObject command = new JSONObject()
+                        .put("execute", "input-send-event")
+                        .put("arguments", new JSONObject().put("events", events));
                 this.pending.addLast(PENDING_INPUT);
                 send(current, command);
             }
@@ -197,14 +226,20 @@ final class QmpClient implements Runnable {
         }
     }
 
-    private static JSONObject touchEvent(String type, int slot, String axis, int value) throws JSONException {
+    private static JSONObject touchEvent(String type, int slot, int trackingId, String axis, int value)
+            throws JSONException {
         JSONObject data = new JSONObject()
                 .put("type", type)
                 .put("slot", slot)
-                .put("tracking-id", slot)
+                .put("tracking-id", trackingId)
                 .put("axis", axis)
                 .put("value", value);
         return new JSONObject().put("type", "mtt").put("data", data);
+    }
+
+    private static JSONObject buttonEvent(boolean down) throws JSONException {
+        JSONObject data = new JSONObject().put("down", down).put("button", "touch");
+        return new JSONObject().put("type", "btn").put("data", data);
     }
 
     private void handle(JSONObject message, OutputStream out) throws IOException, JSONException {
