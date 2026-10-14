@@ -1195,6 +1195,15 @@ QEMU 의 9p(`-fsdev local,path=apps,security_model=none,readonly=on` +
 "brought to the front" 를 `SVMG:front` 로 돌려 바로 화면을 엽니다(이전에는 20초를 그냥
 기다렸습니다).
 
+**다시 누를 때는 게스트에 아무것도 보내지 않습니다.** 가상롬이 떠 있어도 매번 "부팅을 기다리는
+중 → 준비하는 중 → 화면을 기다리는 중" 을 거쳤다는 보고가 왔습니다. 상태 글은 무조건 "부팅을
+기다리는 중" 으로 시작했고, `pm path` 와 `am start` 가 게스트에서 자바 프로세스를 하나씩 새로
+띄우느라(TCG 위에서 각각 몇 초) 세 단계가 그대로 보였습니다. 이제 `GuestVm` 이 부팅 완료
+(`Sending BOOT_COMPLETE` / `SVMG:boot`)와 "떠 있는 게임"(`started`/`front`/`Displayed` 로 기록,
+`has died`/`am_proc_died`/`Force finishing activity` 로 지움)을 기억합니다. 같은 게임을 다시
+누르면 콘솔에 아무것도 쓰지 않고 실행 화면만 붙입니다. 다른 경우에도 설치된 것으로 아는
+게임은 `pm path` 없이 `am start` 부터 하고, 그것이 실패할 때만 설치합니다.
+
 ### 7.20 파이프 24개가 바닥나 system_server 가 죽었다 — 64개로, 그리고 가상롬은 끄지 않는다
 
 터치를 고친 뒤에도 "터치가 안 된다" 는 보고가 왔습니다. 로그를 보니 터치는 게스트에 **들어가고

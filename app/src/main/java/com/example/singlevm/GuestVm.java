@@ -312,6 +312,13 @@ public final class GuestVm {
     private volatile GameLaunch launch;
     private volatile GameListener launchListener;
     private volatile boolean consoleSeen = false;
+    /** 게스트가 sys.boot_completed 를 올렸다(콘솔 logcat 의 BOOT_COMPLETE 또는 SVMG:boot). */
+    private volatile boolean bootCompleted = false;
+    /**
+     * 게스트 안에서 마지막으로 띄웠고 아직 죽지 않은 게임의 패키지. 같은 게임을 다시 누르면 게스트에
+     * 아무것도 보내지 않고 바로 화면을 연다 — pm/am 은 TCG 위에서 하나에 몇 초씩 걸린다.
+     */
+    private volatile String runningGame = null;
     private volatile long qemuStartedAt = 0L;
     private volatile long gameStartedAt = 0L;
     private final StringBuilder installOutput = new StringBuilder();
@@ -341,7 +348,14 @@ public final class GuestVm {
             return;
         }
         apk.setReadable(true, false);
-        listener.onStatus(isRunning() ? "가상롬 부팅을 기다리는 중…" : "가상롬을 켜는 중…");
+        boolean booted = isRunning() && this.bootCompleted;
+        if (booted && !request.reinstall && request.packageName.equals(this.runningGame)) {
+            // 게임이 게스트 안에 이미 떠 있다. 실행 화면만 다시 붙이면 된다.
+            appendLog("\n[게임 실행] " + request.packageName + " 은 이미 떠 있음 - 바로 연다");
+            finishLaunch(listener, null);
+            return;
+        }
+        listener.onStatus(booted ? "게임을 여는 중…" : isRunning() ? "가상롬 부팅을 기다리는 중…" : "가상롬을 켜는 중…");
         new Thread(() -> {
             // 콘솔 셸이 뜨기 전에 쓴 글자는 tty 에 쌓였다가 셸이 읽지만, 확실히 하려고 init 이
             // console 서비스를 띄우는 줄을 기다린다.
@@ -352,7 +366,9 @@ public final class GuestVm {
                 }
                 SystemClock.sleep(500);
             }
-            SystemClock.sleep(1500);
+            if (!this.bootCompleted) {
+                SystemClock.sleep(1500);
+            }
             Process process = this.qemuProcess;
             if (process == null || !process.isAlive()) {
                 finishLaunch(null, "가상롬이 꺼져 있습니다. 홈으로 돌아가 다시 열어 주세요.");
@@ -385,18 +401,21 @@ public final class GuestVm {
         String start = request.activity.isEmpty()
                 ? "monkey -p " + request.packageName + " -c android.intent.category.LAUNCHER 1"
                 : "am start -n " + request.packageName + "/" + request.activity;
-        String install = "pm install -r " + apk + " >/data/local/tmp/svm.pm 2>&1"
-                + " && echo SVMG:''installed || { echo SVMG:''installfail; cat /data/local/tmp/svm.pm; }";
-        String haveCheck = request.reinstall
-                ? install
-                : "if pm path " + request.packageName + " >/dev/null 2>&1; then echo SVMG:''have; else " + install + "; fi";
         // am start 는 이미 떠 있는 액티비티면 "brought to the front" 라고만 하고 Displayed 줄이 안
-        // 나온다. 그 경우를 front 로 구분해 20초 예비 대기 없이 바로 화면을 연다.
-        String run = "if o=$(" + start + " 2>&1); then case \"$o\" in *Error*) echo SVMG:''startfail;;"
-                + " *front*) echo SVMG:''front;; *) echo SVMG:''started;; esac; else echo SVMG:''startfail; fi";
+        // 나온다. 그 경우를 front 로 구분해 20초 예비 대기 없이 바로 화면을 연다. 셸 함수 s 는
+        // 실패하면 1 을 돌려 설치 뒤 재시도로 이어진다.
+        String startFn = "s(){ o=$(" + start + " 2>&1) || return 1; case \"$o\" in *Error*) return 1;;"
+                + " *front*) echo SVMG:''front;; *) echo SVMG:''started;; esac; }";
+        String install = "pm install -r " + apk + " >/data/local/tmp/svm.pm 2>&1"
+                + " && echo SVMG:''installed || { echo SVMG:''installfail; cat /data/local/tmp/svm.pm; false; }";
+        // 이미 설치된 것으로 아는 게임은 pm path 로 확인하지 않고 바로 띄운다 — pm 도 am 도 게스트에서
+        // 자바 프로세스를 새로 띄우는 일이라 TCG 위에서 각각 몇 초씩 든다. 실패하면 그때 설치한다.
+        String run = request.reinstall
+                ? install + " && s || echo SVMG:''startfail"
+                : "s || { " + install + " && s || echo SVMG:''startfail; }";
         return "\r( until [ \"$(getprop sys.boot_completed)\" = 1 ]; do sleep 2; done; echo SVMG:''boot;"
                 + " [ -f " + apk + " ] && echo SVMG:''share || echo SVMG:''noshare;"
-                + " " + haveCheck + ";"
+                + " " + startFn + ";"
                 + " " + run + " ) &\r";
     }
 
@@ -404,6 +423,16 @@ public final class GuestVm {
     private void handleLaunchLine(String line) {
         if (!this.consoleSeen && line.contains("service 'console'")) {
             this.consoleSeen = true;
+        }
+        if (!this.bootCompleted && (line.contains("Sending BOOT_COMPLETE") || line.contains("framework_boot_completed")
+                || line.contains(LAUNCH_MARK + "boot"))) {
+            this.bootCompleted = true;
+        }
+        String running = this.runningGame;
+        if (running != null && line.contains(running)
+                && (line.contains("has died") || line.contains("am_proc_died") || line.contains("Force finishing activity"))) {
+            // 게임 프로세스가 죽었다. 다음 실행은 am start 부터 다시 한다.
+            this.runningGame = null;
         }
         synchronized (this.installOutput) {
             if (this.installOutput.length() > 0 && this.installOutput.length() < 600
@@ -417,6 +446,7 @@ public final class GuestVm {
             return;
         }
         if (this.gameStartedAt == 0L && line.contains("ActivityManager: Displayed " + request.packageName + "/")) {
+            this.runningGame = request.packageName;
             finishLaunch(listener, null);
             return;
         }
@@ -431,7 +461,7 @@ public final class GuestVm {
         String mark = line.substring(at + LAUNCH_MARK.length()).trim();
         switch (mark) {
             case "boot":
-                listener.onStatus("게임을 준비하는 중…");
+                listener.onStatus(request.reinstall ? "게임을 준비하는 중…" : "게임을 여는 중…");
                 break;
             case "noshare":
                 finishLaunch(listener, "가상롬 안에서 게임 파일이 보이지 않습니다. 게스트 이미지가 공유 폴더(9p)를 "
@@ -461,10 +491,12 @@ public final class GuestVm {
                 break;
             case "started":
                 this.gameStartedAt = SystemClock.elapsedRealtime();
+                this.runningGame = request.packageName;
                 listener.onStatus("게임 화면을 기다리는 중…");
                 break;
             case "front":
                 // 이미 떠 있던 게임을 앞으로 가져왔다. 화면은 이미 그려지고 있다.
+                this.runningGame = request.packageName;
                 finishLaunch(listener, null);
                 break;
             case "startfail":
@@ -864,6 +896,8 @@ public final class GuestVm {
         // ensureStarted() 가 꺼져 있는 줄 알고 QEMU 를 하나 더 띄운다.
         this.qemuProcess = process;
         this.consoleSeen = false;
+        this.bootCompleted = false;
+        this.runningGame = null;
         this.qemuStartedAt = SystemClock.elapsedRealtime();
         final Process started = process;
         final long startedAt = SystemClock.elapsedRealtime();
