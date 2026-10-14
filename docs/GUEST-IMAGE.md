@@ -1248,6 +1248,38 @@ goldfish 파이프는 개수 제한이 없습니다.
 이미지에는 플레이 서비스가 없습니다. OK 를 누르면 닫힙니다 — 위 수정 전에는 그 OK 도 멈춘
 메인 스레드가 받지 못했을 뿐입니다.
 
+### 7.21 OK 는 눌리는데 화면이 심하게 깜빡인다 — flush 마다 post 하던 패치를 끈다
+
+7.20 뒤 터치가 됩니다(결제 대화상자의 OK 가 눌리고, `KD: [0] : (323, 287) -> (153, 151)` 처럼
+게임이 좌표를 받습니다). 대신 화면이 심하게 깜빡였습니다. 렌더러 로그가 이유를 보여 줍니다:
+
+```
+flush callback post handle=60 color=61      ← 게임 창(서피스 60)의 버퍼를 화면에
+rcFBPost color=6                            ← SurfaceFlinger 가 합성한 화면을 화면에
+flush callback post handle=5 color=4        ← SurfaceFlinger 자신의 창까지 또
+```
+
+이 프리빌트 `libemugl_host_android.so` 의 `flushWindowSurfaceColorBuffer` 는 앱 창이 flush 될
+때마다 그 창의 컬러버퍼를 `postImpl` 로 바로 올립니다(원래 emugl 에는 없는 동작). 그래서 게임의
+GL 버퍼, SurfaceFlinger 의 합성 결과, 상태 표시줄 창이 초당 수십 번 번갈아 화면이 됐습니다.
+두 분기를 무조건 점프로 바꿔(README 의 다섯 번째 패치) flush 는 flush 만 하게 했습니다. 화면은
+`rcFBPost`(SurfaceFlinger 합성)로만 바뀝니다 — 진짜 에뮬레이터와 같습니다.
+
+**남은 것 — 게임의 GL 그리기가 버려진다.** 같은 로그에 이것이 초당 열 번 넘게 찍힙니다
+(`liblog: 98` 은 같은 줄 98개가 생략됐다는 뜻):
+
+```
+E emuglGLESv1_enc: glDrawArrays: no data bound to the command - ignoring
+```
+
+게스트의 GLES1 인코더가 "켜진 정점 배열이 하나도 없다" 며 `glDrawArrays` 를 버리는 것입니다.
+타이틀의 "Ver 1.0.1" 과 "MORE GAMES" 만 보이고 로고·배경이 검은 이유로 보입니다(글자는
+`glDrawTexOES` 같은 배열 없는 경로일 수 있습니다). 게임이 `glEnableClientState` 를 다른
+컨텍스트에서 했거나 인코더가 모르는 경로를 쓰는 것인데, APK 를 뜯어 봐야 압니다.
+
+소리도 아직 없습니다: `APM_AudioPolicyManager: getOutput() could not find output for stream`
+— 게스트에 오디오 장치가 없습니다(virt 머신에는 goldfish 오디오가 없다).
+
 ---
 
 ## 8. 폰으로 옮긴 뒤

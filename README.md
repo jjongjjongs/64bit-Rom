@@ -137,6 +137,14 @@ SDL 보일러플레이트의 deprecation과 `PackageInfo.versionCode` 레거시 
 줄 순서를 뒤집는데, 동기 경로의 `ColorBuffer::readback` 은 이미 위에서 아래 순서로 준다.
 `0x1083fc`: `mov w3, #-1` (`03008012`) → `mov w3, #1` (`23008052`). 결과 sha256 `dbf0cae5…`.
 
+**다섯 번째 패치 — 앱 서피스 flush 마다 화면에 올리던 것을 끈다.** 이 프리빌트의
+`FrameBuffer::flushWindowSurfaceColorBuffer` 는 앱 창이 flush 될 때마다 그 창의 컬러버퍼를
+`postImpl` 로 화면에 올리고(`flush callback post handle=…`), 컬러버퍼가 없으면 창을 직접
+readback 해 콜백에 넘긴다. SurfaceFlinger 가 합성한 화면(`rcFBPost`)과 게임 창의 버퍼가
+번갈아 올라가 화면이 심하게 깜빡였다(폰 실측, 시드2 타이틀). `0x10b608`: `cbz x24, +0x38`
+(`d80100b4`) → `b +0x38` (`0e000014`), `0x10b640`: `cbz x8, +0xa4` (`280500b4`) → `b +0xa4`
+(`29000014`). 이제 화면은 `rcFBPost` 로만 바뀐다. 결과 sha256 `3fc18e8b…`.
+
 ```
 sha256sum app/src/main/jniLibs/arm64-v8a/libemugl_host_android.so
 ```
