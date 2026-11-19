@@ -356,6 +356,7 @@
   }
   function updBot(dt, a) {
     var ai = a.ai, g = a.guns[a.slot], w = W[g.id], df = G.diff; ai.err = df.err;
+    ai.holdT = (ai.holdT || 0) - dt; if (ai.holdT <= 0) { ai.holdT = rnd(4, 9); ai.holdI = (Math.random() * 120) | 0; }   // time to shift to another post
     ai.think -= dt; ai.pathT += dt; ai.lastSeenT += dt; if (ai.think <= 0) { ai.think = .16 + Math.random() * .08; think(a); }
     var vx = 0, vz = 0, sp = 4.1, tgt = ai.tgt, wantYaw = a.yaw, wantPitch = 0;
     if (tgt && !tgt.alive) { tgt = ai.tgt = null; }
@@ -386,7 +387,7 @@
   // ---------- bomb mission ----------
   // Rounds without respawn. The attacking side carries one bomb to site A or B and holds "use" for 3 s; it goes off 35 s later
   // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
-  var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
+  var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0], [-5.5, .5], [5, -4.5], [1, 6], [-4, -5.5], [6.5, 3], [-1, -7]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
   var bombMesh = new T.Mesh(new T.BoxGeometry(.36, .16, .24), new T.MeshLambertMaterial({ color: 0x2a2e31 })), bombLed = new T.Mesh(new T.BoxGeometry(.09, .05, .09), new T.MeshBasicMaterial({ color: 0xff3b2a, fog: false }));
   bombLed.position.y = .1; bombMesh.add(bombLed); bombMesh.visible = false; scene.add(bombMesh);
   function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: c >= nav.N ? nav.H : 0 }; }
@@ -398,16 +399,23 @@
     var B = G.bomb, atk = a.team === B.atk, off = POSTS[a.idx % POSTS.length], s, o, far = { x: G.map.spawns.B[2].x, z: 0 };
     if (B.phase !== 'live') return { x: a.pos.x, z: a.pos.z };
     if (B.planted) {
-      s = B.planted; if (atk) { o = snap(s.x + off[0] * 1.7, s.z + off[1] * 1.7, s.l); o.look = far; return o; }
+      s = B.planted; if (atk) return hold(a, s, 1.5, (G.map.fwd || []).concat([[far.x, far.z]]));
       return { x: s.x, z: s.z, l: s.l, use: near(a, s, 1.3), force: s.t < 14 || a.useP > 2.5 };
     }
-    if (!atk) { if (a.ai.fwd) { o = snap(a.ai.fwd[0], a.ai.fwd[1], a.ai.fwd[2]); o.look = { x: G.map.spawns.A[2].x, z: 0 }; return o; } s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1], s.l); o.look = { x: 0, z: 0 }; return o; }
+    if (!atk) { var k = a.ai.holdI || 0, fw = G.map.fwd;
+      if (a.ai.fwd && fw) { o = fw[(k + a.idx) % fw.length]; o = snap(o[0], o[1], o[2]); s = G.map.sites[k % 2].via; o.look = s ? { x: s[k % s.length][0], z: s[k % s.length][1] } : { x: G.map.spawns.A[2].x, z: 0 }; return o; }   // roams the forward spots
+      s = G.map.sites[(a.idx + (k % 4 === 0 ? 1 : 0)) % 2]; return hold(a, s, 1, s.via || [[0, 0]]); }   // guards a site, now and then crossing to the other
     if (B.drop) return { x: B.drop.x, z: B.drop.z, l: B.drop.l, force: true };
     s = G.map.sites[B.plan];
     if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4 && (a.ai.via[2] || 0) === lvl(a)) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1], a.ai.via[2]); }   // this round's route
     if (B.carrier === a) return { x: s.x, z: s.z, l: s.l, use: near(a, s, 1.4), force: a.useP > 1.5 };
     if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9, lvl(B.carrier));   // escort the player
     o = snap(s.x + off[0], s.z + off[1], s.l); o.look = far; return o;
+  }
+  // a place to stand near s, changing every few seconds, and something to watch from there that changes more often
+  function hold(a, s, scale, looks) {
+    var k = a.ai.holdI || 0, off = POSTS[(a.idx * 5 + k) % POSTS.length], o = snap(s.x + off[0] * scale, s.z + off[1] * scale, s.l), v = looks && looks.length ? looks[(k + a.idx + ((G.elapsed / 3.2) | 0)) % looks.length] : null;
+    o.look = v ? { x: v[0], z: v[1] } : null; return o;
   }
   function roundEnd(winner, why) {
     var B = G.bomb; if (B.phase !== 'live') return; B.phase = 'post'; B.postT = 4; G.score[winner]++; B.round++; inp.use = false;
@@ -526,7 +534,7 @@
     if (G.feedDirty || G.feed.length) { var ch = false; G.feed.forEach(function (f) { f.t -= dt; }); while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) { G.feed.pop(); ch = true; }
       if (G.feedDirty || ch) { G.feedDirty = false; var box = $('feed'); box.textContent = ''; G.feed.forEach(function (f) { var d = document.createElement('div'), a = document.createElement('b'), b2 = document.createElement('b'); a.textContent = f.k.name; a.className = 't' + f.k.team; b2.textContent = f.v.name; b2.className = 't' + f.v.team; d.appendChild(a); d.appendChild(document.createTextNode(f.head ? ' ◆ ' : ' ▸ ')); d.appendChild(b2); box.appendChild(d); }); } }
     if (msgT > 0) { msgT -= dt; if (msgT <= 0 && p.alive) $('msg').hidden = true; }
-    if (!p.alive && G.state === 'play' && !(G.bomb && G.bomb.phase === 'post')) { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + (G.bomb ? '다음 라운드까지 관전' : Math.ceil(p.respawn) + '초 뒤 다시 투입'); msgT = .1; }
+    if (!p.alive && G.state === 'play' && !(G.bomb && G.bomb.phase === 'post')) { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + (G.bomb ? (G.specName ? G.specName + ' 관전 중 · 사격 버튼으로 전환' : '다음 라운드까지 관전') : Math.ceil(p.respawn) + '초 뒤 다시 투입'); msgT = .1; }
     var B = G.bomb, can = B && p.alive && B.phase === 'live' ? B.can : null, ot = '', ut = can === 'plant' ? '설치' : can === 'defuse' ? '해제' : '', up = can ? Math.round(p.useP / (can === 'plant' ? PLANT : DEFUSE) * 100) : 0, red = !!(B && B.planted);
     if (B) ot = B.planted ? (p.team === B.atk ? B.planted.site + ' 지점 설치 완료 · 폭탄을 지키세요' : B.planted.site + ' 지점에 폭탄 · 해제하세요') : p.team === B.atk ? (B.carrier === p ? '폭탄 소지 · A 또는 B에 설치' : B.drop ? '폭탄이 떨어져 있습니다 · 주우세요' : '공격 · ' + (B.carrier ? B.carrier.name + ' 이(가) 폭탄 운반 중' : '')) : '수비 · A, B 지점 방어';
     set('obj', ot); if (last.objh !== !B) { last.objh = !B; $('obj').hidden = !B; }
@@ -563,13 +571,14 @@
     }
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt);
-    if (p.alive) { G.deadT = 0; cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
-    else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
+    if (p.alive) { G.deadT = 0; G.specName = ''; cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
+    else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
     if (G.shake > 0) { G.shake -= dt; cam.position.x += rnd(-1, 1) * G.shake * .12; cam.position.y += rnd(-1, 1) * G.shake * .12; }
     if (G.flashT > 0) { G.flashT -= dt; if (G.flashT <= 0) flash.visible = false; }
   }
-  function watch(p) { var i, a, any = null; for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (!a.alive) continue; if (a.team === p.team) return a; any = any || a; } return any; }
+  // who the dead player's camera follows: living teammates in turn (the fire button steps to the next), else anyone alive
+  function watch(p) { var i, a, mates = [], any = null; for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (!a.alive) continue; if (a.team === p.team) mates.push(a); any = any || a; } return mates.length ? mates[(G.specI || 0) % mates.length] : any; }
   var prev = 0;
   function frame(t) {
     requestAnimationFrame(frame); var dt = Math.min(.05, (t - prev) / 1000 || 0); prev = t;
