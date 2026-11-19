@@ -46,7 +46,10 @@
       host.appendChild(col);
     });
   }
-  function applyCfg() { var h = $('hud'); h.style.setProperty('--bs', cfg.btnScale / 100); h.style.setProperty('--ba', cfg.btnAlpha / 100); $('b-lfire').hidden = !cfg.leftFire; SV.resize(); }
+  var EDIT = ['stick', 'b-lfire', 'b-fire', 'b-ads', 'b-jump', 'b-crouch', 'b-reload', 'b-nade'], ENAME = { stick: '이동 스틱', 'b-lfire': '왼손 사격', 'b-fire': '사격', 'b-ads': '정조준', 'b-jump': '점프', 'b-crouch': '앉기', 'b-reload': '장전', 'b-nade': '투척' };
+  if (!cfg.layout || typeof cfg.layout !== 'object') cfg.layout = {};
+  function applyLayout() { EDIT.forEach(function (id) { var l = cfg.layout[id] || {}, st = $(id).style; st.setProperty('--dx', (l.x || 0) + 'px'); st.setProperty('--dy', (l.y || 0) + 'px'); st.setProperty('--sc', l.s || 1); }); }
+  function applyCfg() { applyLayout(); var h = $('hud'); h.style.setProperty('--bs', cfg.btnScale / 100); h.style.setProperty('--ba', cfg.btnAlpha / 100); $('b-lfire').hidden = !cfg.leftFire; SV.resize(); }
 
   // ---------- navigation ----------
   document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { SV.audio(); var to = b.getAttribute('data-go'); if (b.hasAttribute('data-from')) from[to] = b.getAttribute('data-from'); show(to); }); });
@@ -75,6 +78,23 @@
   // ---------- settings ----------
   [['sens', 'sens'], ['ads', 'adsSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
   [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
+
+  // ---------- button layout editor ----------
+  var hud = $('hud'), sel = null, dragB = null;
+  function pick(id) { EDIT.forEach(function (e) { $(e).classList.toggle('sel', e === id); }); sel = id; $('ed-name').textContent = id ? ENAME[id] + ' 선택됨' : '버튼을 끌어 옮기세요'; $('ed-size').disabled = !id; if (id) $('ed-size').value = Math.round(((cfg.layout[id] || {}).s || 1) * 100); }
+  function editOn() { cur = 'edit'; SCR.forEach(function (s) { $(s).hidden = true; }); hud.hidden = false; hud.classList.add('edit'); $('grid').hidden = false; $('edbar').hidden = false; $('b-lfire').hidden = false; pick(null); }
+  function editOff() { hud.classList.remove('edit'); $('grid').hidden = true; $('edbar').hidden = true; pick(null); save(); applyCfg(); show('s-set'); }
+  $('go-edit').addEventListener('click', editOn); $('ed-done').addEventListener('click', editOff);
+  $('ed-reset').addEventListener('click', function () { cfg.layout = {}; applyLayout(); pick(null); save(); });
+  $('ed-size').addEventListener('input', function () { if (!sel) return; var l = cfg.layout[sel] || (cfg.layout[sel] = {}); l.s = +this.value / 100; applyLayout(); save(); });
+  hud.addEventListener('pointerdown', function (e) {
+    if (!hud.classList.contains('edit')) return; var t = e.target.closest ? e.target.closest('.hb, #stick') : null;
+    if (!t) { if (!(e.target.closest && e.target.closest('#edbar'))) pick(null); return; }
+    e.stopPropagation(); e.preventDefault(); pick(t.id); var l = cfg.layout[t.id] || (cfg.layout[t.id] = {}); dragB = { id: t.id, p: e.pointerId, sx: e.clientX, sy: e.clientY, ox: l.x || 0, oy: l.y || 0 }; try { hud.setPointerCapture(e.pointerId); } catch (er) {}
+  }, true);
+  hud.addEventListener('pointermove', function (e) { if (!dragB || e.pointerId !== dragB.p) return; e.stopPropagation(); var l = cfg.layout[dragB.id], W2 = window.innerWidth, H2 = window.innerHeight; l.x = Math.max(-W2, Math.min(W2, dragB.ox + e.clientX - dragB.sx)); l.y = Math.max(-H2, Math.min(H2, dragB.oy + e.clientY - dragB.sy)); applyLayout(); }, true);
+  function dragEnd(e) { if (!dragB || e.pointerId !== dragB.p) return; e.stopPropagation(); var r = $(dragB.id).getBoundingClientRect(), l = cfg.layout[dragB.id]; if (r.right < 30) l.x += 30 - r.right; if (r.left > window.innerWidth - 30) l.x -= r.left - (window.innerWidth - 30); if (r.bottom < 30) l.y += 30 - r.bottom; if (r.top > window.innerHeight - 30) l.y -= r.top - (window.innerHeight - 30); applyLayout(); dragB = null; save(); }
+  hud.addEventListener('pointerup', dragEnd, true); hud.addEventListener('pointercancel', dragEnd, true);
 
   // ---------- touch ----------
   var zone = $('zone'), stick = null, looks = {}, knob = $('knob'), stickEl = $('stick');
@@ -124,7 +144,7 @@
   window.addEventListener('resize', SV.resize); if (window.ResizeObserver) new ResizeObserver(SV.resize).observe($('cv'));
   if (window.matchMedia('(pointer: coarse)').matches) $('keys').hidden = true;
   // Android back key: pause a running match, step back out of menus, and only then let the app close.
-  SV.back = function () { if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
-  SV.ui = { begin: begin, match: match, pause: pause, resume: resume };
+  SV.back = function () { if (cur === 'edit') { editOff(); return true; } if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
+  SV.ui = { begin: begin, match: match, pause: pause, resume: resume, edit: editOn };
   applyCfg(); show('s-title');
 })();

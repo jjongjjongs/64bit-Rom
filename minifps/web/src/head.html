@@ -86,7 +86,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 /* ---- HUD ---- */
 #hud { position: absolute; inset: 0; --bs: 1; --ba: .6; }
 #zone { position: absolute; inset: 0; }
-.hb { position: absolute; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .6); background: rgba(11, 13, 15, .4); font-size: 12px; font-weight: 700; opacity: var(--ba); transform: scale(var(--bs)); display: flex; align-items: center; justify-content: center; touch-action: none; }
+.hb { position: absolute; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .6); background: rgba(11, 13, 15, .4); font-size: 12px; font-weight: 700; opacity: var(--ba); transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); display: flex; align-items: center; justify-content: center; touch-action: none; }
 .hb.on { background: rgba(232, 228, 218, .35); }
 #b-fire { right: calc(var(--sr) + 96px); bottom: calc(var(--sb) + 58px); width: 86px; height: 86px; border: 3px solid var(--alarm); background: rgba(255, 90, 64, .22); font-size: 16px; font-weight: 900; }
 #b-ads { right: calc(var(--sr) + 28px); bottom: calc(var(--sb) + 134px); width: 60px; height: 60px; }
@@ -95,7 +95,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #b-reload { right: calc(var(--sr) + 192px); bottom: calc(var(--sb) + 52px); width: 52px; height: 52px; }
 #b-nade { right: calc(var(--sr) + 178px); bottom: calc(var(--sb) + 116px); width: 48px; height: 48px; font-size: 11px; }
 #b-lfire { left: calc(var(--sl) + 6px); top: 42%; width: 54px; height: 54px; border-color: rgba(255, 90, 64, .8); }
-#stick { position: absolute; left: calc(var(--sl) + 24px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; }
+#stick { position: absolute; left: calc(var(--sl) + 24px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); }
 #knob { position: absolute; left: 36px; top: 36px; width: 56px; height: 56px; border-radius: 50%; background: rgba(232, 228, 218, .5); }
 #score { position: absolute; left: 50%; top: calc(var(--st) + 8px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 3px 12px; background: rgba(11, 13, 15, .6); pointer-events: none; }
 #score b { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: 1; } #sc-t { font-family: var(--f-mono); font-size: 13px; }
@@ -125,12 +125,21 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 @media (orientation: portrait) and (pointer: coarse) { #rot { display: flex; } }
 @media (max-width: 620px) { .lobby, .pause, .res, .load { grid-template-columns: minmax(0, 1fr); } .set { grid-template-columns: minmax(0, 1fr); } }
 @media (pointer: fine) { #stick, .hb { display: none; } }
+/* ---- button layout editor ---- */
+#grid { position: absolute; inset: 0; background-color: var(--ink); background-image: linear-gradient(rgba(232, 228, 218, .09) 1px, transparent 1px), linear-gradient(90deg, rgba(232, 228, 218, .09) 1px, transparent 1px); background-size: 26px 26px; }
+#edbar { position: absolute; left: calc(var(--sl) + 108px); right: var(--sr); top: calc(var(--st) + 8px); display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 6px 10px; background: var(--ink-2); border: 1px solid var(--signal); font-size: 13px; }
+#edbar b { font-weight: 900; font-size: 15px; } #edbar label { display: flex; align-items: center; gap: 8px; flex: 1 1 160px; } #edbar .cta, #edbar .ghost { min-height: 44px; padding: 0 16px; font-size: 14px; }
+#hud.edit #zone, #hud.edit #cross, #hud.edit #hitm, #hud.edit #dmg, #hud.edit #scope, #hud.edit #msg, #hud.edit #feed, #hud.edit #score, #hud.edit .sq { display: none; }
+#hud.edit .hb, #hud.edit #stick { display: flex; opacity: 1; pointer-events: auto; border-style: dashed; cursor: grab; touch-action: none; }
+#hud.edit #stick { display: block; } #hud.edit .sel { border: 2px solid var(--signal); box-shadow: 0 0 0 3px rgba(255, 179, 71, .3); }
+#hud.edit #mini, #hud.edit #bottom { opacity: .45; pointer-events: none; }
 </style>
 
 <div id="app">
   <canvas id="cv"></canvas>
 
   <div id="hud" hidden>
+    <div id="grid" hidden></div>
     <div id="zone"></div>
     <div id="dmg"></div>
     <div id="scope" hidden></div>
@@ -155,10 +164,16 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
       <div id="ammo"><span id="am">30</span><span id="ar">/ 90</span></div>
     </div>
     <div id="msg" hidden></div>
+    <div id="edbar" hidden>
+      <b id="ed-name">버튼을 끌어 옮기세요</b>
+      <label for="ed-size">크기 <input id="ed-size" type="range" min="60" max="170" value="100" disabled></label>
+      <button class="ghost" id="ed-reset">기본값</button>
+      <button class="cta" id="ed-done">완료</button>
+    </div>
   </div>
 
   <section class="scr" id="s-title">
-    <div class="eyebrow">v0.1 · 오프라인 봇전</div>
+    <div class="eyebrow">v0.2 · 오프라인 봇전</div>
     <h1>Mini-FPS</h1>
     <div class="tag"><i></i>팀 데스매치 · 맵 2개 · 무기 7종</div>
     <div><button class="cta" data-go="s-lobby" id="go-start">시작</button></div>
@@ -221,6 +236,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
       <div class="tog"><div><b>왼손 사격 버튼</b><small>조준하면서 왼손으로 발사</small></div><button class="sw" role="switch" id="c-left" aria-label="왼손 사격 버튼"><i></i></button></div>
       <div class="tog"><div><b>소리</b><small>총성과 효과음</small></div><button class="sw" role="switch" id="c-sound" aria-label="소리"><i></i></button></div>
       <div class="tog"><div><b>고화질</b><small>끄면 더 부드럽게 돌아감</small></div><button class="sw" role="switch" id="c-quality" aria-label="고화질"><i></i></button></div>
+      <div class="tog"><div><b>버튼 배치</b><small>조작 버튼을 끌어 옮기고 크기를 바꿈</small></div><button class="ghost" id="go-edit" style="border-color:var(--signal);color:var(--signal)">배치 편집</button></div>
     </div>
   </section>
 
