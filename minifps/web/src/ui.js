@@ -36,7 +36,7 @@
     }
     if (id === 's-pause') board();
     if (id === 's-set') {
-      [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
+      [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['gs', 'gyroSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
       [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
     }
   }
@@ -84,7 +84,7 @@
   };
 
   // ---------- settings ----------
-  [['sens', 'sens'], ['ads', 'adsSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
+  [['sens', 'sens'], ['ads', 'adsSens'], ['gs', 'gyroSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
   $('c-reset').addEventListener('click', function () { var d = SV.cfgDefaults; for (var k in d) cfg[k] = JSON.parse(JSON.stringify(d[k])); save(); refresh('s-set'); applyCfg(); });
   [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
 
@@ -152,8 +152,10 @@
 
   // gyro aiming: rotation rate of the phone, mapped for either landscape orientation
   window.addEventListener('devicemotion', function (e) {
-    if (!cfg.gyro || G.state !== 'play' || !e.rotationRate) return; var r = e.rotationRate, dt = (e.interval > 1 ? e.interval / 1000 : e.interval) || .016, a = (screen.orientation && screen.orientation.angle) || window.orientation || 90, s = a === 270 || a === -90 ? -1 : 1, k = Math.PI / 180 * dt * .9;
-    inp.gy += (r.beta || 0) * s * k; inp.gp += -(r.gamma || 0) * s * k;
+    if (!cfg.gyro || G.state !== 'play' || !e.rotationRate) return; var r = e.rotationRate, dt = (e.interval > 1 ? e.interval / 1000 : e.interval) || .016, a = (screen.orientation && screen.orientation.angle) || window.orientation || 90, s = a === 270 || a === -90 ? -1 : 1, k = Math.PI / 180 * dt * cfg.gyroSens / 50;
+    // Android WebView reports alpha about the phone's short axis and beta about its long axis. Held in landscape, the short axis is
+    // vertical (turning left and right) and the long axis is horizontal (tilting up and down).
+    inp.gy += (r.alpha || 0) * s * k; inp.gp += -(r.beta || 0) * s * k;
   });
   window.addEventListener('resize', SV.resize); if (window.ResizeObserver) new ResizeObserver(SV.resize).observe($('cv'));
   if (window.matchMedia('(pointer: coarse)').matches) $('keys').hidden = true;

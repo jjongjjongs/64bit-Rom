@@ -111,7 +111,7 @@
       box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false) coll(x, z, w, d, h, y0); },
       cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false) coll(x, z, r * 1.7, r * 1.7, h, y0); },
       geo: function (g, c, t, opt) { push(g, c, t || 'plain', opt); },
-      solid: function (x, z, w, d, h, y0) { coll(x, z, w, d, h, y0 || 0); },
+      solid: function (x, z, w, d, h, y0, soft) { coll(x, z, w, d, h, y0 || 0); if (soft) b.boxes[b.boxes.length - 1].soft = true; },   // soft: stops people, not bullets
       seg: function (x0, y0, z0, x1, y1, z1, w, c, t) {              // a beam between two points
         var a = new T.Vector3(x0, y0, z0), e = new T.Vector3(x1, y1, z1), dir = e.clone().sub(a), len = dir.length(), g = new T.BoxGeometry(w, len, w), m = new T.Matrix4();
         m.compose(a.add(e).multiplyScalar(.5), new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize()), new T.Vector3(1, 1, 1)); g.applyMatrix4(m); push(g, c, t || 'metal');
@@ -260,11 +260,11 @@
     });
     // pallet racking: uprights, beams, loaded shelves (the collision volume stays one block per rack)
     function rack(x, z0, z1) {
-      var z, lv, n = 0; b.solid(x, (z0 + z1) / 2, 1.2, z1 - z0, 3.4, 0);
+      var z, lv, n = 0; b.solid(x, (z0 + z1) / 2, 1.2, z1 - z0, 3.4, 0, true);   // you cannot walk through a rack, but shots pass between the loads
       for (z = z0; z <= z1 + .01; z += (z1 - z0) / Math.round((z1 - z0) / 2.7)) { [-.52, .52].forEach(function (dx) { b.box(x + dx, z, .09, .09, 4.3, C.blue, 0, false, 'metal'); }); b.seg(x - .52, .2, z, x + .52, 1.5, z, .04, C.blue); b.seg(x - .52, 1.7, z, x + .52, 3, z, .04, C.blue); }
       [0.1, 1.55, 3.0].forEach(function (y, li) {
         if (li) [-.52, .52].forEach(function (dx) { b.box(x + dx, (z0 + z1) / 2, .07, z1 - z0, .12, C.orange, y - .14, false, 'metal'); });
-        for (z = z0 + .75; z < z1 - .3; z += 1.35) { n++; b.pallet(x, z, y, true);
+        for (z = z0 + .75; z < z1 - .3; z += 1.35) { n++; b.pallet(x, z, y, true); b.solid(x, z, 1, 1.2, .15, y); b.solid(x, z, .95, 1.05, n % 4 === 0 ? .9 : n % 4 === 1 ? 1.05 : n % 3 ? 1 : 1.05, y + .14);
           if (n % 4 === 0) { b.barrel(x - .2, z - .25, C.blue, y + .14); b.barrel(x + .2, z + .25, C.blue, y + .14); }
           else if (n % 4 === 1) b.crate(x, z, .95, 0xc9a66e, y + .14, 1.05);
           else { b.box(x, z, .9, 1.05, n % 3 ? 1 : .7, n % 2 ? 0xb39a72 : 0x8f8468, y + .14, false, 'crate', true); if (n % 3 === 0) b.box(x, z, .6, .7, .35, 0xb39a72, y + .84, false, 'crate', true); } }
