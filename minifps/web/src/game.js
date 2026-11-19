@@ -19,7 +19,7 @@
   var EYE = 1.63, EYEC = 1.12, RAD = .35;
 
   var G = SV.G = { state: 'menu', actors: [], nades: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
-  var inp = SV.inp = { mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
+  var inp = SV.inp = { gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
   var cfg = SV.cfg;
 
   // ---------- renderer ----------
@@ -201,7 +201,7 @@
       if (by !== v) { by.kills++; G.score[by.team]++; }
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
-      if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; }
+      if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
       if (G.score[by.team] >= G.match.target) endMatch();
     }
     return true;
@@ -286,7 +286,7 @@
   function updPlayer(dt, p) {
     var g = p.guns[p.slot], w = W[g.id];
     var sens = (p.ads && !w.melee ? cfg.adsSens * (w.scope ? .35 : 1) : cfg.sens) * .00011 * (G.assistSlow ? .55 : 1);
-    p.yaw -= inp.lx * sens; p.pitch = clamp(p.pitch - inp.ly * sens, -1.45, 1.45); inp.lx = inp.ly = 0;
+    p.yaw -= inp.lx * sens; p.yaw += inp.gy; p.pitch = clamp(p.pitch - inp.ly * sens + inp.gp, -1.45, 1.45); inp.lx = inp.ly = inp.gy = inp.gp = 0;
     if (inp.crouch) { p.crouch = !p.crouch; inp.crouch = false; }
     if (inp.slot >= 0) { if (inp.slot !== p.slot) { p.slot = inp.slot; p.ads = false; g.reload = 0; setVm(); } inp.slot = -1; g = p.guns[p.slot]; w = W[g.id]; }
     p.ads = inp.ads && !w.melee && g.reload <= 0;
@@ -348,7 +348,7 @@
     // unstick
     ai.stuckT += dt; if (ai.stuckT > 1.2) { if (a.moving && Math.hypot(a.pos.x - ai.lastX, a.pos.z - ai.lastZ) < .35) { ai.path = []; ai.goal = null; ai.lastSeenT = 99; } ai.lastX = a.pos.x; ai.lastZ = a.pos.z; ai.stuckT = 0; }
     // shoot
-    if (tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
+    if (!G.match.practice && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
       ai.pause -= dt;
       if (ai.pause <= 0 && g.cool <= 0) {
         eye(a, vO); vD.set(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch));
@@ -366,8 +366,8 @@
 
   // ---------- match ----------
   SV.start = function (match) {
-    SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
-    G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0 };
+    SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
+    G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group);
     scene.background = new T.Color(map.bg); scene.fog = new T.Fog(map.bg, map.fog[0], map.fog[1]);
     hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2];
@@ -381,8 +381,8 @@
     function gun(n) { var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
-    for (i = 0; i < match.perTeam; i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
-    G.actors.forEach(spawn); G.mini = null; G.state = 'play'; SV.resize(); showMsg(map.name + ' · 먼저 ' + match.target + '킬', 2.5);
+    for (i = 0; i < (match.enemies || match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
+    G.actors.forEach(spawn); G.mini = null; G.state = 'play'; SV.resize(); showMsg(match.practice ? '연습장 · 봇은 쏘지 않습니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
   };
   SV.end = function () {
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); G.map = null; }
@@ -394,7 +394,7 @@
   function endMatch() {
     if (G.state !== 'play') return; G.state = 'over'; inp.fire = false;
     var p = G.player, mine = G.score[p.team], theirs = G.score[p.team === 'A' ? 'B' : 'A'];
-    setTimeout(function () { SV.onEnd({ win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: (G.match.minutes * 60 - G.time), map: G.map.name, weapon: W[G.match.primary].name, killer: G.killer }); }, 1200);
+    setTimeout(function () { SV.onEnd({ win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: (G.match.minutes * 60 - G.time), map: G.map.name, weapon: W[G.match.primary].name, practice: !!G.match.practice }); }, 1200);
     showMsg(mine > theirs ? '승리' : mine === theirs ? '무승부' : '패배', 5);
   }
 
@@ -417,7 +417,7 @@
     for (var i = 0; i < 3; i++) { var on = i === p.slot ? 'true' : 'false'; if (last['s' + i] !== on + p.guns[i].id) { last['s' + i] = on + p.guns[i].id; var e = $('slot' + i); e.setAttribute('aria-pressed', on); e.textContent = W[p.guns[i].id].short; } }
     set('nn', p.nade > 0 ? '투척' : '없음');
     var sp = Math.round(((p.ads ? w.ads : w.spread || 0) + p.bloom + (p.moving ? .012 : 0)) * 900 + 5); if (last.sp !== sp) { last.sp = sp; $('cross').style.setProperty('--g', sp + 'px'); }
-    $('cross').hidden = !p.alive || (w.scope && vmAds > .8) || (p.ads && !w.melee && !w.scope && vmAds > .6);
+    $('cross').hidden = !p.alive || (w.scope && vmAds > .8); var dotOnly = p.ads && !w.melee && !w.scope && vmAds > .6; if (last.dot !== dotOnly) { last.dot = dotOnly; $('cross').classList.toggle('dot', dotOnly); }
     G.marker = Math.max(0, G.marker - dt); var mk = $('hitm'); mk.hidden = G.marker <= 0; if (G.marker > 0) mk.style.borderColor = G.markerHead ? '#ff5a40' : '#e8e4da';
     G.hitFlash = Math.max(0, G.hitFlash - dt); $('dmg').style.opacity = Math.min(1, G.hitFlash * 2 + (p.alive && p.hp < 35 ? .25 : 0));
     if (G.feedDirty || G.feed.length) { var ch = false; G.feed.forEach(function (f) { f.t -= dt; }); while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) { G.feed.pop(); ch = true; }
@@ -426,6 +426,20 @@
     if (!p.alive && G.state === 'play') { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + Math.ceil(p.respawn) + '초 뒤 다시 투입'; msgT = .1; }
     miniT -= dt; if (miniT <= 0) { miniT = .12; drawMini(); }
   }
+  SV.botGun = function (n, map) { var id = BOTGUN[n % BOTGUN.length]; return map === 1 && id === 'sniper' ? 'smg' : id; };
+  // Side-on picture of a gun for the menus, drawn with the game renderer into a small off-screen target.
+  var thumbs = {};
+  SV.thumb = function (id) {
+    if (thumbs[id] || !renderer) return thumbs[id] || '';
+    var w = 320, h = 128, rt = new T.WebGLRenderTarget(w, h), sc = new T.Scene(), mesh = new T.Mesh(SV.merge(SV.GUN[id]().g), new T.MeshLambertMaterial({ color: 0xe8e4da }));
+    var box = new T.Box3().setFromObject(mesh), c = box.getCenter(new T.Vector3()), sz = box.getSize(new T.Vector3()), half = Math.max(sz.x / 2 * 1.08, sz.y / 2 * 1.08 * w / h);
+    var oc = new T.OrthographicCamera(-half, half, half * h / w, -half * h / w, .01, 10); oc.position.set(c.x, c.y, 3); oc.lookAt(c);
+    sc.add(mesh); sc.add(new T.HemisphereLight(0xffffff, 0x666666, .9)); var dl = new T.DirectionalLight(0xffffff, .5); dl.position.set(-1, 2, 3); sc.add(dl);
+    var px = new Uint8Array(w * h * 4), old = renderer.getClearAlpha(); renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, oc); renderer.readRenderTargetPixels(rt, 0, 0, w, h, px); renderer.setRenderTarget(null); renderer.setClearColor(0x000000, old);
+    var cv = document.createElement('canvas'); cv.width = w; cv.height = h; var x = cv.getContext('2d'), im = x.createImageData(w, h), y;
+    for (y = 0; y < h; y++) im.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    x.putImageData(im, 0, 0); rt.dispose(); mesh.geometry.dispose(); return thumbs[id] = cv.toDataURL();
+  };
   SV.board = function () { return G.actors.slice().sort(function (a, b) { return b.kills - a.kills || a.deaths - b.deaths; }); };
 
   // ---------- main loop ----------

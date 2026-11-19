@@ -14,6 +14,7 @@ var SV = window.SV = window.SV || {};
       cx: function (r, len, mat, x, y, z, seg, r2) { return add(new T.CylinderGeometry(r2 == null ? r : r2, r, len, seg || 8), mat, x, y, z, 0, 0, -PI / 2); },
       cy: function (r, len, mat, x, y, z, seg) { return add(new T.CylinderGeometry(r, r, len, seg || 8), mat, x, y, z); },
       cz: function (r, len, mat, x, y, z, seg) { return add(new T.CylinderGeometry(r, r, len, seg || 8), mat, x, y, z, PI / 2, 0, 0); },
+      s: function (r, mat, x, y, z, sx, sy, sz, seg) { var m = add(new T.SphereGeometry(r, seg || 10, 8), mat, x, y, z); m.scale.set(sx || 1, sy || 1, sz || 1); return m; },
       add: add
     };
   }
@@ -39,11 +40,11 @@ var SV = window.SV = window.SV || {};
     var g = new T.Group(), k = kit(g), m = MAT;
     k.b(.3, .07, .046, m.poly, 0, .02, 0); k.b(.3, .02, .05, m.steel, 0, .058, 0); k.b(.06, .024, .003, m.dark, .02, .03, .0235); rail(k, -.13, .13, .072, .024);
     k.cx(.02, .11, m.dark, .205, .028, 0); for (var i = 0; i < 3; i++) k.b(.016, .044, .02, m.steel, .17 + i * .03, .028, 0); k.cx(.009, .05, m.steel, .28, .028, 0);
-    k.b(.012, .034, .03, m.dark, -.1, .1, 0); k.b(.012, .03, .008, m.bright, .11, .098, 0);
+    k.b(.012, .02, .005, m.dark, -.1, .093, .011); k.b(.012, .02, .005, m.dark, -.1, .093, -.011); k.b(.006, .03, .005, m.bright, .11, .098, 0);
     k.b(.036, .2, .026, m.poly2, .05, -.115, 0); k.b(.042, .012, .03, m.accent, .05, -.22, 0); k.b(.044, .11, .034, m.rubber, -.07, -.07, 0, 0, 0, -.22); guard(k, -.01, -.015);
     k.b(.034, .085, .03, m.rubber, .165, -.05, 0);
     k.b(.2, .01, .01, m.steel, -.25, .045, .016); k.b(.2, .01, .01, m.steel, -.25, .045, -.016); k.b(.012, .11, .046, m.rubber, -.352, 0, 0);
-    return { g: g, grip: [-.07, -.085], fore: [.165, -.07], muzzle: [.31, .028], sight: .105 };
+    return { g: g, grip: [-.07, -.085], fore: [.165, -.07], muzzle: [.31, .028], sight: .118 };
   };
   GUN.sniper = function () {
     var g = new T.Group(), k = kit(g), m = MAT;
@@ -64,15 +65,15 @@ var SV = window.SV = window.SV || {};
     k.b(.17, .05, .052, m.wood, .25, -.016, 0); for (var i = 0; i < 6; i++) k.b(.008, .054, .056, m.wood2, .185 + i * .026, -.016, 0);
     guard(k, -.08, -.02); k.b(.1, .06, .04, m.wood, -.16, -.03, 0, 0, 0, .35); k.b(.22, .075, .04, m.wood, -.31, -.055, 0, 0, 0, .12); k.b(.024, .13, .046, m.rubber, -.43, -.075, 0, 0, 0, .12);
     k.b(.13, .04, .008, m.poly2, 0, 0, -.027); for (var j = 0; j < 4; j++) k.cy(.011, .05, m.red, -.045 + j * .03, .005, -.04, 6);
-    return { g: g, grip: [-.15, -.06], fore: [.25, -.04], muzzle: [.65, .02], sight: .05 };
+    return { g: g, grip: [-.15, -.06], fore: [.25, -.04], muzzle: [.65, .02], sight: .054 };
   };
   GUN.pistol = function () {
     var g = new T.Group(), k = kit(g), m = MAT;
     k.b(.2, .034, .03, m.steel, .02, .03, 0); for (var i = 0; i < 6; i++) k.b(.006, .028, .033, m.dark, -.06 + i * .011, .03, 0);
     k.b(.175, .024, .028, m.poly, .02, .003, 0); k.b(.06, .01, .022, m.dark, .08, -.014, 0); k.cx(.007, .012, m.bright, .125, .03, 0);
-    k.b(.008, .01, .006, m.bright, .11, .052, 0); k.b(.008, .012, .022, m.dark, -.07, .052, 0);
+    k.b(.008, .01, .005, m.bright, .11, .052, 0); k.b(.008, .012, .005, m.dark, -.07, .052, .008); k.b(.008, .012, .005, m.dark, -.07, .052, -.008);
     k.b(.048, .12, .03, m.poly, -.045, -.065, 0, 0, 0, -.22); k.b(.05, .012, .034, m.accent, -.062, -.128, 0, 0, 0, -.22); guard(k, .012, 0);
-    return { g: g, grip: [-.045, -.08], fore: [-.03, -.1], muzzle: [.13, .03], sight: .056 };
+    return { g: g, grip: [-.045, -.08], fore: [-.03, -.1], muzzle: [.13, .03], sight: .063 };
   };
   GUN.knife = function () {
     var g = new T.Group(), k = kit(g), m = MAT;
@@ -105,46 +106,58 @@ var SV = window.SV = window.SV || {};
   SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk;
   SV.litMat = new T.MeshLambertMaterial({ vertexColors: true });
 
-  // First-person weapon: the gun plus two gloved hands and sleeves.
-  SV.viewModel = function (id, team) {
-    var d = GUN[id](), k = kit(d.g), sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB;
-    k.b(.06, .07, .07, MAT.glove, d.grip[0], d.grip[1], .005);
-    k.b(.07, .07, .26, sl, d.grip[0] - .04, d.grip[1] - .06, .15, .35, 0, 0);
-    if (d.fore) { k.b(.07, .06, .07, MAT.glove, d.fore[0], d.fore[1], -.005); k.b(.07, .07, .3, sl, d.fore[0] - .12, d.fore[1] - .07, -.14, -.3, .5, 0); }
-    var mesh = new T.Mesh(merge(d.g), SV.litMat); mesh.userData = { muzzle: d.muzzle, sight: d.sight }; return mesh;
-  };
-
-  // Third-person soldier. Faces +Z, feet at y = 0. Returns { root, legL, legR } with legs pivoting at the hip.
-  function seg(g, a, b, w, dd, mat) {
-    var dir = new T.Vector3().subVectors(b, a), len = dir.length(), mesh = new T.Mesh(new T.BoxGeometry(w, len, dd), mat);
+  // A limb: a tapered tube between two points with a ball at the far joint.
+  function tube(g, a, b, r0, r1, mat) {
+    var dir = new T.Vector3().subVectors(b, a), len = dir.length(), mesh = new T.Mesh(new T.CylinderGeometry(r1, r0, len, 10), mat);
     mesh.position.copy(a).add(b).multiplyScalar(.5); mesh.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize()); g.add(mesh);
   }
+  function ball(g, p, r, mat, sx, sy, sz) { var m = new T.Mesh(new T.SphereGeometry(r, 10, 8), mat); m.position.copy(p); m.scale.set(sx || 1, sy || 1, sz || 1); g.add(m); return m; }
+
+  // First-person weapon: the gun plus two gloved hands and sleeves.
+  SV.viewModel = function (id, team) {
+    var d = GUN[id](), g = d.g, sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, V = function (x, y, z) { return new T.Vector3(x, y, z); };
+    var h1 = V(d.grip[0], d.grip[1], .012); ball(g, h1, .042, MAT.glove, 1.1, 1.1, 1); tube(g, V(h1.x - .02, h1.y - .02, h1.z + .03), V(h1.x - .1, h1.y - .13, h1.z + .3), .04, .05, sl);
+    if (d.fore) { var h2 = V(d.fore[0], d.fore[1], -.01); ball(g, h2, .042, MAT.glove, 1.2, .9, 1.1); tube(g, V(h2.x - .03, h2.y - .02, h2.z - .03), V(h2.x - .22, h2.y - .12, h2.z - .3), .04, .05, sl); }
+    var mesh = new T.Mesh(merge(g), SV.litMat); mesh.userData = { muzzle: d.muzzle, sight: d.sight }; return mesh;
+  };
+
+  // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
+  // Returns { root, legL, legR } with the legs pivoting at the hip.
   function arm(g, S, Tg, bend, cloth, glove) {
-    var L = .34, v = new T.Vector3().subVectors(Tg, S), d = Math.min(v.length(), L * 2 - .01); v.normalize();
+    var L = .33, v = new T.Vector3().subVectors(Tg, S), d = Math.min(v.length(), L * 2 - .01); v.normalize();
     var h = Math.sqrt(Math.max(L * L - d * d / 4, 0)), perp = bend.clone().addScaledVector(v, -bend.dot(v)).normalize();
     var E = S.clone().addScaledVector(v, d / 2).addScaledVector(perp, h), H = S.clone().addScaledVector(v, d);
-    seg(g, S, E, .105, .115, cloth); seg(g, E, H, .09, .1, cloth);
-    var hand = new T.Mesh(new T.BoxGeometry(.095, .1, .11), glove); hand.position.copy(H); g.add(hand);
+    tube(g, S, E, .074, .062, cloth); ball(g, E, .064, cloth); tube(g, E, H, .06, .05, cloth); ball(g, H, .058, glove, 1, 1.1, 1.15);
   }
   var cache = {};
   SV.soldier = function (team, gunId) {
     var key = team + gunId, c = cache[key];
     if (!c) {
       var tc = team === 'A' ? 0xffb347 : 0x6cc4e0, cloth = mk(team === 'A' ? 0x7a6646 : 0x3f6272), cloth2 = mk(team === 'A' ? 0x5a4a32 : 0x2e4a57);
-      var gear = mk(0x2a2f33), pad = mk(0x1a1d20), teamM = mk(tc), body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()];
+      var gear = mk(0x2a2f33), pad = mk(0x1a1d20), teamM = mk(tc), skin = mk(0x1c1f22), body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()], V = function (x, y, z) { return new T.Vector3(x, y, z); };
       [-1, 1].forEach(function (sx, n) {
-        var x = sx * .11, kl = kit(legs[n]);
-        kl.b(.12, .09, .27, pad, x, .045, .035); kl.b(.125, .4, .135, cloth, x, .29, 0); kl.b(.135, .1, .06, pad, x, .5, .065); kl.b(.155, .4, .165, cloth2, x, .7, 0);
-        k.b(.14, .075, .18, teamM, sx * .275, 1.42, 0); k.b(.05, .09, .1, gear, sx * .118, 1.585, 0);
+        var x = sx * .105, l = legs[n];
+        tube(l, V(x, .93, 0), V(x, .5, .01), .108, .084, cloth2); ball(l, V(x, .5, .01), .085, cloth2); ball(l, V(x, .5, .06), .075, pad, 1.05, 1.25, .7); ball(l, V(x + sx * .09, .72, 0), .07, gear, .5, 1.3, 1);        // thigh, knee, knee pad
+        tube(l, V(x, .5, .01), V(x, .14, 0), .08, .066, cloth); tube(l, V(x, .22, 0), V(x, .03, 0), .074, .078, pad);                                       // shin, boot shaft
+        ball(l, V(x, .065, .07), .075, pad, 1, .9, 2); ball(l, V(x, .022, .06), .074, MAT.rubber, 1.05, .32, 2.1);                                          // boot, sole
+        ball(body, V(sx * .235, 1.4, 0), .095, cloth); ball(body, V(sx * .255, 1.44, 0), .1, teamM, 1.05, .55, 1.25);                                       // shoulder, team plate
+        k.cx(.042, .05, gear, sx * .108, 1.58, 0, 10);                                                                                                       // ear cup
       });
-      k.b(.39, .15, .21, cloth2, 0, .95, 0); k.b(.41, .05, .225, gear, 0, .99, 0); k.b(.4, .42, .22, cloth, 0, 1.22, 0); k.b(.37, .34, .27, gear, 0, 1.2, 0);
-      k.b(.27, .2, .03, pad, 0, 1.27, .145); for (var i = -1; i <= 1; i++) k.b(.075, .13, .045, gear, i * .09, 1.1, .155);
-      k.b(.12, .06, .012, teamM, .08, 1.31, .162); k.b(.29, .32, .11, gear, 0, 1.24, -.18); k.b(.2, .12, .012, teamM, 0, 1.3, -.238);
-      k.b(.11, .07, .11, cloth2, 0, 1.455, 0); k.b(.185, .2, .2, pad, 0, 1.575, 0); k.b(.175, .06, .03, teamM, 0, 1.6, .1);
-      k.b(.23, .1, .26, cloth2, 0, 1.69, -.005); k.b(.2, .04, .22, cloth2, 0, 1.755, -.005); k.b(.05, .104, .264, teamM, 0, 1.69, -.005);
-      var d = GUN[gunId](), gx = -.2, gy = 1.3, gz = .36; d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); body.add(d.g);
-      arm(body, new T.Vector3(-.275, 1.36, 0), new T.Vector3(gx, gy + d.grip[1] + .02, gz + d.grip[0]), new T.Vector3(-.6, -1, -.2), cloth, pad);
-      if (d.fore) arm(body, new T.Vector3(.275, 1.36, 0), new T.Vector3(gx + .01, gy + d.fore[1] + .02, gz + d.fore[0]), new T.Vector3(.5, -1, 0), cloth, pad);
+      k.s(.2, cloth2, 0, .95, 0, 1, .62, .7); k.s(.205, gear, 0, 1.0, 0, 1, .2, .74);                                                                       // hips, belt
+      var torso = k.add(new T.CylinderGeometry(.215, .18, .46, 12), cloth, 0, 1.22, 0); torso.scale.z = .66;
+      var vest = k.add(new T.CylinderGeometry(.228, .2, .34, 12), gear, 0, 1.2, 0); vest.scale.z = .74; k.s(.228, gear, 0, 1.37, 0, 1, .28, .74);
+      k.s(.13, pad, 0, 1.27, .115, 1.05, .8, .4);                                                                                                           // chest plate
+      for (var i = -1; i <= 1; i++) { k.b(.07, .12, .045, gear, i * .088, 1.1, .15); k.s(.036, pad, i * .088, 1.165, .15, 1, .45, .65); }                       // magazine pouches
+      k.b(.11, .05, .012, teamM, .075, 1.33, .152);                                                                                                         // chest team patch
+      k.s(.15, gear, 0, 1.24, -.19, .95, 1.1, .42); k.cx(.055, .3, cloth2, 0, 1.42, -.17, 10); k.b(.18, .1, .012, teamM, 0, 1.27, -.256);                    // backpack, bedroll, back patch
+      k.cy(.06, .08, skin, 0, 1.46, 0, 10); k.s(.108, skin, 0, 1.575, 0, 1, 1.12, 1.06);                                                                     // neck, head (balaclava)
+      k.s(.09, teamM, 0, 1.6, .062, 1, .3, .72); k.s(.095, gear, 0, 1.6, .03, 1.08, .46, .78);                                                         // visor glow and frame
+      var helm = k.add(new T.SphereGeometry(.138, 14, 8, 0, PI * 2, 0, PI * .55), cloth2, 0, 1.6, -.005); helm.scale.set(1, 1.05, 1.12);
+      var stripe = k.add(new T.SphereGeometry(.141, 8, 8, 0, PI * 2, 0, PI * .53), teamM, 0, 1.6, -.005); stripe.scale.set(.22, 1.05, 1.12);
+      k.b(.05, .03, .04, gear, 0, 1.71, .125);                                                                                                              // helmet mount
+      var d = GUN[gunId](), gx = -.19, gy = 1.3, gz = .36; d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); body.add(d.g);
+      arm(body, V(-.24, 1.38, 0), V(gx, gy + d.grip[1] + .02, gz + d.grip[0]), V(-.6, -1, -.2), cloth, pad);
+      if (d.fore) arm(body, V(.24, 1.38, 0), V(gx + .01, gy + d.fore[1] + .02, gz + d.fore[0]), V(.5, -1, 0), cloth, pad);
       var lg = legs.map(function (l) { var gm = merge(l); gm.translate(0, -.92, 0); return gm; });
       c = cache[key] = { body: merge(body), legL: lg[0], legR: lg[1], muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
     }

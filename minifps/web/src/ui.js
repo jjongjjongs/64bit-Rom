@@ -3,7 +3,8 @@
   var $ = function (id) { return document.getElementById(id); }, G = SV.G, inp = SV.inp, cfg = SV.cfg, W = SV.W;
   var match = { map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', minutes: 10 };
   try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
-  function save() { try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
+  var stats = { w: 0, l: 0, k: 0, d: 0 }; try { var s0 = JSON.parse(localStorage.getItem('minifps.stats') || 'null'); if (s0) for (var k1 in stats) if (typeof s0[k1] === 'number') stats[k1] = s0[k1]; } catch (e) {}
+  function save() { try { localStorage.setItem('minifps.stats', JSON.stringify(stats)); } catch (e) {} try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
   var SCR = ['s-title', 's-lobby', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res'], from = { 's-load': 's-team', 's-set': 's-lobby' };
   var cur = 's-title';
   function show(id) { cur = id; SCR.forEach(function (s) { $(s).hidden = s !== id; }); $('hud').hidden = !(id === null || id === 's-pause'); if (id) refresh(id); }
@@ -13,29 +14,30 @@
   function seg(host, items, get, set) {
     host.textContent = ''; items.forEach(function (it, n) {
       var b = document.createElement('button'); b.className = 'opt'; b.id = host.id + '-' + n; b.textContent = it[0]; if (it[1]) { var s = document.createElement('small'); s.textContent = it[1]; b.appendChild(s); }
+      if (it[3]) { var im = document.createElement('img'); im.alt = ''; im.src = it[3]; b.insertBefore(im, b.firstChild); }
       b.setAttribute('aria-pressed', get() === it[2] ? 'true' : 'false'); b.addEventListener('click', function () { set(it[2]); save(); refresh(host.closest('.scr').id); }); host.appendChild(b);
     });
   }
   var GUNS = [['rifle', '중거리 만능. 연사 반동이 위로 올라갑니다.', [62, 70, 58, 66, 55]], ['smg', '가볍고 빠릅니다. 멀어질수록 약해집니다.', [40, 92, 48, 35, 88]], ['sniper', '한 발이 무겁습니다. 정조준하면 조준경이 열립니다.', [98, 12, 96, 100, 25]], ['shotgun', '좁은 통로의 주인. 여덟 알이 퍼져 나갑니다.', [90, 28, 30, 20, 60]]];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비'] };
   function refresh(id) {
-    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; ['팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); }
+    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; ['팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
     if (id === 's-match') {
       seg($('o-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; });
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
       $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
     }
-    if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); $('ro-' + t).textContent = (match.team === t ? ['나'].concat(NAMES[t].slice(0, match.perTeam - 1)) : NAMES[t].slice(0, match.perTeam)).join(' · '); });
+    if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
     if (id === 's-load') {
-      seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, W[g[0]].mag + '발', g[0]]; }), function () { return match.primary; }, function (v) { match.primary = v; });
-      var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1];
+      seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, '', g[0], SV.thumb(g[0])]; }), function () { return match.primary; }, function (v) { match.primary = v; });
+      var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1]; $('ga').textContent = W[g[0]].mag + ' / ' + W[g[0]].res + '발';
       var gb = $('gb'); gb.textContent = ''; ['위력', '연사', '정확도', '사거리', '기동성'].forEach(function (l, n) { var a = document.createElement('div'); a.textContent = l; var b = document.createElement('div'); b.className = 'bar'; var f = document.createElement('i'); f.style.width = g[2][n] + '%'; b.appendChild(f); gb.appendChild(a); gb.appendChild(b); });
       var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? '다음 투입부터 적용' : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
     }
     if (id === 's-pause') board();
     if (id === 's-set') {
       [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
-      [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
+      [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
     }
   }
   function board() {
@@ -55,9 +57,13 @@
   document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { SV.audio(); var to = b.getAttribute('data-go'); if (b.hasAttribute('data-from')) from[to] = b.getAttribute('data-from'); show(to); }); });
   $('ld-back').addEventListener('click', function () { show(from['s-load']); });
   $('st-back').addEventListener('click', function () { show(from['s-set']); });
-  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); SV.start(match); applyCfg(); }
+  var practice = false;
+  $('go-practice').addEventListener('click', function () { practice = true; begin(); });
+  $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.map = 1; m.perTeam = 1; m.enemies = 3; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
+  var lastPractice = false;
   $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') show('s-pause'); else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
-  $('r-again').addEventListener('click', begin);
+  $('r-again').addEventListener('click', function () { practice = lastPractice; begin(); });
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }
   stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
@@ -71,13 +77,16 @@
     $('r-eye').textContent = r.map + ' · 팀 데스매치'; $('r-title').textContent = r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.score.A; $('r-b').textContent = r.score.B;
     var u = Math.round(r.used); $('r-time').textContent = ('0' + ((u / 60) | 0)).slice(-2) + ':' + ('0' + (u % 60)).slice(-2) + ' 소요';
     $('r-k').textContent = r.stats.kills; $('r-d').textContent = r.stats.deaths; $('r-h').textContent = r.stats.heads;
-    var f = $('r-facts'); f.textContent = ''; [['명중률', r.stats.shots ? Math.round(r.stats.hits / r.stats.shots * 100) + '%' : '–'], ['최다 연속 킬', r.stats.streak], ['주 무기', r.weapon]].forEach(function (x) { var li = document.createElement('li'), a = document.createElement('span'), b = document.createElement('b'); a.textContent = x[0]; b.textContent = x[1]; li.appendChild(a); li.appendChild(b); f.appendChild(li); });
+    var nem = '없음', nb = 0; for (var nk in r.stats.by) if (r.stats.by[nk] > nb) { nb = r.stats.by[nk]; nem = nk + ' · ' + nb + '회'; }
+    if (!r.practice) { stats.k += r.stats.kills; stats.d += r.stats.deaths; if (!r.draw) { if (r.win) stats.w++; else stats.l++; } save(); }
+    var f = $('r-facts'); f.textContent = ''; [['명중률', r.stats.shots ? Math.round(r.stats.hits / r.stats.shots * 100) + '%' : '–'], ['최다 연속 킬', r.stats.streak], ['주 무기', r.weapon], ['나를 가장 많이 잡은 적', nem]].forEach(function (x) { var li = document.createElement('li'), a = document.createElement('span'), b = document.createElement('b'); a.textContent = x[0]; b.textContent = x[1]; li.appendChild(a); li.appendChild(b); f.appendChild(li); });
     SV.end(); show('s-res');
   };
 
   // ---------- settings ----------
   [['sens', 'sens'], ['ads', 'adsSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
-  [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
+  $('c-reset').addEventListener('click', function () { var d = SV.cfgDefaults; for (var k in d) cfg[k] = JSON.parse(JSON.stringify(d[k])); save(); refresh('s-set'); applyCfg(); });
+  [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
 
   // ---------- button layout editor ----------
   var hud = $('hud'), sel = null, dragB = null;
@@ -141,6 +150,11 @@
   zone.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('pointerlockchange', function () { if (document.pointerLockElement !== zone && G.state === 'play' && window.matchMedia('(pointer: fine)').matches && SV.locked) pause(); SV.locked = document.pointerLockElement === zone; });
 
+  // gyro aiming: rotation rate of the phone, mapped for either landscape orientation
+  window.addEventListener('devicemotion', function (e) {
+    if (!cfg.gyro || G.state !== 'play' || !e.rotationRate) return; var r = e.rotationRate, dt = (e.interval > 1 ? e.interval / 1000 : e.interval) || .016, a = (screen.orientation && screen.orientation.angle) || window.orientation || 90, s = a === 270 || a === -90 ? -1 : 1, k = Math.PI / 180 * dt * .9;
+    inp.gy += (r.beta || 0) * s * k; inp.gp += -(r.gamma || 0) * s * k;
+  });
   window.addEventListener('resize', SV.resize); if (window.ResizeObserver) new ResizeObserver(SV.resize).observe($('cv'));
   if (window.matchMedia('(pointer: coarse)').matches) $('keys').hidden = true;
   // Android back key: pause a running match, step back out of menus, and only then let the app close.

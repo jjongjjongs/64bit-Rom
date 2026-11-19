@@ -56,6 +56,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .team[aria-pressed="true"] { border: 2px solid var(--signal); }
 .team .nm { font-family: var(--f-display); font-weight: 900; font-size: 36px; line-height: 1; }
 .team small { color: var(--bone-dim); font-size: 12px; }
+.roster { display: flex; flex-direction: column; gap: 3px; } .roster > span { display: flex; justify-content: space-between; padding: 3px 8px; background: rgba(232, 228, 218, .08); font-size: 13px; color: var(--bone); } .roster .me { background: var(--bone); color: var(--ink); font-weight: 900; }
+.opt img { display: block; width: 100%; max-width: 150px; height: auto; margin: 0 auto 2px; } .opt[aria-pressed="true"] img { filter: invert(1); }
+.kit { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .kit span { border: 1px solid var(--line); padding: 3px 8px; font-size: 12px; } .kit small { color: var(--bone-dim); margin-right: 6px; }
 .tA { color: var(--signal); } .tB { color: var(--bravo); }
 .load { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .guns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -116,6 +119,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #cross i { position: absolute; background: var(--bone); }
 #cross i:nth-child(1) { width: 2px; height: 9px; left: -1px; top: calc(-9px - var(--g)); } #cross i:nth-child(2) { width: 2px; height: 9px; left: -1px; top: var(--g); }
 #cross i:nth-child(3) { height: 2px; width: 9px; top: -1px; left: calc(-9px - var(--g)); } #cross i:nth-child(4) { height: 2px; width: 9px; top: -1px; left: var(--g); }
+#cross i:nth-child(5) { width: 4px; height: 4px; left: -2px; top: -2px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(11, 13, 15, .6); } #cross.dot i:nth-child(-n+4) { display: none; }
 #hitm { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -13px 0 0 -13px; border: 2px solid var(--bone); transform: rotate(45deg); pointer-events: none; }
 #dmg { position: absolute; inset: 0; box-shadow: inset 0 0 90px 30px rgba(255, 60, 40, .55); opacity: 0; pointer-events: none; }
 #scope { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at center, transparent 0, transparent 38vh, #000 38.5vh); }
@@ -143,7 +147,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
     <div id="zone"></div>
     <div id="dmg"></div>
     <div id="scope" hidden></div>
-    <div id="cross"><i></i><i></i><i></i><i></i></div>
+    <div id="cross"><i></i><i></i><i></i><i></i><i></i></div>
     <div id="hitm" hidden></div>
     <canvas id="mini" width="192" height="192"></canvas>
     <div id="score"><b id="sc-a" class="tA">0</b><span id="sc-t">10:00</span><b id="sc-b" class="tB">0</b></div>
@@ -173,7 +177,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   </div>
 
   <section class="scr" id="s-title">
-    <div class="eyebrow">v0.2 · 오프라인 봇전</div>
+    <div class="eyebrow">v0.3 · 오프라인 봇전</div>
     <h1>Mini-FPS</h1>
     <div class="tag"><i></i>팀 데스매치 · 맵 2개 · 무기 7종</div>
     <div><button class="cta" data-go="s-lobby" id="go-start">시작</button></div>
@@ -183,8 +187,8 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   <section class="scr" id="s-lobby" hidden>
     <div class="top"><h2 style="font-family:var(--f-display);font-size:36px">Mini-FPS</h2><span class="step">오프라인 · 계정 없음</span></div>
     <div class="lobby grow">
-      <nav><button class="cta" data-go="s-match" id="go-match">전투 시작</button><button class="ghost" data-go="s-load" data-from="s-lobby" id="go-armory">무기 선택</button><button class="ghost" data-go="s-set" data-from="s-lobby" id="go-set">설정</button></nav>
-      <div class="card"><div class="eyebrow">지금 설정</div><b id="lb-map"></b><div class="chips" id="lb-chips"></div></div>
+      <nav><button class="cta" data-go="s-match" id="go-match">전투 시작</button><button class="ghost" data-go="s-load" data-from="s-lobby" id="go-armory">무기 선택</button><button class="ghost" data-go="s-set" data-from="s-lobby" id="go-set">설정</button><button class="ghost" id="go-practice">조작 연습장</button></nav>
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0"><div class="card"><div class="eyebrow">지난 전투 설정 그대로</div><b id="lb-map"></b><div class="chips" id="lb-chips"></div></div><div class="tiles"><div><span>전적</span><b id="lb-wl"></b></div><div><span>킬 / 데스</span><b id="lb-kd"></b></div><div><span>주 무기</span><b id="lb-gun" style="font-family:var(--f-body);font-size:18px;line-height:34px"></b></div></div></div>
     </div>
   </section>
 
@@ -192,7 +196,8 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
     <div class="top"><button class="back" data-go="s-lobby" aria-label="뒤로">‹</button><h2>매치 설정</h2><span class="step">1 / 3</span></div>
     <div class="cols grow">
       <div><div class="lbl">맵</div><div class="seg" id="o-map"></div></div>
-      <div><div class="lbl">봇 난이도</div><div class="seg" id="o-diff"></div></div>
+      <div><div class="lbl">모드</div><div class="seg"><button class="opt" aria-pressed="true" id="md-0">팀 데스매치</button><button class="opt" id="md-1" disabled style="opacity:.5">폭파 미션<small>준비 중</small></button><button class="opt" id="md-2" disabled style="opacity:.5">개인전<small>준비 중</small></button></div></div>
+      <div style="grid-column:1/-1"><div class="lbl">봇 난이도</div><div class="seg" id="o-diff"></div></div>
       <div><div class="lbl">한 팀 인원 (나 포함)</div><div class="stepper"><button id="pt-" aria-label="인원 줄이기">−</button><output id="pt"></output><button id="pt+" aria-label="인원 늘리기">+</button></div></div>
       <div><div class="lbl">목표 킬</div><div class="stepper"><button id="tk-" aria-label="목표 줄이기">−</button><output id="tk"></output><button id="tk+" aria-label="목표 늘리기">+</button></div></div>
     </div>
@@ -202,17 +207,17 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   <section class="scr" id="s-team" hidden>
     <div class="top"><button class="back" data-go="s-match" aria-label="뒤로">‹</button><h2>팀 선택</h2><span class="step">2 / 3</span></div>
     <div class="teams grow">
-      <button class="team" id="tm-A" aria-pressed="true"><span class="nm tA">ALPHA</span><small>주황 · 서쪽에서 시작</small><span id="ro-A"></span></button>
-      <button class="team" id="tm-B" aria-pressed="false"><span class="nm tB">BRAVO</span><small>하늘 · 동쪽에서 시작</small><span id="ro-B"></span></button>
+      <button class="team" id="tm-A" aria-pressed="true"><span class="nm tA">ALPHA</span><small>주황 · 서쪽에서 시작</small><span class="roster" id="ro-A"></span></button>
+      <button class="team" id="tm-B" aria-pressed="false"><span class="nm tB">BRAVO</span><small>하늘 · 동쪽에서 시작</small><span class="roster" id="ro-B"></span></button>
     </div>
-    <div class="foot"><small>같은 팀은 맞지 않습니다</small><button class="cta" data-go="s-load" data-from="s-team" id="go-load">다음 · 무기 선택</button></div>
+    <div class="foot"><button class="ghost" id="tm-auto">자동 배정</button><small>같은 팀은 맞지 않습니다</small><button class="cta" data-go="s-load" data-from="s-team" id="go-load">다음 · 무기 선택</button></div>
   </section>
 
   <section class="scr" id="s-load" hidden>
     <div class="top"><button class="back" id="ld-back" aria-label="뒤로">‹</button><h2>무기 선택</h2><span class="step" id="ld-step">3 / 3</span></div>
     <div class="load grow">
       <div class="guns" id="o-gun"></div>
-      <div class="card"><b id="gn"></b><div id="gd" style="font-size:13px;color:var(--bone-dim)"></div><div class="bars" id="gb"></div><div style="font-size:12px;color:var(--bone-dim);margin-top:8px">보조 권총 · 나이프 · 수류탄 1개는 항상 지급</div></div>
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><b id="gn"></b><span id="ga" style="font-family:var(--f-mono);font-size:12px;color:var(--signal)"></span></div><div id="gd" style="font-size:13px;color:var(--bone-dim)"></div><div class="bars" id="gb"></div><div class="kit"><span><small>보조 무기</small>권총</span><span><small>근접</small>나이프</span><span><small>투척</small>수류탄 × 1</span></div></div>
     </div>
     <div class="foot"><small id="ld-note">모든 무기가 처음부터 열려 있습니다</small><button class="cta" id="go-fight">전투 투입</button></div>
   </section>
@@ -225,7 +230,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   </section>
 
   <section class="scr" id="s-set" hidden>
-    <div class="top"><button class="back" id="st-back" aria-label="뒤로">‹</button><h2>설정</h2><span class="step">바꾸면 바로 저장</span></div>
+    <div class="top"><button class="back" id="st-back" aria-label="뒤로">‹</button><h2>설정</h2><span class="step">바꾸면 바로 저장</span><button class="ghost" id="c-reset" style="min-height:44px">기본값으로</button></div>
     <div class="set grow">
       <div><label for="c-sens"><span>시점 감도</span><output id="v-sens"></output></label><input id="c-sens" type="range" min="10" max="100"></div>
       <div><label for="c-ads"><span>정조준 감도</span><output id="v-ads"></output></label><input id="c-ads" type="range" min="10" max="100"></div>
@@ -234,6 +239,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
       <div class="tog"><div><b>조준 보조</b><small>적 근처에서 시점이 느려짐</small></div><button class="sw" role="switch" id="c-assist" aria-label="조준 보조"><i></i></button></div>
       <div class="tog"><div><b>자동 사격</b><small>조준선이 적에 닿으면 발사</small></div><button class="sw" role="switch" id="c-auto" aria-label="자동 사격"><i></i></button></div>
       <div class="tog"><div><b>왼손 사격 버튼</b><small>조준하면서 왼손으로 발사</small></div><button class="sw" role="switch" id="c-left" aria-label="왼손 사격 버튼"><i></i></button></div>
+      <div class="tog"><div><b>자이로 조준 (시험)</b><small>폰을 기울여 미세 조준 · 방향이 반대면 알려 주세요</small></div><button class="sw" role="switch" id="c-gyro" aria-label="자이로 조준"><i></i></button></div>
       <div class="tog"><div><b>소리</b><small>총성과 효과음</small></div><button class="sw" role="switch" id="c-sound" aria-label="소리"><i></i></button></div>
       <div class="tog"><div><b>고화질</b><small>끄면 더 부드럽게 돌아감</small></div><button class="sw" role="switch" id="c-quality" aria-label="고화질"><i></i></button></div>
       <div class="tog"><div><b>버튼 배치</b><small>조작 버튼을 끌어 옮기고 크기를 바꿈</small></div><button class="ghost" id="go-edit" style="border-color:var(--signal);color:var(--signal)">배치 편집</button></div>
