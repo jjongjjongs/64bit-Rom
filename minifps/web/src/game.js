@@ -139,7 +139,7 @@
   function findPath(x0, z0, x1, z1) {
     var nx = nav.nx, s = freeNear(cellOf(x0, z0)), t = freeNear(cellOf(x1, z1)), run = ++nav.run, heap = [s], hf = {}, ti2 = t % nx, tj = (t / nx) | 0, guard = 0;
     nav.g[s] = 0; nav.par[s] = -1; nav.stamp[s] = run; hf[s] = 0;
-    while (heap.length && guard++ < 6000) {
+    while (heap.length && guard++ < 20000) {
       var bi = 0, k; for (k = 1; k < heap.length; k++) if (hf[heap[k]] < hf[heap[bi]]) bi = k;
       var c = heap[bi]; heap[bi] = heap[heap.length - 1]; heap.pop();
       if (c === t) break; if (nav.cl[c] === run) continue; nav.cl[c] = run;
@@ -184,7 +184,7 @@
   function spawn(a) {
     var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
-    a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
+    a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); }
@@ -199,7 +199,7 @@
     if (v.hp <= 0) {
       v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001;
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
-      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = snap(v.pos.x, v.pos.z); }
+      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z); }
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
@@ -364,7 +364,7 @@
   // ---------- bomb mission ----------
   // Rounds without respawn. The attacking side carries one bomb to site A or B and holds "use" for 3 s; it goes off 35 s later
   // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
-  var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0]], PLANT = 3, DEFUSE = 5, FUSE = 35;
+  var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
   var bombMesh = new T.Mesh(new T.BoxGeometry(.36, .16, .24), new T.MeshLambertMaterial({ color: 0x2a2e31 })), bombLed = new T.Mesh(new T.BoxGeometry(.09, .05, .09), new T.MeshBasicMaterial({ color: 0xff3b2a, fog: false }));
   bombLed.position.y = .1; bombMesh.add(bombLed); bombMesh.visible = false; scene.add(bombMesh);
   function snap(x, z) { var c = freeNear(cellOf(x, z)); return { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; }
@@ -378,9 +378,10 @@
       s = B.planted; if (atk) { o = snap(s.x + off[0] * 1.7, s.z + off[1] * 1.7); o.look = far; return o; }
       return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.3, force: s.t < 14 || a.useP > 2.5 };
     }
-    if (!atk) { s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1]); o.look = { x: 0, z: 0 }; return o; }
+    if (!atk) { if (a.ai.fwd) { o = snap(a.ai.fwd[0], a.ai.fwd[1]); o.look = { x: G.map.spawns.A[2].x, z: 0 }; return o; } s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1]); o.look = { x: 0, z: 0 }; return o; }
     if (B.drop) return { x: B.drop.x, z: B.drop.z, force: true };
     s = G.map.sites[B.plan];
+    if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1]); }   // this round's route
     if (B.carrier === a) return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.4, force: a.useP > 1.5 };
     if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9);   // escort the player
     o = snap(s.x + off[0], s.z + off[1]); o.look = far; return o;
@@ -391,10 +392,13 @@
   }
   function newRound() {
     var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
-    B.phase = 'live'; B.t = 120; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; bombMesh.visible = false; G.killer = null;
+    B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; bombMesh.visible = false; G.killer = null;
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
     G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
     at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
+    // spread out: the attackers split over two of the routes to the chosen site, and every third defender pushes forward
+    var vs = G.map.sites[B.plan].via || [], v1 = vs[(Math.random() * vs.length) | 0], v2 = vs[(Math.random() * vs.length) | 0], fw = G.map.fwd || [];
+    G.actors.forEach(function (a) { a.ai.via = a.team === B.atk ? (a.idx % 2 ? v1 : v2) || null : null; a.ai.fwd = a.team !== B.atk && a.idx % 3 === 2 && fw.length ? fw[(Math.random() * fw.length) | 0] : null; });
     showMsg('라운드 ' + B.round + (B.swapped && B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2);
   }
   function updBomb(dt) {
@@ -403,6 +407,7 @@
     for (i = 0; i < G.actors.length; i++) {
       a = G.actors[i]; if (!a.alive) { a.useP = 0; a.useAt = null; continue; }
       if (B.drop && a.team === B.atk && Math.hypot(a.pos.x - B.drop.x, a.pos.z - B.drop.z) < 1.5) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
+      if (B.carrier === a && !nav.blk[cellOf(a.pos.x, a.pos.z)]) a.lastFree = { x: a.pos.x, z: a.pos.z };   // if the carrier dies the bomb lands where bots can walk
       kind = null; s = null;
       if (!B.planted) { if (B.carrier === a && (s = siteAt(a.pos))) kind = 'plant'; }
       else if (a.team === def && Math.hypot(a.pos.x - B.planted.x, a.pos.z - B.planted.z) < 1.7) kind = 'defuse';

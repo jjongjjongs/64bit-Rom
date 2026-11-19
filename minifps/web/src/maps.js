@@ -296,14 +296,31 @@
     return { name: '물류 창고', b: b, bounds: { minx: -19, maxx: 19, minz: -13, maxz: 13 }, bg: 0x101315, fog: [28, 90], hemi: [0xc9d2d8, 0x4a4338, .88], sun: [0xfff1dc, .32, [9, 30, 7]], rain: false, indoor: true };
   }
 
-  // 03 보급기지 — 60 x 44 m 야외 기지. 폭파 미션용: 공격은 서쪽, 수비는 동쪽에서 출발하고 목표는 북동(A 연료 집적소)·남동(B 보급 창고).
+  // 03 보급기지 — 92 x 64 m 야외 기지. 건물 블록 아홉 개가 3 x 3 으로 놓이고 그 사이 길이 격자를 이룬다. 폭파 미션에서는
+  // 공격이 서쪽, 수비가 동쪽에서 출발하고 목표는 북동(A 연료 집적소, 야외)과 남동(B 보급 창고, 실내)이다.
   function depot() {
-    var b = Builder(), i, OL = 0x56633f, OD = 0x3f4a30;
-    b.box(0, 0, 100, 80, .4, 0x777a70, -.4, false, 'conc');
-    b.box(-9, -18.5, 26, .14, .02, 0xd8d8d2, 0, false); b.box(-9, 18.5, 26, .14, .02, 0xd8d8d2, 0, false);
-    for (i = -20; i <= 20; i += 4) b.box(i, 0, 2, .14, .02, C.yellow, 0, false);
-    [[-12, -5], [6, 5], [-18, 19], [14, -4], [-4, -19]].forEach(function (p) { b.quad('puddle', p[0], .025, p[1], rnd(3, 5), rnd(2.4, 3.6), rnd(0, 3), { flat: true, mode: 'alpha' }); });
-    function bldg(x0, x1, z0, z1, h, c) { var cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0; b.box(cx, cz, w, d, 2.2, c || 0xb4b4ac, 0, true, 'block'); b.box(cx, cz, w - .1, d - .1, h - 2.2, 0x7d8a80, 2.2, true, 'panel'); b.box(cx, cz, w + .5, d + .5, .25, 0x464c4f, h, false); }
+    var b = Builder(), i, ROOF = !SV.noRoof, OL = 0x56633f, OD = 0x3f4a30, WC = 0xb4b4ac;   // SV.noRoof: 평면도를 찍을 때만 쓴다
+    b.box(0, 0, 150, 110, .4, 0x777a70, -.4, false, 'conc');
+    [-29, 29].forEach(function (z) { for (i = -30; i <= 14; i += 4) b.box(i, z, 2, .14, .02, 0xd8d8d2, 0, false); });
+    for (i = -36; i <= 32; i += 4) b.box(i, 0, 2, .14, .02, C.yellow, 0, false);
+    [[-27, -10], [9, 10], [-18, 29], [27, -3], [-4, -29], [18, -20], [-36, 14], [2, 20]].forEach(function (p) { b.quad('puddle', p[0], .025, p[1], rnd(3, 5), rnd(2.4, 3.6), rnd(0, 3), { flat: true, mode: 'alpha' }); });
+    function bldg(x0, x1, z0, z1, h, c) { var cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0; b.box(cx, cz, w, d, 2.2, c || WC, 0, true, 'block'); b.box(cx, cz, w - .1, d - .1, h - 2.2, 0x7d8a80, 2.2, true, 'panel'); b.box(cx, cz, w + .5, d + .5, .25, 0x464c4f, h, false); }
+    // a wall along x (at z = c) or along z (at x = c) with door gaps; a lintel closes each gap above head height
+    function wallG(along, c, a0, a1, gaps, h) {
+      var cur = a0; gaps = (gaps || []).concat([[a1, a1]]);
+      gaps.forEach(function (g) {
+        if (g[0] > cur) { if (along === 'x') b.box((cur + g[0]) / 2, c, g[0] - cur, .4, h, WC, 0, true, 'block'); else b.box(c, (cur + g[0]) / 2, .4, g[0] - cur, h, WC, 0, true, 'block'); }
+        if (g[1] > g[0]) { var m = (g[0] + g[1]) / 2, l = g[1] - g[0]; if (along === 'x') { b.box(m, c, l, .46, h - 3.2, WC, 3.2, true, 'block'); b.quad('hazard', m, 3, c - .24, l, .4, PI, { rep: [l, .4] }); b.quad('hazard', m, 3, c + .24, l, .4, 0, { rep: [l, .4] }); } else { b.box(c, m, .46, l, h - 3.2, WC, 3.2, true, 'block'); b.quad('hazard', c - .24, 3, m, l, .4, -PI / 2, { rep: [l, .4] }); b.quad('hazard', c + .24, 3, m, l, .4, PI / 2, { rep: [l, .4] }); } }
+        cur = g[1];
+      });
+    }
+    // a building you can walk through: four walls with doors, a floor, a roof and strip lights
+    function hall(x0, x1, z0, z1, h, d) {
+      var cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, dp = z1 - z0, x;
+      wallG('x', z0, x0, x1, d.N, h); wallG('x', z1, x0, x1, d.S, h); wallG('z', x0, z0, z1, d.W, h); wallG('z', x1, z0, z1, d.E, h);
+      b.box(cx, cz, w - .4, dp - .4, .02, 0xa8acad, 0, false, 'floor');
+      if (ROOF) { var rf = new T.BoxGeometry(w + .8, .3, dp + .8); rf.translate(cx, h + .15, cz); b.geo(rf, 0x5d666c, 'panel', {}); for (x = x0 + 3; x < x1 - 1; x += 4) { b.box(x, cz, .2, dp - .4, .22, 0x4f585e, h - .3, false, 'metal'); b.glow(x, h - .34, cz, .3, .05, Math.min(6, dp - 4), C.sky); b.quad('pool', x, .03, cz, 7, dp - 3, 0, { flat: true, mode: 'add', color: 0x9db4c4 }); } }
+    }
     function truck(x, z, rot, dir) {
       var L = 6.6, W = 2.4, f = dir || 1;
       function bx(dl, dw, l, w, h, c, y, t) { if (rot) b.box(x + dw, z + dl * f, w, l, h, c, y, false, t); else b.box(x + dl * f, z + dw, l, w, h, c, y, false, t); }
@@ -313,58 +330,58 @@
       b.solid(x, z, rot ? W : L, rot ? L : W, 2.85);
     }
     function tank(x, z) { var g = new T.CylinderGeometry(1.15, 1.15, 5.2, 16); g.rotateZ(PI / 2); g.translate(x, 1.65, z); b.geo(g, 0xb9bdb6, 'metal', {}); [-1.7, 1.7].forEach(function (d) { b.box(x + d, z, .5, 1.9, .55, 0x8d9296, 0, false, 'conc'); }); b.box(x, z, 5.3, .06, .5, C.red, 1.5, false); b.solid(x, z, 5.2, 2.3, 2.8); }
-    function stack(x, z, n, c) { b.pallet(x, z, 0); b.crate(x, z, 1.4, c || 0x7c7a52, .14, 1.2); b.solid(x, z, 1.5, 1.5, .2); if (n > 1) b.crate(x + .1, z - .05, 1.2, 0x8a8660, 1.34, 1.1); if (n > 1) b.solid(x, z, 1.3, 1.3, 1.1, 1.34); }
-    function site(id, x, z) { b.quad('hazard', x, .02, z - 2.6, 5.2, .35, 0, { flat: true, rep: [5.2, .35] }); b.quad('hazard', x, .02, z + 2.6, 5.2, .35, 0, { flat: true, rep: [5.2, .35] }); b.quad('hazard', x - 2.6, .02, z, .35, 5.2, 0, { flat: true, rep: [.35, 5.2] }); b.quad('hazard', x + 2.6, .02, z, .35, 5.2, 0, { flat: true, rep: [.35, 5.2] }); b.mark(id, x, .03, z, 2.6, 2.6, 0, '#e2562f', true); }
-    // perimeter wall with a concrete cap
-    b.wallX(-22.2, -30.4, 30.4, 5, 0xa9aaa2); b.wallX(22.2, -30.4, 30.4, 5, 0xa9aaa2); b.wallZ(-30.2, -22, 22, 5, 0xa9aaa2); b.wallZ(30.2, -22, 22, 5, 0xa9aaa2);
-    b.solid(0, -22.2, 61, .4, 9); b.solid(0, 22.2, 61, .4, 9); b.solid(-30.2, 0, .4, 44, 9); b.solid(30.2, 0, .4, 44, 9);
-    // spawn yards
-    [[-15, -3], [3, 15]].forEach(function (s) { b.wallZ(-22, s[0], s[1], 3.4, 0xb4b4ac); });
-    [[-22, -15], [-9, -2], [2, 8]].forEach(function (s) { b.wallZ(22, s[0], s[1], 3.4, 0xb4b4ac); });
-    b.mark('공격', -21.75, 2.4, -9, 3, .9, PI / 2, '#ffb347'); b.mark('수비', 21.75, 2.4, -5.5, 3, .9, -PI / 2, '#6cc4e0');
-    // north: vehicle workshop between the north road and the yard
-    bldg(-14, 2, -15, -8, 5.6);
-    [-10, -6, -2].forEach(function (x) { b.quad('shutter', x, 1.9, -15.03, 3.4, 3.8, PI); b.quad('shutter', x, 1.9, -7.97, 3.4, 3.8, 0); });
-    b.mark('정비고', -6, 4.6, -7.94, 4, 1, 0, '#ecebe4');
-    truck(-9, -19.3, false, 1); stack(-18, -16.4, 2); b.barrel(-16.6, -16.2, C.olive); b.barrel(0, -21.2, C.red); b.barrel(.7, -20.9, C.olive); b.jersey(1.5, -17.5, 3, true);
-    // A: fuel dump under an open shed
-    b.wallZ(5, -17, -7, 4, 0xb4b4ac); b.wallX(-7, 5, 8, 4, 0xb4b4ac); b.wallX(-7, 11, 22, 4, 0xb4b4ac);
-    [[8, -19], [18, -19], [8, -9.5], [18, -9.5]].forEach(function (p) { b.box(p[0], p[1], .3, .3, 4.4, 0x4f585e, 0, true, 'metal'); });
-    b.box(13, -19, 10.3, .2, .25, 0x4f585e, 4.15, false, 'metal'); b.box(13, -9.5, 10.3, .2, .25, 0x4f585e, 4.15, false, 'metal');
-    { var rf = new T.BoxGeometry(11.4, .16, 10.9); rf.translate(13, 4.5, -14.25); b.geo(rf, 0x6a7479, 'panel', {}); }
-    tank(13, -20.3); tank(18.2, -13.2 + 0); site('A', 12, -14);
-    stack(8.6, -11, 2); stack(15.4, -9.6, 1, 0x9c8a62); b.barrel(9.4, -17.6, C.red); b.barrel(10.1, -18, C.red); b.barrel(9.9, -17.2, C.olive); b.jersey(7.2, -14.5, 3, true);
-    b.mark('A', 4.75, 2.6, -12, 1.6, 1.6, -PI / 2, '#e2562f'); b.mark('A', 9.5, 2.6, -6.75, 1.6, 1.6, 0, '#e2562f');
-    // middle yard: control hut, water tower, parked truck, barriers
-    bldg(-7, -1, -2.6, 2.6, 3.5, 0xa8a89c); b.quad('door', -4, 1.25, 2.63, 1.3, 2.4, 0, { color: 0x56633f }); b.mark('통제소', -4, 2.9, -2.63, 3, .7, PI, '#ecebe4');
-    [[8, -1.4], [10.8, -1.4], [8, 1.4], [10.8, 1.4]].forEach(function (p) { b.box(p[0], p[1], .28, .28, 6.2, 0x4f585e, 0, true, 'metal'); });
-    b.seg(8, .3, -1.4, 10.8, 3, -1.4, .08, 0x4f585e); b.seg(8, .3, 1.4, 10.8, 3, 1.4, .08, 0x4f585e); b.seg(8, 3, -1.4, 8, 6, 1.4, .08, 0x4f585e); b.seg(10.8, 3, -1.4, 10.8, 6, 1.4, .08, 0x4f585e);
-    b.cyl(9.4, 0, 2.3, 2.6, 0x7b8a7a, 6.2, false, 'metal', 2.3, 18); b.cyl(9.4, 0, 2.4, .4, 0x586458, 8.8, false, 'metal', .6, 18);
-    truck(-14.5, 4.4, false, -1); b.jersey(-17, -2.6, 3, true); b.jersey(3.6, 3.2, 3, false); b.jersey(15, -3.4, 3, true); b.jersey(16.5, 3.6, 3, false);
-    stack(3, -4.6, 2); stack(-10.5, -5.4, 1, 0x9c8a62); b.tires(12.8, 5.6, 3); b.cone(-19.5, 1.2); b.cone(-19.5, -1.2); stack(18.6, 0, 1);
-    // south: barracks block and the alley behind it
-    bldg(-16, -2, 8, 15, 4.6, 0xb0ae9e); b.mark('생활관', -9, 3.6, 7.94, 3.6, .9, PI, '#ecebe4');
-    [-13, -9, -5].forEach(function (x) { b.box(x, 7.95, 1.4, .08, 1, 0x1c2226, 1.3, false); b.box(x, 15.05, 1.4, .08, 1, 0x1c2226, 1.3, false); });
-    b.cont(-9.5, 20.6, false, OL, 0); stack(-17.5, 20.4, 1); b.barrel(-1.4, 21.2, C.olive); b.barrel(-.7, 21.4, C.olive); b.jersey(-3, 17.4, 3, true); stack(1, 10.2, 2, 0x9c8a62);
-    // B: supply hall
-    [[8, 17], [20, 22]].forEach(function (s) { b.box(4, (s[0] + s[1]) / 2, .4, s[1] - s[0], 5, 0xb4b4ac, 0, true, 'block'); });
-    [[4, 10], [13, 20]].forEach(function (s) { b.box((s[0] + s[1]) / 2, 8, s[1] - s[0], .4, 5, 0xb4b4ac, 0, true, 'block'); });
-    [[8, 12], [15, 22]].forEach(function (s) { b.box(20, (s[0] + s[1]) / 2, .4, s[1] - s[0], 5, 0xb4b4ac, 0, true, 'block'); });
-    b.box(4, 18.5, .46, 3, 1.6, 0xb4b4ac, 3.4, false, 'block'); b.box(11.5, 8, 3, .46, 1.6, 0xb4b4ac, 3.4, false, 'block'); b.box(20, 13.5, .46, 3, 1.6, 0xb4b4ac, 3.4, false, 'block');
-    b.quad('hazard', 3.77, 3.2, 18.5, 3, .4, -PI / 2, { rep: [3, .4] }); b.quad('hazard', 11.5, 3.2, 7.77, 3, .4, PI, { rep: [3, .4] });
-    b.box(12, 15, 15.6, 13.6, .02, 0xa8acad, 0, false, 'floor');
-    { var rb = new T.BoxGeometry(16.8, .3, 14.8); rb.translate(12, 5.15, 15); b.geo(rb, 0x5d666c, 'panel', {}); [8, 12, 16].forEach(function (x) { b.box(x, 15, .2, 13.6, .22, 0x4f585e, 4.7, false, 'metal'); b.glow(x, 4.66, 15, .3, .05, 5, C.sky); b.quad('pool', x, .03, 15, 7, 11, 0, { flat: true, mode: 'add', color: 0x9db4c4 }); }); }
-    site('B', 12.5, 15.5); b.mark('B', 3.75, 2.4, 14, 1.6, 1.6, -PI / 2, '#e2562f'); b.mark('B', 14.6, 2.4, 7.75, 1.6, 1.6, PI, '#e2562f');
-    stack(6.2, 10.2, 2); stack(7.9, 10.2, 1, 0x9c8a62); stack(17.8, 20, 2); stack(16.1, 20.2, 2, 0x9c8a62); stack(18, 18.2, 1); stack(8.4, 20.2, 2, 0x9c8a62); stack(16.6, 10.4, 1);
-    b.crate(12.5, 12, 2.2, 0x6f7350, .01, 1.5); b.crate(9, 15.5, 1.6, 0x9c8a62, .01, 1.6); b.barrel(15.6, 15.2, C.olive); b.barrel(16.2, 15.7, C.olive);
-    // lights
-    [[-18, -15.3, 0, -1], [-8, 7.6, 0, -1], [3.5, -4, 1, 0], [14, 7.5, 0, -1], [-20, 15.4, 0, 1], [21.6, -3, -1, 0], [-21.6, -6, 1, 0]].forEach(function (p) { b.lamp(p[0], p[1], 6, p[2], p[3]); });
-    b.spawn('A', -26.5, 0); b.spawn('B', 26.5, 0);
-    return { name: '보급기지', b: b, bounds: { minx: -30, maxx: 30, minz: -22, maxz: 22 }, bg: 0x4a5560, fog: [30, 150], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], rain: false, sky: [0x26313f, 0xb9885e],
-      sites: [{ id: 'A', x: 12, z: -14 }, { id: 'B', x: 12.5, z: 15.5 }] };
+    function stack(x, z, n, c) { b.pallet(x, z, 0); b.crate(x, z, 1.4, c || 0x7c7a52, .14, 1.2); b.solid(x, z, 1.5, 1.5, .2); if (n > 1) { b.crate(x + .1, z - .05, 1.2, 0x8a8660, 1.34, 1.1); b.solid(x, z, 1.3, 1.3, 1.1, 1.34); } }
+    function site(id, x, z) { [[0, -2.6, 5.2, .35], [0, 2.6, 5.2, .35], [-2.6, 0, .35, 5.2], [2.6, 0, .35, 5.2]].forEach(function (q) { b.quad('hazard', x + q[0], .025, z + q[1], q[2], q[3], 0, { flat: true, rep: [q[2], q[3]] }); }); b.mark(id, x, .03, z, 2.6, 2.6, 0, '#e2562f', true); }
+    // perimeter and the two spawn yards
+    b.wallX(-32.2, -46.4, 46.4, 5, 0xa9aaa2); b.wallX(32.2, -46.4, 46.4, 5, 0xa9aaa2); b.wallZ(-46.2, -32, 32, 5, 0xa9aaa2); b.wallZ(46.2, -32, 32, 5, 0xa9aaa2);
+    b.solid(0, -32.2, 93, .4, 9); b.solid(0, 32.2, 93, .4, 9); b.solid(-46.2, 0, .4, 64, 9); b.solid(46.2, 0, .4, 64, 9);
+    [[-27, -3], [3, 27]].forEach(function (s) { b.wallZ(-38, s[0], s[1], 3.4, WC); });
+    [[-32, -22], [-18, -2], [2, 12], [30, 32]].forEach(function (s) { b.wallZ(34, s[0], s[1], 3.4, WC); });
+    b.mark('공격', -37.75, 2.4, -15, 3, .9, PI / 2, '#ffb347'); b.mark('수비', 33.75, 2.4, -10, 3, .9, -PI / 2, '#6cc4e0');
+    // north row: workshop you can cut through, a closed store, the tank farm
+    hall(-34, -20, -26, -12, 5.5, { W: [[-21, -17]], E: [[-21, -17]], S: [[-29, -25]] }); b.mark('정비고', -27, 4.5, -11.74, 4, 1, 0, '#ecebe4');
+    truck(-27, -23.6, false, 1); stack(-32.4, -14, 2); stack(-22, -14.2, 1, 0x9c8a62); b.barrel(-21.4, -24.6, C.olive); b.tires(-32.6, -24.6, 3);
+    bldg(-16, 0, -26, -12, 5.6); [-12, -8, -4].forEach(function (x) { b.quad('shutter', x, 1.9, -26.03, 3.4, 3.8, PI); b.quad('shutter', x, 1.9, -11.97, 3.4, 3.8, 0); }); b.mark('2 창고', -8, 4.6, -11.94, 3.4, 1, 0, '#ecebe4');
+    tank(10, -23.4); tank(10, -18.9); tank(10, -14.4); b.box(10, -26.1, 12, .25, .3, 0x9a9c97, 0, false, 'conc'); b.barrel(5, -25, C.red); b.barrel(15.2, -13, C.red); b.barrel(14.6, -13.4, C.olive);
+    // middle row: motor pool, control hut with alleys all round, container stacks
+    truck(-28, -5.6, false, 1); truck(-26.5, .6, false, -1); truck(-28, 6, false, 1); b.cone(-21.5, -7); b.cone(-21.5, 7); stack(-33, 0, 1);
+    bldg(-13, -3, -5, 5, 3.5, 0xa8a89c); b.quad('door', -8, 1.25, 5.03, 1.3, 2.4, 0, { color: 0x56633f }); b.mark('통제소', -8, 2.9, -5.03, 3, .7, PI, '#ecebe4'); b.barrel(-14.4, -6.6, C.olive); stack(-1.4, 6.8, 1, 0x9c8a62);
+    b.cont(7.5, -5.5, false, OL, 0); b.cont(12.5, -1, true, C.sand, 0); b.cont(7, 2.5, false, C.navy, 0); b.cont(7, 2.5, false, OL, 1); b.cont(12, 6.2, false, C.rust, 0);
+    // south row: barracks, a second barracks with a corridor through it, the mess
+    bldg(-34, -20, 12, 26, 4.6, 0xb0ae9e); b.mark('1 생활관', -27, 3.6, 11.94, 3.6, .9, PI, '#ecebe4'); [-31, -27, -23].forEach(function (x) { b.box(x, 11.95, 1.4, .08, 1, 0x1c2226, 1.3, false); b.box(x, 26.05, 1.4, .08, 1, 0x1c2226, 1.3, false); });
+    hall(-16, 0, 12, 26, 4.6, { N: [[-10, -7]], S: [[-10, -7]], E: [[17, 20]] }); b.mark('2 생활관', -3.5, 3.7, 11.74, 3.4, .9, PI, '#ecebe4');
+    [[-14.4, 15], [-14.4, 19], [-14.4, 23], [-1.6, 14], [-1.6, 23.5]].forEach(function (q) { b.box(q[0], q[1], 2, 1, .5, 0x5b6548, 0, true); b.box(q[0], q[1], 2, 1, .08, 0x8d9296, 1.3, false, 'metal'); }); b.wallX(19, -6, -1.5, 2.4, 0x9c9c90);
+    bldg(4, 16, 14, 26, 4.4, 0xb0ae9e); b.mark('식당', 10, 3.5, 13.94, 2.4, .9, PI, '#ecebe4'); b.tires(5, 12.9, 3); b.barrel(15, 13, C.olive);
+    // A: fuel dump under an open shed, walled on the west and south
+    b.wallZ(20, -26, -12, 4, WC); b.wallX(-8, 20, 24, 4, WC); b.wallX(-8, 27, 34, 4, WC);
+    [[22.5, -25], [31.5, -25], [22.5, -15], [31.5, -15]].forEach(function (p) { b.box(p[0], p[1], .3, .3, 4.4, 0x4f585e, 0, true, 'metal'); });
+    b.box(27, -25, 9.3, .2, .25, 0x4f585e, 4.15, false, 'metal'); b.box(27, -15, 9.3, .2, .25, 0x4f585e, 4.15, false, 'metal');
+    if (ROOF) { var ra = new T.BoxGeometry(10.4, .16, 11.4); ra.translate(27, 4.5, -20); b.geo(ra, 0x6a7479, 'panel', {}); }
+    tank(28, -29.6); site('A', 27, -20); stack(23, -17, 2); stack(31.4, -22.4, 2, 0x9c8a62); stack(30.5, -11.6, 1); b.jersey(22.2, -28.6, 3, true); b.jersey(25.5, -10.6, 3, false);
+    b.barrel(23.4, -23.4, C.red); b.barrel(24.1, -23.8, C.red); b.barrel(23.9, -23, C.olive); b.mark('A', 19.75, 2.6, -19, 1.6, 1.6, -PI / 2, '#e2562f'); b.mark('A', 22, 2.6, -7.75, 1.6, 1.6, 0, '#e2562f');
+    // east yard between the two sites
+    b.wallZ(20, -8, -2, 3.4, WC); b.wallZ(20, 6, 12, 3.4, WC);
+    [[25.6, .6], [28.4, .6], [25.6, 3.4], [28.4, 3.4]].forEach(function (p) { b.box(p[0], p[1], .28, .28, 6.2, 0x4f585e, 0, true, 'metal'); });
+    b.seg(25.6, .3, .6, 28.4, 3, .6, .08, 0x4f585e); b.seg(25.6, .3, 3.4, 28.4, 3, 3.4, .08, 0x4f585e); b.seg(25.6, 3, .6, 25.6, 6, 3.4, .08, 0x4f585e); b.seg(28.4, 3, .6, 28.4, 6, 3.4, .08, 0x4f585e);
+    b.cyl(27, 2, 2.3, 2.6, 0x7b8a7a, 6.2, false, 'metal', 2.3, 18); b.cyl(27, 2, 2.4, .4, 0x586458, 8.8, false, 'metal', .6, 18);
+    truck(27.5, 8.4, false, 1); stack(22, -4.6, 2); b.jersey(31, -3.4, 3, false); b.tires(32.6, 10.6, 3); b.jersey(22.4, 3, 3, true);
+    // B: supply hall, four doors
+    hall(20, 34, 12, 30, 5, { N: [[24, 27]], W: [[15, 18], [26, 29]], E: [[19, 22]] }); site('B', 27, 21.5);
+    b.mark('B', 19.75, 2.4, 22, 1.6, 1.6, -PI / 2, '#e2562f'); b.mark('B', 29, 2.4, 11.75, 1.6, 1.6, PI, '#e2562f');
+    stack(22, 13.8, 2); stack(32.2, 13.8, 1, 0x9c8a62); stack(32.2, 28.2, 2); stack(30.5, 28.4, 2, 0x9c8a62); stack(22, 22.4, 1); stack(31.6, 24.4, 1, 0x9c8a62); stack(23.8, 28.4, 2);
+    b.crate(27, 16.6, 2.2, 0x6f7350, .01, 1.5); b.crate(23.2, 18.6, 1.6, 0x9c8a62, .01, 1.6); b.barrel(30.6, 19.2, C.olive); b.barrel(31.2, 19.7, C.olive);
+    // road and street cover
+    truck(-8, -29.8, false, 1); stack(-24, -27.4, 2); b.cont(12, -30.6, false, C.teal, 0); b.jersey(2, -28.2, 3, true); b.barrel(-17, -31.2, C.olive);
+    b.cont(-9.5, 30.6, false, OL, 0); stack(-30, 27.6, 2); b.jersey(6, 28, 3, true); b.barrel(15, 31.2, C.olive); b.barrel(15.7, 31.3, C.red); stack(18.6, 27.4, 1, 0x9c8a62);
+    stack(-18.9, -1.5, 2); b.jersey(-17, 9.4, 3, false); b.tires(19, 9.4, 3); stack(1, -11.2, 1); b.jersey(17.4, -3, 3, true); b.barrel(3.4, 9, C.olive); b.jersey(-35.4, -14, 3, true); b.jersey(-35.4, 14, 3, true);
+    [[-36, -27.6, 0, 1], [-18, -8.3, 0, 1], [2, -8.3, 0, 1], [18, -8.3, -1, 0], [-18, 8.3, 0, -1], [2, 8.3, 0, -1], [-36, 27.6, 0, -1], [8, -31.6, 0, 1], [8, 31.6, 0, -1], [33.6, 5, -1, 0], [-37.6, -8, 1, 0], [-37.6, 8, 1, 0], [20.4, -30, 1, 0]].forEach(function (p) { b.lamp(p[0], p[1], 6, p[2], p[3]); });
+    b.spawn('A', -42, 0); b.spawn('B', 40.5, 0);
+    return { name: '보급기지', b: b, bounds: { minx: -46, maxx: 46, minz: -32, maxz: 32 }, bg: 0x4a5560, fog: [36, 170], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], rain: false, sky: [0x26313f, 0xb9885e],
+      // 폭파 미션: 목표 지점과, 공격 봇이 라운드마다 하나씩 골라 거쳐 가는 길목(via), 수비 봇 일부가 앞으로 나가 서는 자리(fwd)
+      sites: [{ id: 'A', x: 27, z: -20, via: [[2, -29], [-18, -10], [2, -10], [18, 2], [-27, -19]] }, { id: 'B', x: 27, z: 21.5, via: [[2, 29], [-18, 10], [2, 10], [18, 2], [-8.5, 19]] }],
+      fwd: [[18, -10], [18, 10], [2, 0], [27, -4], [14, -29], [18, 24]] };
   }
-
   var MAKERS = [dock, warehouse, depot];
-  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 72 × 44 m', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 38 × 26 m', hint: '실내 근접전' }, { name: '보급기지', info: '중형 · 60 × 44 m', hint: '폭파 미션 가능', bomb: true }];
+  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 72 × 44 m', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 38 × 26 m', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 92 × 64 m', hint: '폭파 미션 가능', bomb: true }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); if (m.sky) m.group.add(skyDome(m.sky[0], m.sky[1])); m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

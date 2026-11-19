@@ -28,7 +28,7 @@
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
       $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
       $('md-0').setAttribute('aria-pressed', match.mode ? 'false' : 'true'); $('md-1').setAttribute('aria-pressed', match.mode ? 'true' : 'false'); $('tk-box').hidden = !!match.mode;
-      $('mt-foot').textContent = match.mode ? '5라운드 선승 · 라운드 2분 · 부활 없음 · 4라운드 뒤 공수 교대' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
+      $('mt-foot').textContent = match.mode ? '5라운드 선승 · 라운드 2분 30초 · 부활 없음 · 4라운드 뒤 공수 교대' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
     }
     if (id === 's-team') { $('tm-A-s').textContent = match.mode ? '주황 · 먼저 공격 (폭탄 설치)' : '주황 · 서쪽에서 시작'; $('tm-B-s').textContent = match.mode ? '하늘 · 먼저 수비 (설치 저지)' : '하늘 · 동쪽에서 시작'; }
     if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
