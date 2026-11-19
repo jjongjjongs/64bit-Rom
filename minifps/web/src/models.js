@@ -3,7 +3,7 @@ var SV = window.SV = window.SV || {};
 (function () {
   var T = THREE, PI = Math.PI;
   function mk(c) { return new T.MeshBasicMaterial({ color: c }); }
-  function camo(a, b, c) { var m = mk(a); m.userData.camo = [new T.Color(a), new T.Color(b), new T.Color(c)]; return m; }
+  function camo(a, b, c) { var m = mk(a); m.userData.camo = [new T.Color(a).convertSRGBToLinear(), new T.Color(b).convertSRGBToLinear(), new T.Color(c).convertSRGBToLinear()]; return m; }
   var MAT = { steel: mk(0x2c3136), dark: mk(0x15181b), bright: mk(0x6f7a82), poly: mk(0x2b3035), poly2: mk(0x1a1d20), rubber: mk(0x0e1012),
     wood: mk(0x7a4a26), wood2: mk(0x5c3619), accent: mk(0xffb347), brass: mk(0xb08a3c), red: mk(0xb23a2a), lens: mk(0xffb347), glass: mk(0x1c4a60),
     olive: mk(0x4b5a3a), glove: mk(0x2a2823), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
@@ -104,12 +104,13 @@ var SV = window.SV = window.SV || {};
   };
 
   // Flatten a group into one geometry: positions, normals and a colour per vertex.
+  var lin = new T.Color();
   function merge(root, shade) {
     root.updateMatrixWorld(true); var P = [], N = [], Cc = [];
     root.traverse(function (o) {
       if (!o.isMesh) return;
       var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
-      var p = g.attributes.position.array, n = g.attributes.normal.array, c = o.material.color, cm = o.material.userData.camo, k = shade ? .92 + Math.random() * .16 : 1, v;
+      var p = g.attributes.position.array, n = g.attributes.normal.array, c = lin.copy(o.material.color).convertSRGBToLinear(), cm = o.material.userData.camo, k = shade ? .92 + Math.random() * .16 : 1, v;
       for (var i = 0; i < p.length; i += 3) {
         P.push(p[i], p[i + 1], p[i + 2]); N.push(n[i], n[i + 1], n[i + 2]);
         if (cm) { v = Math.sin(p[i] * 23 + p[i + 1] * 31) + Math.sin(p[i + 1] * 27 + p[i + 2] * 37 + 1.3) + Math.sin(p[i + 2] * 21 - p[i] * 29 + 2.1); c = cm[v > .7 ? 1 : v < -.9 ? 2 : 0]; }
@@ -122,7 +123,7 @@ var SV = window.SV = window.SV || {};
     return out;
   }
   SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk;
-  SV.litMat = new T.MeshLambertMaterial({ vertexColors: true });
+  SV.litMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .3, envMapIntensity: .55 });
 
   // A limb: a tapered tube between two points with a ball at the far joint.
   function tube(g, a, b, r0, r1, mat) {

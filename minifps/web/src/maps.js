@@ -81,8 +81,23 @@
   var texCache = {};
   function tex(key, make) {
     if (texCache[key]) return texCache[key];
-    var t = new T.CanvasTexture((make || PAINT[key])()); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; return texCache[key] = t;
+    var t = new T.CanvasTexture((make || PAINT[key])()); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; t.encoding = T.sRGBEncoding; return texCache[key] = t;
   }
+  // A normal map from a painted texture: brightness is taken as height, so scratches, seams and specks catch the light.
+  var nrmCache = {};
+  function nrm(key, strength) {
+    if (nrmCache[key]) return nrmCache[key];
+    var src = tex(key).image, w = src.width, h = src.height, a = cv(w, h), x = a[1], i, j; x.drawImage(src, 0, 0);
+    var d = x.getImageData(0, 0, w, h), px = d.data, H = new Float32Array(w * h), out = x.createImageData(w, h), o = out.data;
+    for (i = 0; i < w * h; i++) H[i] = (px[i * 4] * .3 + px[i * 4 + 1] * .59 + px[i * 4 + 2] * .11) / 255;
+    for (j = 0; j < h; j++) for (i = 0; i < w; i++) {
+      var dx = (H[j * w + (i + 1) % w] - H[j * w + (i + w - 1) % w]) * strength, dy = (H[((j + 1) % h) * w + i] - H[((j + h - 1) % h) * w + i]) * strength, l = 1 / Math.sqrt(dx * dx + dy * dy + 1), q = (j * w + i) * 4;
+      o[q] = (-dx * l * .5 + .5) * 255; o[q + 1] = (dy * l * .5 + .5) * 255; o[q + 2] = (l * .5 + .5) * 255; o[q + 3] = 255;
+    }
+    x.putImageData(out, 0, 0); var t = new T.CanvasTexture(a[0]); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; return nrmCache[key] = t;
+  }
+  // how each surface answers light: [roughness, metalness, normal strength]
+  var SURF = { conc: [.86, 0, 3], floor: [.42, 0, 2], corr: [.5, .55, 5], panel: [.48, .5, 4], block: [.92, 0, 5], metal: [.42, .7, 3], crate: [.8, 0, 4], plain: [.78, .05, 0] };
   function label(text, fg, bg, w, h) {
     return function () { var a = cv(w || 256, h || 128), c = a[0], x = a[1]; if (bg) { x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); } x.fillStyle = fg; x.font = '900 ' + Math.round(c.height * .62) + 'px "Big Shoulders Display","Arial Narrow",sans-serif-condensed,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, c.width / 2, c.height / 2 + 4, c.width - 16); if (bg) speck(x, c.width, c.height, 500, .15); return c; };
   }
@@ -94,7 +109,7 @@
     // append a transformed geometry to a layer. World-space UVs by default, the geometry's own UVs when opt.fit.
     function push(geo, c, t, opt, store) {
       opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, t), ts = TS[t] || TS.plain;
-      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c);
+      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear();
       for (i = 0; i < p.length / 3; i++) {
         var px = p[i * 3], py = p[i * 3 + 1], pz = p[i * 3 + 2], nx = n[i * 3], ny = n[i * 3 + 1], q = k;
         l.P.push(px, py, pz); l.N.push(nx, ny, n[i * 3 + 2]);
@@ -165,13 +180,15 @@
         var grp = new T.Group(), k;
         function geo(l) { var g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(l.P, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(l.N, 3)); g.setAttribute('color', new T.Float32BufferAttribute(l.C, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(l.U, 2)); return g; }
         for (k in L) {
-          var mat = k === 'glow' ? new T.MeshBasicMaterial({ vertexColors: true, fog: false }) : k === 'plain' ? SV.litMat : new T.MeshLambertMaterial({ vertexColors: true, map: tex(k) });
+          var sf = SURF[k] || SURF.plain, mat = k === 'glow' ? new T.MeshBasicMaterial({ vertexColors: true, fog: false, color: new T.Color(3, 3, 3) })   // brighter than white: this is what blooms
+            : new T.MeshStandardMaterial({ vertexColors: true, map: k === 'plain' ? null : tex(k), normalMap: sf[2] ? nrm(k, sf[2]) : null, roughness: sf[0], metalness: sf[1] });
+          mat.userData.surf = k;
           var m = new T.Mesh(geo(L[k]), mat); if (k !== 'glow') { m.castShadow = true; m.receiveShadow = true; } grp.add(m);
         }
         for (k in Q) {
           var q = Q[k], qm = q.mode === 'add' ? new T.MeshBasicMaterial({ map: q.tex, blending: T.AdditiveBlending, transparent: true, depthWrite: false, vertexColors: true })
-            : q.mode === 'alpha' ? new T.MeshLambertMaterial({ map: q.tex, vertexColors: true, transparent: true, alphaTest: .25, side: T.DoubleSide })
-            : q.mode === 'lit' ? new T.MeshBasicMaterial({ map: q.tex, vertexColors: true, fog: false }) : new T.MeshLambertMaterial({ map: q.tex, vertexColors: true });
+            : q.mode === 'alpha' ? new T.MeshStandardMaterial({ map: q.tex, vertexColors: true, transparent: true, alphaTest: .25, side: T.DoubleSide, roughness: .7, metalness: .1 })
+            : q.mode === 'lit' ? new T.MeshBasicMaterial({ map: q.tex, vertexColors: true, fog: false }) : new T.MeshStandardMaterial({ map: q.tex, vertexColors: true, roughness: .6, metalness: .2 });
           var qq = new T.Mesh(geo(q), qm); qq.receiveShadow = q.mode !== 'add' && q.mode !== 'lit'; qq.renderOrder = q.mode === 'add' ? 2 : 1; grp.add(qq);
         }
         return grp;
@@ -180,7 +197,7 @@
     return b;
   }
   function skyDome(top, horizon) {
-    var g = new T.SphereGeometry(300, 16, 10), p = g.attributes.position, c = [], a = new T.Color(top), h = new T.Color(horizon), i;
+    var g = new T.SphereGeometry(300, 16, 10), p = g.attributes.position, c = [], a = new T.Color(top).convertSRGBToLinear(), h = new T.Color(horizon).convertSRGBToLinear(), i;
     for (i = 0; i < p.count; i++) { var t = Math.max(0, Math.min(1, p.getY(i) / 110)), k = Math.pow(t, .6); c.push(h.r + (a.r - h.r) * k, h.g + (a.g - h.g) * k, h.b + (a.b - h.b) * k); }
     g.setAttribute('color', new T.Float32BufferAttribute(c, 3)); return new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide, fog: false, depthWrite: false }));
   }

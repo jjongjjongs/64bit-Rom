@@ -26,17 +26,60 @@
   var canvas = $('cv'), renderer = null, scene = new T.Scene(), cam = new T.PerspectiveCamera(62, 2, .08, 400), vmScene = new T.Scene(), vmCam = new T.PerspectiveCamera(48, 2, .01, 10);
   cam.rotation.order = 'YXZ';
   try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { SV.fatal = '이 기기에서는 3D 화면을 열 수 없습니다.'; }
-  if (renderer) { renderer.autoClear = false; renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFShadowMap; renderer.shadowMap.autoUpdate = false; }
+  if (renderer) { renderer.autoClear = false; renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false; }
   var hemi = new T.HemisphereLight(0xffffff, 0x222222, .6), sun = new T.DirectionalLight(0xffffff, .6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0008;
   scene.add(hemi); scene.add(sun); scene.add(sun.target);
   vmScene.add(new T.HemisphereLight(0xdfe6ea, 0x3a342b, 1)); var vmSun = new T.DirectionalLight(0xfff1dc, .5); vmSun.position.set(1, 2, 1); vmScene.add(vmSun);
   var vmRoot = new T.Group(); vmScene.add(vmRoot);
-  var flash = new T.Mesh(new T.PlaneGeometry(.16, .16), new T.MeshBasicMaterial({ color: 0xffc977, transparent: true, opacity: .9, depthTest: false })); flash.visible = false; vmRoot.add(flash);
+  var flash = new T.Mesh(new T.PlaneGeometry(.16, .16), new T.MeshBasicMaterial({ color: new T.Color(3.2, 2.2, 1.1), transparent: true, opacity: .9, depthTest: false })); flash.visible = false; vmRoot.add(flash);
   var vms = {}, vmCur = null, vmKick = 0, vmAds = 0, vmSwap = 0, bobT = 0;
+
+  // ---------- post-processing ----------
+  // With "high quality" on, the scene is drawn in linear HDR into an off-screen target; bright parts are blurred into a bloom,
+  // then one pass adds the bloom, maps HDR to the display (ACES fit), grades and vignettes, and a last pass smooths edges and
+  // adds a little grain. Without it (or where the GPU cannot render to float targets) the scene goes straight to the screen.
+  var post = null, usePost = false, envRT = null;
+  (function () {
+    if (!renderer || !renderer.capabilities.isWebGL2 || !(renderer.extensions.get('EXT_color_buffer_float') || renderer.extensions.get('EXT_color_buffer_half_float'))) return;
+    function rt(type, depth) { return new T.WebGLRenderTarget(4, 4, { type: type, format: T.RGBAFormat, minFilter: T.LinearFilter, magFilter: T.LinearFilter, depthBuffer: !!depth, stencilBuffer: false }); }
+    function pass(fs, uni) { return new T.ShaderMaterial({ vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }', fragmentShader: 'varying vec2 vUv;\n' + fs, uniforms: uni, depthTest: false, depthWrite: false }); }
+    var H = T.HalfFloatType, B = T.UnsignedByteType;
+    post = { scene: rt(H, true), a1: rt(H), b1: rt(H), a2: rt(H), b2: rt(H), ldr: rt(B), cam: new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad: new T.Mesh(new T.PlaneGeometry(2, 2)), sc: new T.Scene(), t: 0,
+      pre: pass('uniform sampler2D t; uniform vec2 px;\nvoid main(){ vec3 c = (texture2D(t, vUv + px * vec2(-1., -1.)).rgb + texture2D(t, vUv + px * vec2(1., -1.)).rgb + texture2D(t, vUv + px * vec2(-1., 1.)).rgb + texture2D(t, vUv + px).rgb) * .25;\n  float l = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(min(c * smoothstep(.85, 1.7, l), vec3(10.)), 1.); }', { t: { value: null }, px: { value: new T.Vector2() } }),
+      blur: pass('uniform sampler2D t; uniform vec2 d;\nvoid main(){ vec3 c = texture2D(t, vUv).rgb * .227; c += (texture2D(t, vUv + d * 1.385).rgb + texture2D(t, vUv - d * 1.385).rgb) * .316; c += (texture2D(t, vUv + d * 3.231).rgb + texture2D(t, vUv - d * 3.231).rgb) * .0705; gl_FragColor = vec4(c, 1.); }', { t: { value: null }, d: { value: new T.Vector2() } }),
+      comp: pass('uniform sampler2D tS, tB1, tB2; uniform float uBloom, uExp, uVig;\nvoid main(){ vec3 c = texture2D(tS, vUv).rgb; c += (texture2D(tB1, vUv).rgb * .55 + texture2D(tB2, vUv).rgb * .45) * uBloom; c *= uExp;\n  c = clamp((c * (2.51 * c + .03)) / (c * (2.43 * c + .59) + .14), 0., 1.);\n  float l = dot(c, vec3(.2126, .7152, .0722)); c *= mix(vec3(.93, 1., 1.08), vec3(1.06, 1., .93), smoothstep(.04, .6, l)); c = mix(c, c * c * (3. - 2. * c), .2);\n  vec2 q = vUv - .5; c *= 1. - uVig * smoothstep(.2, .95, dot(q, q) * 2.2);\n  c = pow(c, vec3(1. / 2.2)); gl_FragColor = vec4(c, dot(c, vec3(.299, .587, .114))); }', { tS: { value: null }, tB1: { value: null }, tB2: { value: null }, uBloom: { value: .5 }, uExp: { value: 1 }, uVig: { value: .42 } }),
+      fin: pass('uniform sampler2D t; uniform vec2 px; uniform float uT;\nvoid main(){ vec4 M = texture2D(t, vUv); float n = texture2D(t, vUv + vec2(0., px.y)).a, s = texture2D(t, vUv - vec2(0., px.y)).a, e = texture2D(t, vUv + vec2(px.x, 0.)).a, w = texture2D(t, vUv - vec2(px.x, 0.)).a;\n  float mx = max(M.a, max(max(n, s), max(e, w))), mn = min(M.a, min(min(n, s), min(e, w))); vec3 c = M.rgb;\n  if (mx - mn > max(.05, mx * .14)) { vec2 g = vec2(e - w, n - s), dir = normalize(vec2(-g.y, g.x) + 1e-5) * px; c = mix(c, (texture2D(t, vUv + dir * .75).rgb + texture2D(t, vUv - dir * .75).rgb) * .5, .6); }\n  c += (fract(sin(dot(vUv * 913. + uT, vec2(12.9898, 78.233))) * 43758.5453) - .5) * .022; gl_FragColor = vec4(c, 1.); }', { t: { value: null }, px: { value: new T.Vector2() }, uT: { value: 0 } }) };
+    post.sc.add(post.quad); post.quad.frustumCulled = false;
+  })();
+  function run(mat, target) { post.quad.material = mat; renderer.setRenderTarget(target); renderer.render(post.sc, post.cam); }
+  function drawFrame() {
+    var vm = G.player && G.player.alive && vmCur;
+    if (!usePost) { renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); if (vm) { renderer.clearDepth(); renderer.render(vmScene, vmCam); } return; }
+    var p = post, w = p.scene.width, h = p.scene.height;
+    renderer.setRenderTarget(p.scene); renderer.clear(); renderer.render(scene, cam); if (vm) { renderer.clearDepth(); renderer.render(vmScene, vmCam); }
+    p.pre.uniforms.t.value = p.scene.texture; p.pre.uniforms.px.value.set(1 / w, 1 / h); run(p.pre, p.a1);
+    p.blur.uniforms.t.value = p.a1.texture; p.blur.uniforms.d.value.set(1 / p.a1.width, 0); run(p.blur, p.b1); p.blur.uniforms.t.value = p.b1.texture; p.blur.uniforms.d.value.set(0, 1 / p.a1.height); run(p.blur, p.a1);
+    p.blur.uniforms.t.value = p.a1.texture; p.blur.uniforms.d.value.set(1 / p.a2.width, 0); run(p.blur, p.b2); p.blur.uniforms.t.value = p.b2.texture; p.blur.uniforms.d.value.set(0, 1 / p.a2.height); run(p.blur, p.a2);
+    p.comp.uniforms.tS.value = p.scene.texture; p.comp.uniforms.tB1.value = p.a1.texture; p.comp.uniforms.tB2.value = p.a2.texture; p.comp.uniforms.uExp.value = (G.map && G.map.exp) || 1; run(p.comp, p.ldr);
+    p.fin.uniforms.t.value = p.ldr.texture; p.fin.uniforms.px.value.set(1 / w, 1 / h); p.fin.uniforms.uT.value = (p.t = (p.t + .37) % 97); run(p.fin, null);
+  }
+  // the sky as a blurred environment map, so metal and wet ground have something to reflect
+  function setEnv(top, horizon, ground) {
+    if (!renderer) return; var sc = new T.Scene(), g = new T.SphereGeometry(50, 16, 10), ps = g.attributes.position, c = [], a = new T.Color(top).convertSRGBToLinear(), h = new T.Color(horizon).convertSRGBToLinear(), gr = new T.Color(ground).convertSRGBToLinear(), i, t, q = new T.Color();
+    for (i = 0; i < ps.count; i++) { t = ps.getY(i) / 50; if (t >= 0) q.copy(h).lerp(a, Math.pow(t, .6)); else q.copy(h).lerp(gr, Math.min(1, -t * 4)); c.push(q.r, q.g, q.b); }
+    g.setAttribute('color', new T.Float32BufferAttribute(c, 3)); sc.add(new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
+    var pm = new T.PMREMGenerator(renderer), old = envRT; envRT = pm.fromScene(sc, .04); pm.dispose(); g.dispose(); scene.environment = vmScene.environment = envRT.texture; if (old) old.dispose();
+  }
 
   SV.resize = function () {
     if (!renderer) return; var w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cfg.quality ? 2 : 1.25)); renderer.setSize(w, h, false);
+    var want = !!(post && cfg.quality);
+    if (want !== usePost || !SV.resize.done) {   // the two paths encode colour differently, so every material's shader is rebuilt on a switch
+      SV.resize.done = true; usePost = want; renderer.toneMapping = want ? T.NoToneMapping : T.ACESFilmicToneMapping; renderer.outputEncoding = want ? T.LinearEncoding : T.sRGBEncoding;
+      [scene, vmScene].forEach(function (s) { s.traverse(function (o) { if (o.material) o.material.needsUpdate = true; }); });
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cfg.quality ? (post ? 1.6 : 2) : 1.25)); renderer.setSize(w, h, false);
+    if (usePost) { var dw = renderer.domElement.width, dh = renderer.domElement.height; post.scene.setSize(dw, dh); post.ldr.setSize(dw, dh); post.a1.setSize(dw >> 2, dh >> 2); post.b1.setSize(dw >> 2, dh >> 2); post.a2.setSize(dw >> 3, dh >> 3); post.b2.setSize(dw >> 3, dh >> 3); }
     cam.aspect = vmCam.aspect = w / h; cam.updateProjectionMatrix(); vmCam.updateProjectionMatrix();
   };
 
@@ -44,15 +87,15 @@
   var tracers = [], puffs = [], booms = [], fx = new T.Group(); scene.add(fx);
   (function () {
     var i, m;
-    for (i = 0; i < 28; i++) { m = new T.Line(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)), new T.LineBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .8 })); m.visible = false; m.frustumCulled = false; fx.add(m); tracers.push({ m: m, life: 0 }); }
+    for (i = 0; i < 28; i++) { m = new T.Line(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)), new T.LineBasicMaterial({ color: new T.Color(2.4, 1.8, 1), transparent: true, opacity: .8 })); m.visible = false; m.frustumCulled = false; fx.add(m); tracers.push({ m: m, life: 0 }); }
     var bg = new T.BoxGeometry(.09, .09, .09);
     for (i = 0; i < 36; i++) { m = new T.Mesh(bg, new T.MeshBasicMaterial({ color: 0xffffff })); m.visible = false; fx.add(m); puffs.push({ m: m, life: 0, max: 1 }); }
     var sg = new T.IcosahedronGeometry(1, 1);
-    for (i = 0; i < 4; i++) { m = new T.Mesh(sg, new T.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: .8 })); m.visible = false; fx.add(m); booms.push({ m: m, life: 0 }); }
+    for (i = 0; i < 4; i++) { m = new T.Mesh(sg, new T.MeshBasicMaterial({ color: new T.Color(4, 2.2, .8), transparent: true, opacity: .8 })); m.visible = false; fx.add(m); booms.push({ m: m, life: 0 }); }
   })();
   var ti = 0, pi2 = 0;
   function tracer(a, b) { var t = tracers[ti = (ti + 1) % tracers.length], p = t.m.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true; t.m.visible = true; t.life = .07; }
-  function puff(p, color, life, size) { var q = puffs[pi2 = (pi2 + 1) % puffs.length]; q.m.position.copy(p); q.m.material.color.setHex(color); q.m.scale.setScalar(size || 1); q.m.visible = true; q.life = q.max = life || .22; }
+  function puff(p, color, life, size) { var q = puffs[pi2 = (pi2 + 1) % puffs.length]; q.m.position.copy(p); q.m.material.color.setHex(color).convertSRGBToLinear(); q.m.scale.setScalar(size || 1); q.m.visible = true; q.life = q.max = life || .22; }
   function updFx(dt) {
     var i, o;
     for (i = 0; i < tracers.length; i++) { o = tracers[i]; if (o.life > 0) { o.life -= dt; if (o.life <= 0) o.m.visible = false; } }
@@ -65,7 +108,7 @@
   function makeRain() {
     var n = 500, p = new Float32Array(n * 6), i; for (i = 0; i < n; i++) { var x = rnd(-14, 14), y = rnd(0, 14), z = rnd(-14, 14); p.set([x, y, z, x + .05, y - .5, z], i * 6); }
     var g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(p, 3));
-    rain = new T.LineSegments(g, new T.LineBasicMaterial({ color: 0x8fa3b3, transparent: true, opacity: .28 })); rain.frustumCulled = false; scene.add(rain);
+    rain = new T.LineSegments(g, new T.LineBasicMaterial({ color: new T.Color(0x8fa3b3).convertSRGBToLinear(), transparent: true, opacity: .32 })); rain.frustumCulled = false; scene.add(rain);
   }
   function updRain(dt) {
     if (!rain) return; var p = rain.geometry.attributes.position.array, i;
@@ -476,7 +519,9 @@
     SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group);
-    scene.background = new T.Color(map.bg); scene.fog = new T.Fog(map.bg, map.fog[0], map.fog[1]);
+    scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
+    setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
+    map.group.traverse(function (o) { var m = o.material; if (m && m.userData.surf === 'conc' && map.rain) { m.roughness = .3; m.metalness = .05; m.envMapIntensity = 1.4; } });   // wet ground
     hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2];
     sun.color.setHex(map.sun[0]); sun.intensity = map.sun[1]; sun.position.fromArray(map.sun[2]); sun.target.position.set(0, 0, 0);
     var r = Math.max(map.bounds.maxx, map.bounds.maxz) + 8, sc = sun.shadow.camera; sc.left = sc.bottom = -r; sc.right = sc.top = r; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
@@ -585,8 +630,7 @@
     if (!renderer || G.state === 'menu') return;
     if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } }
     updFx(dt); updRain(dt);
-    renderer.clear(); renderer.render(scene, cam);
-    if (G.player && G.player.alive && vmCur) { renderer.clearDepth(); renderer.render(vmScene, vmCam); }
+    drawFrame();
   }
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
