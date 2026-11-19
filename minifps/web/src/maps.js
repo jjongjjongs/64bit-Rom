@@ -122,7 +122,9 @@
     }
     function coll(x, z, w, d, h, y0) { b.boxes.push({ minx: x - w / 2, maxx: x + w / 2, miny: y0, maxy: y0 + h, minz: z - d / 2, maxz: z + d / 2 }); }
     var b = {
-      boxes: [], spawns: { A: [], B: [] },
+      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false,
+      // a lamp that really lights its surroundings; the game keeps the nearest few switched on
+      light: function (x, y, z, c, i, d) { if (!b.day) b.lights.push({ x: x, y: y, z: z, c: new T.Color(c).convertSRGBToLinear(), i: i, d: d }); },
       box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false) coll(x, z, w, d, h, y0); },
       cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false) coll(x, z, r * 1.7, r * 1.7, h, y0); },
       geo: function (g, c, t, opt) { push(g, c, t || 'plain', opt); },
@@ -165,7 +167,7 @@
       lamp: function (x, z, h, ax, az) {                                 // street light: pole, arm, head and its pool of light
         b.cyl(x, z, .09, h, 0x3a4045, 0, false, 'metal', .06, 8); b.cyl(x, z, .16, .5, 0x3a4045, 0, false, 'metal', .12, 8); ax = ax || 0; az = az || 0;
         var hx = x + ax * 1.6, hz = z + az * 1.6; b.seg(x, h - .1, z, hx, h + .25, hz, .09, 0x3a4045, 'metal'); b.box(hx, hz, ax ? .7 : .34, az ? .7 : .34, .12, 0x2a2e31, h + .2, false);
-        b.glow(hx, h + .17, hz, ax ? .56 : .24, .05, az ? .56 : .24, C.lamp); b.quad('pool', hx, .03, hz, 13, 13, 0, { flat: true, mode: 'add' });
+        b.glow(hx, h + .17, hz, ax ? .56 : .24, .05, az ? .56 : .24, b.day ? 0x3a3a36 : C.lamp); if (!b.day) { b.quad('pool', hx, .03, hz, 9, 9, 0, { flat: true, mode: 'add', color: 0x5a5a5a }); b.light(hx, h - .25, hz, 0xffc98a, 2.1, 17); }
       },
       fence: function (x0, z0, x1, z1, h) {                               // chain-link fence on a concrete kerb
         var len = Math.hypot(x1 - x0, z1 - z0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0), n = Math.round(len / 3), i;
@@ -274,7 +276,7 @@
       for (k = -12; k < 12; k += 3) { b.seg(i, h - 1.4, k, i, h - .2, k + 1.5, .1, 0x4f585e); b.seg(i, h - .2, k + 1.5, i, h - 1.4, k + 3, .1, 0x4f585e); } }
     [-8, 8].forEach(function (z) { b.box(0, z, 38, .14, .14, 0x4f585e, h - 1.5, false, 'metal'); });
     var rf = new T.BoxGeometry(39, .3, 27); rf.translate(0, h + .15, 0); b.geo(rf, 0x5d666c, 'panel', {});
-    for (i = -15; i <= 15; i += 6) { b.glow(i, h - .04, -5, 1.6, .06, 6, C.sky); b.glow(i, h - .04, 6, 1.6, .06, 6, C.sky); b.quad('pool', i, .03, -5, 9, 12, 0, { flat: true, mode: 'add', color: 0x9db4c4 }); b.quad('pool', i, .03, 6, 9, 12, 0, { flat: true, mode: 'add', color: 0x9db4c4 }); }
+    for (i = -15; i <= 15; i += 6) { b.light(i, h - .5, -5, 0xd6e6f2, 1.35, 15); b.light(i, h - .5, 6, 0xd6e6f2, 1.35, 15); b.glow(i, h - .04, -5, 1.6, .06, 6, C.sky); b.glow(i, h - .04, 6, 1.6, .06, 6, C.sky); }
     // spawn rooms behind block partitions, hazard-striped door frames
     [-13.5, 13.5].forEach(function (x) {
       [[-12.8, -9], [-5, 5], [9, 12.8]].forEach(function (s) { b.wallZ(x, s[0], s[1], 3.4, 0xb4b4ac, 'block'); });
@@ -342,7 +344,7 @@
       var cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, dp = z1 - z0, x;
       wallG('x', z0, x0, x1, d.N, h); wallG('x', z1, x0, x1, d.S, h); wallG('z', x0, z0, z1, d.W, h); wallG('z', x1, z0, z1, d.E, h);
       b.box(cx, cz, w - .4, dp - .4, .02, 0xa8acad, 0, false, 'floor');
-      if (ROOF) { var rf = new T.BoxGeometry(w + .8, .3, dp + .8); rf.translate(cx, h + .15, cz); b.geo(rf, 0x5d666c, 'panel', {}); for (x = x0 + 3; x < x1 - 1; x += 4) { b.box(x, cz, .2, dp - .4, .22, 0x4f585e, h - .3, false, 'metal'); b.glow(x, h - .34, cz, .3, .05, Math.min(6, dp - 4), C.sky); b.quad('pool', x, .03, cz, 7, dp - 3, 0, { flat: true, mode: 'add', color: 0x9db4c4 }); } }
+      if (ROOF) { var rf = new T.BoxGeometry(w + .8, .3, dp + .8); rf.translate(cx, h + .15, cz); b.geo(rf, 0x5d666c, 'panel', {}); for (x = x0 + 3; x < x1 - 1; x += 4) { b.box(x, cz, .2, dp - .4, .22, 0x4f585e, h - .3, false, 'metal'); b.glow(x, h - .34, cz, .3, .05, Math.min(6, dp - 4), C.sky); b.light(x, h - .7, cz, 0xd6e6f2, 1.3, 13); } }
     }
     function truck(x, z, rot, dir) {
       var L = 6.6, W = 2.4, f = dir || 1;
@@ -408,7 +410,7 @@
   // 건물, 지점마다 성격이 다른 입구 셋 이상(큰길, 샛길, 윗길), 수비가 먼저 닿는 거리, 야외 지점 하나와 실내 지점 하나.
   // 건물은 저마다 다른 각도로 놓여 길이 직각으로 만나지 않는다. 위층(H = 3.2 m)은 시장 옥상, 구름다리, A 옥상, B 중층이다.
   function oldtown() {
-    var b = Builder(), H = 3.2, ROOF = !SV.noRoof, links = [], ladders = [], ST = 0xc9b79a, ST2 = 0xb9a488, TILE = 0x9a5a3c, DK = 0x4f585e, WD = 0x9c7a4a;
+    var b = Builder(); b.day = true; var H = 3.2, ROOF = !SV.noRoof, links = [], ladders = [], ST = 0xc9b79a, ST2 = 0xb9a488, TILE = 0x9a5a3c, DK = 0x4f585e, WD = 0x9c7a4a;
     b.box(0, 0, 140, 110, .4, 0x8f897c, -.4, false, 'conc');
     // a local frame: everything built through it is placed and turned together, so each building is laid out as a plain rectangle
     function fr(cx, cz, ang) {
@@ -499,5 +501,5 @@
 
   var MAKERS = [dock, warehouse, depot, oldtown];
   SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true }];
-  SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); if (m.sky) m.group.add(skyDome(m.sky[0], m.sky[1])); m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
+  SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) m.group.add(skyDome(m.sky[0], m.sky[1])); m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

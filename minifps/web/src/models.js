@@ -9,6 +9,8 @@ var SV = window.SV = window.SV || {};
     olive: mk(0x4b5a3a), glove: mk(0x2a2823), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
     sleeveA: camo(0x8a7a58, 0x6b5d40, 0x4d4733), sleeveB: camo(0x5d6a70, 0x44525a, 0x2c363d) };
 
+  ['poly', 'poly2', 'rubber', 'wood', 'wood2', 'olive', 'glove', 'fde', 'fde2', 'skin', 'sleeveA', 'sleeveB'].forEach(function (n) { MAT[n].userData.soft = true; });
+
   function kit(g) {
     function add(geo, mat, x, y, z, rx, ry, rz) { var m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, rz || 0); g.add(m); return m; }
     return {
@@ -23,71 +25,105 @@ var SV = window.SV = window.SV || {};
   function rail(k, x0, x1, y, w) { k.b(x1 - x0, .008, w, MAT.dark, (x0 + x1) / 2, y, 0); for (var x = x0 + .01; x < x1; x += .03) k.b(.014, .007, w + .004, MAT.steel, x, y + .007, 0); }
   function guard(k, x, y) { k.b(.07, .006, .016, MAT.dark, x, y - .045, 0); k.b(.006, .045, .016, MAT.dark, x + .035, y - .024, 0); k.b(.008, .03, .008, MAT.bright, x - .008, y - .02, 0, 0, 0, .25); }
 
+  // Hard-surface parts are drawn as a side profile and pushed out sideways with bevelled edges, the way a receiver is milled
+  // from a block; round parts are turned on a lathe. Edges that catch the light are most of what makes a gun read as metal.
+  function shape(pts, holes) { var sh = new T.Shape(pts.map(function (p) { return new T.Vector2(p[0], p[1]); })); (holes || []).forEach(function (h) { sh.holes.push(new T.Path(h.map(function (p) { return new T.Vector2(p[0], p[1]); }))); }); return sh; }
+  function exg(pts, a, b, bv, holes) { var g = new T.ExtrudeGeometry(shape(pts, holes), { depth: b - a - 2 * bv, bevelEnabled: bv > 0, bevelSize: bv, bevelThickness: bv, bevelSegments: 1, curveSegments: 3 }); g.translate(0, 0, a + bv); return g; }
+  // profile in the side view (x forward, y up), from z = a to z = b
+  function ex(k, pts, a, b, mat, bv, holes) { return k.add(exg(pts, a, b, bv || 0, holes), mat, 0, 0, 0); }
+  // profile seen from the front (z across, y up), from x = a to x = b: sight hoods, optic bodies
+  function exX(k, pts, a, b, mat, bv, holes) { var g = exg(pts, 0, b - a, bv || 0, holes); g.rotateY(PI / 2); return k.add(g, mat, a, 0, 0); }
+  // turned part along the barrel axis: [[x, radius], ...]
+  function lx(k, prof, mat, y, z, seg) { var g = new T.LatheGeometry(prof.map(function (p) { return new T.Vector2(p[1], p[0]); }), seg || 14); g.rotateZ(-PI / 2); return k.add(g, mat, 0, y, z || 0); }
+  function teeth(k, x0, n, y, w, mat) { for (var i = 0; i < n; i++) k.b(.0052, .0065, w, mat, x0 + i * .01, y, 0); }
+  function trig(k, x, y, mat, gm) {   // trigger guard (a loop) and the trigger inside it
+    ex(k, [[x - .042, y], [x + .04, y], [x + .04, y - .034], [x - .03, y - .038], [x - .046, y - .02]], -.0075, .0075, gm, .001, [[[x - .037, y - .004], [x + .035, y - .004], [x + .035, y - .029], [x - .028, y - .033], [x - .041, y - .02]]]);
+    ex(k, [[x - .006, y], [x + .002, y], [x, y - .014], [x + .006, y - .025], [x + .002, y - .027], [x - .007, y - .016]], -.003, .003, mat, 0);
+  }
+
   // every gun: +X is the muzzle, +Y up. `grip` and `fore` are hand positions, `muzzle` the barrel tip, `sight` the aiming line height.
   var GUN = {};
   GUN.rifle = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
-    k.b(.27, .058, .048, m.steel, 0, .03, 0); k.b(.21, .05, .044, m.poly, -.02, -.022, 0); k.b(.07, .028, .003, m.dark, .03, .034, .0245);
-    k.b(.04, .016, .05, m.dark, -.125, .062, 0); k.b(.3, .058, .056, m.poly, .285, .03, 0);
-    for (var i = 0; i < 6; i++) k.b(.028, .012, .06, m.dark, .17 + i * .045, .03, 0);
-    rail(k, -.13, .43, .064, .026);
-    k.cx(.011, .2, m.steel, .53, .03, 0); k.b(.022, .05, .024, m.dark, .47, .05, 0); k.b(.006, .03, .006, m.bright, .47, .088, 0); k.cx(.017, .055, m.dark, .655, .03, 0);
-    k.b(.07, .014, .034, m.dark, 0, .08, 0); k.b(.06, .008, .05, m.dark, 0, .135, 0); k.b(.06, .05, .006, m.dark, 0, .11, .022); k.b(.06, .05, .006, m.dark, 0, .11, -.022);
-    k.b(.06, .1, .028, m.poly2, .045, -.095, 0, 0, 0, .12); k.b(.06, .09, .028, m.poly2, .064, -.18, 0, 0, 0, .3); k.b(.066, .012, .032, m.fde, .078, -.226, 0, 0, 0, .3);
-    k.b(.046, .115, .036, m.rubber, -.105, -.095, 0, 0, 0, -.32); guard(k, -.045, -.04);
-    k.cx(.017, .2, m.steel, -.235, .03, 0); k.b(.17, .075, .04, m.poly, -.29, .008, 0); k.b(.022, .125, .046, m.rubber, -.385, -.005, 0); k.b(.05, .012, .042, m.fde, -.25, .048, 0);
-    // ejection port, charging handle, bolt release, angled foregrip, light, ported brake, sling loop
-    k.b(.06, .024, .003, m.rubber, .01, .034, -.0245); k.b(.034, .012, .034, m.dark, -.148, .052, 0); k.b(.014, .02, .004, m.bright, -.03, .012, .0245);
-    k.b(.1, .034, .03, m.poly2, .27, -.012, 0, 0, 0, -.2); k.cx(.015, .075, m.dark, .385, .03, .046, 10); k.cx(.016, .006, m.bright, .424, .03, .046, 10); k.b(.03, .014, .02, m.dark, .385, .03, .03);
-    k.b(.01, .012, .04, m.rubber, .64, .03, 0); k.b(.01, .012, .04, m.rubber, .665, .03, 0); k.b(.012, .03, .006, m.steel, -.2, -.02, .022);
-    k.cx(.033, .3, m.poly, .285, .03, 0, 8); k.b(.06, .02, .05, m.fde2, -.3, -.03, 0);
-    return { g: g, grip: [-.105, -.11], fore: [.27, -.02], muzzle: [.69, .03], sight: .11 };
+    var g = new T.Group(), k = kit(g), m = MAT, i;
+    ex(k, [[-.14, .002], [.13, .002], [.13, .056], [.122, .064], [-.132, .064], [-.14, .052]], -.021, .021, m.steel, .003);                                    // upper receiver
+    ex(k, [[-.14, 0], [.1, 0], [.1, -.04], [.04, -.052], [.036, -.03], [-.03, -.03], [-.05, -.022], [-.14, -.022]], -.019, .019, m.steel, .0025);              // lower receiver and magazine well
+    k.b(.062, .02, .003, m.rubber, .02, .034, -.0225); k.b(.066, .006, .006, m.dark, .02, .021, -.0235); k.cz(.007, .014, m.dark, -.09, .04, -.026, 10);        // ejection port, its cover hinge, forward assist
+    k.b(.012, .022, .004, m.dark, -.03, .012, .0215); k.cz(.005, .006, m.dark, .03, -.012, -.0205, 10); k.cz(.0042, .045, m.bright, -.12, -.012, 0, 8); k.cz(.0042, .045, m.bright, .085, -.01, 0, 8); k.b(.016, .008, .006, m.dark, -.07, -.006, .021);   // bolt release, magazine button, take-down pins, selector
+    ex(k, [[-.168, .05], [-.13, .05], [-.13, .062], [-.168, .062]], -.016, .016, m.dark, .002);                                                               // charging handle
+    teeth(k, -.128, 56, .0675, .021, m.steel);
+    var hg = k.cx(.031, .3, m.steel, .28, .03, 0, 8); hg.rotation.x = PI / 8;                                                                                   // free-float handguard, slotted on three faces
+    for (i = 0; i < 6; i++) { k.b(.032, .003, .009, m.rubber, .16 + i * .048, .0002, 0); k.b(.032, .009, .003, m.rubber, .16 + i * .048, .03, .0298); k.b(.032, .009, .003, m.rubber, .16 + i * .048, .03, -.0298); }
+    k.cx(.0085, .2, m.dark, .52, .03, 0, 12); k.cx(.0125, .03, m.steel, .45, .03, 0, 12);                                                                       // barrel, gas block
+    lx(k, [[.6, 0], [.6, .0125], [.612, .0138], [.66, .0138], [.668, .011], [.668, 0]], m.dark, .03); for (i = 0; i < 3; i++) k.b(.007, .009, .03, m.rubber, .622 + i * .014, .03, 0);   // muzzle brake and its ports
+    k.b(.075, .012, .03, m.dark, .003, .074, 0); k.b(.02, .012, .034, m.steel, -.02, .076, 0); k.b(.02, .012, .034, m.steel, .026, .076, 0);                    // optic mount and clamps
+    exX(k, [[-.023, .082], [.023, .082], [.023, .13], [.017, .138], [-.017, .138], [-.023, .13]], -.03, .036, m.dark, .0015, [[[-.018, .09], [.018, .09], [.018, .128], [.014, .132], [-.014, .132], [-.018, .128]]]);   // reflex sight: you aim through the window
+    k.cz(.006, .008, m.steel, .0, .1, .027, 8); k.cy(.005, .006, m.steel, .0, .141, 0, 8);
+    ex(k, [[-.09, -.02], [-.045, -.02], [-.058, -.07], [-.08, -.145], [-.128, -.138], [-.108, -.07]], -.014, .014, m.fde, .005); trig(k, -.005, -.03, m.bright, m.steel);   // pistol grip, trigger
+    ex(k, [[.04, -.04], [.094, -.034], [.104, -.12], [.122, -.2], [.07, -.214], [.055, -.13]], -.0125, .0125, m.poly2, .002);                                  // curved magazine, ribs, floor plate
+    for (i = 0; i < 4; i++) k.b(.05, .004, .0275, m.dark, .083 + i * .007, -.072 - i * .036, 0, 0, 0, .2); k.b(.06, .01, .03, m.fde, .097, -.212, 0, 0, 0, .27);
+    ex(k, [[.2, 0], [.32, 0], [.3, -.03], [.24, -.042], [.21, -.03]], -.014, .014, m.fde, .004);                                                               // angled foregrip
+    k.cx(.0145, .07, m.dark, .38, .03, .047, 12); k.cx(.0168, .014, m.dark, .42, .03, .047, 12); k.cx(.013, .003, m.bright, .4275, .03, .047, 12); k.b(.03, .012, .018, m.dark, .38, .03, .034);   // weapon light
+    k.cx(.0145, .2, m.steel, -.235, .03, 0, 12); k.cx(.0185, .012, m.steel, -.142, .03, 0, 12);                                                                 // buffer tube, castle nut
+    ex(k, [[-.21, .052], [-.37, .052], [-.385, .04], [-.385, -.07], [-.365, -.078], [-.3, -.028], [-.21, .004]], -.019, .019, m.fde, .004, [[[-.33, 0], [-.365, 0], [-.365, -.05], [-.33, -.02]]]);   // skeleton stock
+    k.b(.02, .13, .044, m.rubber, -.397, -.012, 0); k.b(.012, .03, .006, m.steel, -.2, -.012, .021);
+    return { g: g, grip: [-.105, -.1], fore: [.265, -.035], muzzle: [.67, .03], sight: .11 };
   };
   GUN.smg = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
-    k.b(.3, .07, .046, m.poly, 0, .02, 0); k.b(.3, .02, .05, m.steel, 0, .058, 0); k.b(.06, .024, .003, m.dark, .02, .03, .0235); rail(k, -.13, .13, .072, .024);
-    k.cx(.02, .11, m.dark, .205, .028, 0); for (var i = 0; i < 3; i++) k.b(.016, .044, .02, m.steel, .17 + i * .03, .028, 0); k.cx(.009, .05, m.steel, .28, .028, 0);
-    k.b(.012, .02, .005, m.dark, -.1, .093, .011); k.b(.012, .02, .005, m.dark, -.1, .093, -.011); k.b(.006, .03, .005, m.bright, .11, .098, 0);
-    k.b(.036, .2, .026, m.poly2, .05, -.115, 0); k.b(.042, .012, .03, m.fde, .05, -.22, 0); k.b(.044, .11, .034, m.rubber, -.07, -.07, 0, 0, 0, -.22); guard(k, -.01, -.015);
-    k.b(.034, .085, .03, m.rubber, .165, -.05, 0);
-    k.b(.2, .01, .01, m.steel, -.25, .045, .016); k.b(.2, .01, .01, m.steel, -.25, .045, -.016); k.b(.012, .11, .046, m.rubber, -.352, 0, 0);
-    k.b(.05, .02, .003, m.rubber, .03, .034, -.0235); k.b(.02, .014, .012, m.bright, -.06, .05, .026); k.b(.01, .014, .004, m.bright, -.02, .0, .0235);
-    k.b(.05, .012, .05, m.rubber, -.352, .05, 0); k.b(.05, .012, .05, m.rubber, -.352, -.05, 0);
-    return { g: g, grip: [-.07, -.085], fore: [.165, -.07], muzzle: [.31, .028], sight: .118 };
+    var g = new T.Group(), k = kit(g), m = MAT, i;
+    ex(k, [[-.15, -.012], [.15, -.012], [.15, .05], [.14, .066], [-.14, .066], [-.15, .056]], -.022, .022, m.poly, .003);                                       // receiver
+    k.b(.06, .022, .003, m.rubber, .03, .036, -.0235); k.cz(.006, .018, m.bright, -.04, .05, .029, 8); k.b(.016, .008, .006, m.dark, -.06, .012, .0225); k.cz(.004, .048, m.bright, -.12, .0, 0, 8); k.cz(.004, .048, m.bright, .1, .0, 0, 8);
+    teeth(k, -.125, 26, .069, .02, m.steel);
+    k.cx(.019, .1, m.steel, .2, .028, 0, 12); for (i = 0; i < 4; i++) { k.b(.012, .042, .008, m.rubber, .165 + i * .022, .028, 0); k.b(.012, .008, .042, m.rubber, .165 + i * .022, .028, 0); }   // vented shroud
+    k.cx(.0095, .06, m.dark, .28, .028, 0, 12); lx(k, [[.295, .0095], [.295, .012], [.31, .012], [.31, 0]], m.dark, .028);
+    k.b(.012, .034, .005, m.dark, -.1, .089, .011); k.b(.012, .034, .005, m.dark, -.1, .089, -.011); k.b(.014, .012, .03, m.dark, -.1, .076, 0);                // rear notch
+    exX(k, [[-.013, .072], [.013, .072], [.013, .104], [.008, .112], [-.008, .112], [-.013, .104]], .1, .118, m.dark, .001, [[[-.009, .078], [.009, .078], [.009, .102], [.006, .107], [-.006, .107], [-.009, .102]]]); k.b(.004, .026, .004, m.bright, .109, .09, 0);   // hooded front post
+    ex(k, [[-.1, -.012], [-.045, -.012], [-.055, -.07], [-.07, -.135], [-.115, -.13], [-.1, -.07]], -.015, .015, m.poly2, .005); trig(k, -.006, -.014, m.bright, m.poly);
+    ex(k, [[.032, -.012], [.07, -.012], [.068, -.21], [.03, -.21]], -.012, .012, m.steel, .002); k.b(.046, .01, .03, m.dark, .049, -.213, 0); for (i = 0; i < 5; i++) k.b(.003, .16, .0255, m.dark, .04 + i * .006, -.11, 0);   // stick magazine
+    ex(k, [[.145, -.012], [.19, -.012], [.186, -.1], [.15, -.1]], -.014, .014, m.poly2, .005);                                                                 // vertical foregrip
+    k.cx(.005, .21, m.steel, -.25, .045, .016, 8); k.cx(.005, .21, m.steel, -.25, .045, -.016, 8); ex(k, [[-.345, .066], [-.362, .066], [-.362, -.06], [-.345, -.06]], -.023, .023, m.rubber, .003);   // wire stock
+    return { g: g, grip: [-.075, -.085], fore: [.167, -.07], muzzle: [.31, .028], sight: .118 };
   };
   GUN.sniper = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
-    k.b(.42, .06, .05, m.poly, 0, 0, 0); k.b(.3, .04, .044, m.steel, .03, .045, 0); k.b(.3, .03, .056, m.poly2, .33, -.008, 0);
-    k.cx(.014, .62, m.steel, .52, .045, 0, 8, .011); k.b(.07, .034, .04, m.dark, .86, .045, 0);
-    k.cz(.007, .05, m.bright, -.1, .04, -.06); k.add(new T.IcosahedronGeometry(.016, 0), m.dark, -.1, .03, -.09);
-    rail(k, -.1, .16, .07, .024); k.b(.02, .04, .03, m.dark, -.04, .095, 0); k.b(.02, .04, .03, m.dark, .09, .095, 0);
-    k.cx(.02, .3, m.dark, .03, .125, 0, 10); k.cx(.02, .08, m.dark, .21, .125, 0, 10, .034); k.cx(.03, .06, m.dark, -.15, .125, 0, 10, .02);
-    k.cx(.03, .004, m.glass, .252, .125, 0, 10); k.cy(.014, .03, m.steel, .03, .158, 0);
-    k.b(.05, .075, .03, m.poly2, .06, -.065, 0); guard(k, -.06, -.02); k.b(.046, .12, .036, m.rubber, -.13, -.085, 0, 0, 0, -.28);
-    k.b(.26, .03, .04, m.poly, -.33, .01, 0); k.b(.22, .028, .036, m.poly, -.33, -.085, 0, 0, 0, .12); k.b(.026, .14, .046, m.rubber, -.47, -.03, 0); k.b(.13, .03, .042, m.fde, -.32, .04, 0);
-    k.cx(.008, .2, m.dark, .47, -.05, .02, 6); k.cx(.008, .2, m.dark, .47, -.05, -.02, 6); k.b(.03, .03, .06, m.dark, .38, -.035, 0);   // folded bipod
-    k.cz(.012, .03, m.steel, .03, .125, .03); k.b(.012, .02, .05, m.rubber, .86, .045, 0); k.b(.012, .02, .05, m.rubber, .885, .045, 0); k.b(.1, .012, .044, m.rubber, -.33, .032, 0);
-    return { g: g, grip: [-.13, -.1], fore: [.3, -.04], muzzle: [.9, .045], sight: .125 };
+    var g = new T.Group(), k = kit(g), m = MAT, i;
+    ex(k, [[-.2, -.03], [.5, -.03], [.5, 0], [.2, .012], [.2, .03], [-.2, .03]], -.024, .024, m.poly, .004);                                                    // chassis and fore-end
+    k.cx(.021, .3, m.steel, .03, .045, 0, 14); k.b(.07, .014, .004, m.rubber, .05, .05, -.019); k.cx(.022, .02, m.dark, -.125, .045, 0, 14);                     // action, port, bolt shroud
+    k.cz(.006, .05, m.bright, -.1, .04, -.045, 8); k.s(.013, m.dark, -.1, .036, -.075);                                                                         // bolt handle
+    lx(k, [[.18, 0], [.18, .016], [.3, .0135], [.82, .0105], [.82, 0]], m.steel, .045, 0, 14);                                                                 // tapered barrel
+    k.b(.075, .03, .036, m.dark, .857, .045, 0); for (i = 0; i < 3; i++) k.b(.012, .02, .04, m.rubber, .835 + i * .022, .045, 0);                               // brake
+    teeth(k, -.1, 27, .0705, .02, m.steel); k.b(.27, .006, .022, m.steel, .03, .066, 0);
+    [-.04, .09].forEach(function (x) { k.b(.022, .03, .03, m.dark, x, .088, 0); k.cx(.0245, .022, m.dark, x, .125, 0, 14); });                                  // scope rings
+    lx(k, [[-.2, 0], [-.2, .019], [-.17, .0215], [-.13, .0215], [-.11, .015], [.12, .015], [.16, .026], [.25, .026], [.25, 0]], m.dark, .125, 0, 16);            // scope
+    k.cx(.0235, .003, m.glass, .2515, .125, 0, 16); k.cx(.0185, .003, m.glass, -.2015, .125, 0, 16); k.cy(.014, .028, m.steel, .03, .152, 0, 12); k.cz(.014, .028, m.steel, .03, .125, .028, 12);
+    ex(k, [[.02, -.03], [.1, -.03], [.095, -.092], [.025, -.092]], -.014, .014, m.poly2, .002);                                                                // magazine
+    ex(k, [[-.16, -.03], [-.1, -.03], [-.115, -.08], [-.14, -.15], [-.185, -.145], [-.165, -.08]], -.015, .015, m.rubber, .005); trig(k, -.055, -.03, m.bright, m.poly);
+    ex(k, [[-.2, .03], [-.47, .03], [-.48, .02], [-.48, -.1], [-.46, -.105], [-.36, -.03], [-.2, -.03]], -.021, .021, m.poly, .004, [[[-.4, 0], [-.45, 0], [-.45, -.07], [-.4, -.03]]]);   // skeleton stock
+    ex(k, [[-.26, .03], [-.39, .03], [-.39, .05], [-.38, .056], [-.27, .056], [-.26, .05]], -.018, .018, m.fde, .003); k.b(.022, .13, .046, m.rubber, -.492, -.04, 0);   // cheek rest, butt pad
+    k.cx(.007, .2, m.dark, .4, -.042, .02, 8); k.cx(.007, .2, m.dark, .4, -.042, -.02, 8); k.b(.03, .024, .06, m.dark, .49, -.036, 0);                           // folded bipod
+    return { g: g, grip: [-.14, -.1], fore: [.3, -.05], muzzle: [.9, .045], sight: .125 };
   };
   GUN.shotgun = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
-    k.b(.24, .075, .044, m.steel, 0, 0, 0); k.b(.09, .03, .003, m.dark, .01, .005, .0225);
-    k.cx(.015, .52, m.steel, .38, .02, 0); k.cx(.013, .4, m.dark, .32, -.016, 0); k.b(.02, .05, .03, m.dark, .5, .003, 0); k.b(.008, .014, .008, m.brass, .625, .04, 0);
-    k.b(.17, .05, .052, m.wood, .25, -.016, 0); for (var i = 0; i < 6; i++) k.b(.008, .054, .056, m.wood2, .185 + i * .026, -.016, 0);
-    guard(k, -.08, -.02); k.b(.1, .06, .04, m.wood, -.16, -.03, 0, 0, 0, .35); k.b(.22, .075, .04, m.wood, -.31, -.055, 0, 0, 0, .12); k.b(.024, .13, .046, m.rubber, -.43, -.075, 0, 0, 0, .12);
-    k.b(.13, .04, .008, m.poly2, 0, 0, -.027); for (var j = 0; j < 4; j++) k.cy(.011, .05, m.red, -.045 + j * .03, .005, -.04, 6);
-    k.b(.3, .012, .04, m.dark, .33, .04, 0); for (var q = 0; q < 7; q++) k.b(.016, .014, .004, m.rubber, .21 + q * .04, .04, .0205); k.b(.012, .03, .006, m.steel, .52, -.03, 0); k.b(.012, .03, .006, m.steel, -.36, -.11, 0);
-    return { g: g, grip: [-.15, -.06], fore: [.25, -.04], muzzle: [.65, .02], sight: .054 };
+    var g = new T.Group(), k = kit(g), m = MAT, i;
+    ex(k, [[-.12, -.04], [.12, -.04], [.12, .03], [.11, .04], [-.1, .04], [-.12, .02]], -.021, .021, m.steel, .003);                                           // receiver
+    k.b(.075, .022, .003, m.rubber, .02, .012, -.0225); k.b(.09, .004, .03, m.rubber, .02, -.0405, 0); k.cz(.004, .046, m.bright, -.08, -.02, 0, 8);            // ejection port, loading port, pin
+    k.cx(.014, .54, m.steel, .39, .022, 0, 14); k.cx(.0125, .44, m.dark, .33, -.014, 0, 14); k.cx(.0145, .02, m.steel, .56, -.014, 0, 14); k.b(.02, .056, .034, m.dark, .5, .004, 0);   // barrel, magazine tube, cap, clamp
+    k.s(.0045, m.brass, .652, .039, 0); k.b(.3, .0035, .032, m.dark, .33, .0385, 0); for (i = 0; i < 9; i++) k.b(.016, .004, .012, m.rubber, .21 + i * .03, .039, 0);   // bead, vented heat shield
+    k.cx(.027, .17, m.wood, .25, -.014, 0, 12); for (i = 0; i < 6; i++) k.cx(.0278, .006, m.wood2, .185 + i * .026, -.014, 0, 12);                               // ribbed fore-end
+    ex(k, [[-.12, .03], [-.2, .025], [-.44, -.02], [-.44, -.13], [-.25, -.07], [-.19, -.062], [-.12, -.04]], -.02, .02, m.wood, .006); k.b(.022, .115, .044, m.rubber, -.452, -.075, 0);   // stock, pad
+    trig(k, -.06, -.04, m.bright, m.steel);
+    k.b(.13, .04, .006, m.poly2, 0, 0, -.026); for (i = 0; i < 4; i++) { k.cy(.011, .05, m.red, -.045 + i * .03, .005, -.04, 10); k.cy(.0112, .012, m.brass, -.045 + i * .03, -.02, -.04, 10); }   // side saddle
+    return { g: g, grip: [-.17, -.05], fore: [.25, -.04], muzzle: [.66, .022], sight: .054 };
   };
   GUN.pistol = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
-    k.b(.2, .034, .03, m.steel, .02, .03, 0); for (var i = 0; i < 6; i++) k.b(.006, .028, .033, m.dark, -.06 + i * .011, .03, 0);
-    k.b(.175, .024, .028, m.poly, .02, .003, 0); k.b(.06, .01, .022, m.dark, .08, -.014, 0); k.cx(.007, .012, m.bright, .125, .03, 0);
-    k.b(.008, .01, .005, m.bright, .11, .052, 0); k.b(.008, .012, .005, m.dark, -.07, .052, .008); k.b(.008, .012, .005, m.dark, -.07, .052, -.008);
-    k.b(.048, .12, .03, m.poly, -.045, -.065, 0, 0, 0, -.22); k.b(.05, .012, .034, m.fde, -.062, -.128, 0, 0, 0, -.22); guard(k, .012, 0);
-    k.b(.045, .016, .003, m.rubber, .04, .036, -.0155); k.b(.07, .008, .024, m.dark, .075, -.02, 0); k.b(.012, .02, .012, m.dark, -.085, .04, 0); k.b(.004, .02, .006, m.bright, .005, -.014, 0, 0, 0, .3);
-    for (var q = 0; q < 5; q++) k.b(.036, .004, .032, m.rubber, -.05 - q * .004, -.035 - q * .018, 0, 0, 0, -.22);
-    return { g: g, grip: [-.045, -.08], fore: [-.03, -.1], muzzle: [.13, .03], sight: .063 };
+    var g = new T.Group(), k = kit(g), m = MAT, i;
+    ex(k, [[-.085, .014], [.125, .014], [.125, .04], [.118, .047], [-.08, .047], [-.085, .042]], -.0145, .0145, m.steel, .002);                                 // slide
+    for (i = 0; i < 7; i++) k.b(.003, .024, .0305, m.dark, -.072 + i * .007, .03, 0); k.b(.04, .012, .014, m.rubber, .03, .042, -.008);                         // serrations, ejection port
+    k.cx(.006, .006, m.bright, .1275, .032, 0, 12); k.cx(.004, .004, m.dark, .1265, .02, 0, 10);                                                                // muzzle, guide rod
+    ex(k, [[-.08, .014], [.112, .014], [.112, -.004], [.045, -.01], [-.02, -.01], [-.035, -.03], [-.045, -.125], [-.095, -.118], [-.085, -.03]], -.0135, .0135, m.poly, .003);   // frame and grip
+    k.b(.05, .006, .022, m.dark, .075, -.008, 0); for (i = 0; i < 3; i++) k.b(.004, .008, .024, m.rubber, .06 + i * .014, -.009, 0);                             // accessory rail
+    trig(k, .003, -.01, m.bright, m.poly);
+    k.b(.006, .008, .004, m.bright, .112, .051, 0); k.b(.008, .01, .005, m.dark, -.072, .052, .008); k.b(.008, .01, .005, m.dark, -.072, .052, -.008); k.b(.006, .03, .026, m.dark, -.087, .03, 0);   // sights, back plate
+    for (i = 0; i < 6; i++) k.b(.034, .004, .0285, m.rubber, -.056 - i * .0015, -.04 - i * .013, 0, 0, 0, -.12); k.b(.054, .008, .03, m.dark, -.071, -.124, 0, 0, 0, -.12);   // grip panels, magazine floor
+    return { g: g, grip: [-.06, -.07], fore: [-.045, -.095], muzzle: [.13, .03], sight: .063 };
   };
   GUN.knife = function () {
     var g = new T.Group(), k = kit(g), m = MAT;
@@ -105,10 +141,10 @@ var SV = window.SV = window.SV || {};
 
   // Flatten a group into one geometry: positions, normals and a colour per vertex.
   var lin = new T.Color();
-  function merge(root, shade) {
+  function merge(root, shade, pick) {
     root.updateMatrixWorld(true); var P = [], N = [], Cc = [];
     root.traverse(function (o) {
-      if (!o.isMesh) return;
+      if (!o.isMesh || (pick && !pick(o.material))) return;
       var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
       var p = g.attributes.position.array, n = g.attributes.normal.array, c = lin.copy(o.material.color).convertSRGBToLinear(), cm = o.material.userData.camo, k = shade ? .92 + Math.random() * .16 : 1, v;
       for (var i = 0; i < p.length; i += 3) {
@@ -124,6 +160,9 @@ var SV = window.SV = window.SV || {};
   }
   SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk;
   SV.litMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .3, envMapIntensity: .55 });
+  SV.gunMetal = new T.MeshStandardMaterial({ vertexColors: true, roughness: .34, metalness: .88, envMapIntensity: 1.25, side: T.DoubleSide });
+  SV.gunSoft = new T.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: 0, envMapIntensity: .4, side: T.DoubleSide });
+  SV.clothMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .92, metalness: 0, envMapIntensity: .35 });   // fabric and webbing: no shine
 
   // A limb: a tapered tube between two points with a ball at the far joint.
   function tube(g, a, b, r0, r1, mat) {
@@ -145,7 +184,9 @@ var SV = window.SV = window.SV || {};
       tube(g, V(h2.x - .01, h2.y, h2.z - .02), V(h2.x + .03, h2.y + .035, h2.z - .034), .012, .011, MAT.glove);
       tube(g, V(h2.x - .03, h2.y - .02, h2.z - .03), V(h2.x - .22, h2.y - .12, h2.z - .3), .038, .052, sl); tube(g, V(h2.x - .024, h2.y - .016, h2.z - .024), V(h2.x - .06, h2.y - .036, h2.z - .08), .04, .041, MAT.glove);
     }
-    var mesh = new T.Mesh(merge(g), SV.litMat); mesh.userData = { muzzle: d.muzzle, sight: d.sight }; return mesh;
+    // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
+    var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
+    out.userData = { muzzle: d.muzzle, sight: d.sight }; return out;
   };
 
   // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
@@ -158,20 +199,23 @@ var SV = window.SV = window.SV || {};
     tube(g, S.clone().lerp(E, .3), S.clone().lerp(E, .48), .066, .063, band);                                   // team armband
     ball(g, E, .05, glove, 1.1, 1.1, .8); tube(g, E.clone().lerp(H, .8), H, .043, .044, glove); ball(g, H, .046, glove, 1, 1.15, 1.2);   // elbow pad, cuff, glove
   }
-  var cache = {};
+  var cache = {}, HIP = .93, KNEE = .52, blob = new T.CircleGeometry(.5, 20), blobMat = new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .42, depthWrite: false });
+  blob.rotateX(-PI / 2); (function () { var p = blob.attributes.position, c = [], i; for (i = 0; i < p.count; i++) { var k = 1 - .62 * Math.pow(1 - Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / .5), 1.4); c.push(k, k, k); } blob.setAttribute('color', new T.Float32BufferAttribute(c, 3)); })();
+  blobMat.vertexColors = true; blobMat.blending = T.MultiplyBlending; blobMat.color.set(0xffffff); blobMat.opacity = 1;
   SV.soldier = function (team, gunId) {
     var key = team + gunId, c = cache[key];
     if (!c) {
       var A = team === 'A', tc = A ? 0xffb347 : 0x6cc4e0, cloth = A ? camo(0x8a7a58, 0x6b5d40, 0x4d4733) : camo(0x5d6a70, 0x44525a, 0x2c363d), cloth2 = A ? camo(0x7b6c4c, 0x5e5239, 0x433d2c) : camo(0x525e64, 0x3c4950, 0x283137);
-      var gear = mk(A ? 0x5a4f3a : 0x2d3338), gear2 = mk(A ? 0x463d2d : 0x202529), pad = mk(0x1a1c1e), teamM = mk(tc), skin = MAT.skin, hood = mk(0x1d2022), body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()], V = function (x, y, z) { return new T.Vector3(x, y, z); };
+      var gear = mk(A ? 0x5a4f3a : 0x2d3338), gear2 = mk(A ? 0x463d2d : 0x202529), pad = mk(0x1a1c1e), boot = mk(A ? 0x4a3d2a : 0x1c1e20), teamM = mk(tc), skin = MAT.skin, hood = mk(0x1d2022), body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()], V = function (x, y, z) { return new T.Vector3(x, y, z); };
+      var shins = [new T.Group(), new T.Group()];
       [-1, 1].forEach(function (sx, n) {
-        var x = sx * .1, l = legs[n], lk = kit(l);
-        tube(l, V(x, .94, 0), V(x, .52, .012), .098, .074, cloth2); ball(l, V(x, .52, .012), .074, cloth2); ball(l, V(x, .52, .055), .066, pad, 1.05, 1.3, .6);            // thigh, knee, knee pad
-        lk.b(.075, .11, .05, gear, x + sx * .085, .76, .01);                                                                                                              // cargo pocket
-        tube(l, V(x, .52, .012), V(x, .17, 0), .07, .052, cloth2); tube(l, V(x, .24, 0), V(x, .07, 0), .056, .06, pad);                                                    // shin, boot shaft
-        ball(l, V(x, .06, .06), .058, pad, 1, .85, 2.1); lk.b(.105, .028, .27, MAT.rubber, x, .014, .05); lk.b(.09, .02, .06, MAT.rubber, x, .034, -.06);                  // boot, sole, heel
-        if (sx < 0) { lk.b(.05, .15, .09, gear2, x - .105, .78, .02); lk.b(.03, .05, .05, MAT.steel, x - .11, .87, 0); lk.b(.012, .03, .2, gear2, x - .09, .84, 0); }        // drop-leg holster
-        lk = null;
+        var x = sx * .1, l = legs[n], sh = shins[n], lk = kit(l), sk = kit(sh);
+        tube(l, V(x, .94, 0), V(x, .52, .012), .098, .076, cloth2); lk.b(.075, .11, .05, gear, x + sx * .085, .76, .01); lk.b(.078, .014, .054, gear2, x + sx * .085, .8, .01);   // thigh, cargo pocket and flap
+        if (sx < 0) { lk.b(.05, .15, .09, gear2, x - .105, .78, .02); lk.b(.03, .05, .05, MAT.steel, x - .11, .87, 0); lk.b(.012, .03, .2, gear2, x - .09, .84, 0); lk.b(.012, .03, .2, gear2, x - .09, .72, 0); }   // drop-leg holster, straps
+        ball(sh, V(x, .52, .012), .076, cloth2); ball(sh, V(x, .52, .055), .068, pad, 1.05, 1.3, .62); sk.b(.11, .016, .1, pad, x, .47, .02);                                 // knee, knee pad, strap
+        tube(sh, V(x, .52, .012), V(x, .2, 0), .072, .056, cloth2); tube(sh, V(x, .21, 0), V(x, .3, 0), .06, .058, cloth2);                                                     // shin, bloused cuff
+        tube(sh, V(x, .26, 0), V(x, .07, 0), .054, .06, boot); for (var q = 0; q < 4; q++) sk.b(.05, .008, .012, pad, x, .11 + q * .04, .056);                                 // boot shaft, laces
+        ball(sh, V(x, .06, .06), .058, boot, 1, .85, 2.1); ball(sh, V(x, .07, .14), .05, boot, 1.05, .8, 1); sk.b(.105, .028, .27, MAT.rubber, x, .014, .05); sk.b(.09, .022, .06, MAT.rubber, x, .036, -.06);   // boot, toe cap, sole, heel
       });
       k.s(.165, cloth2, 0, .96, 0, 1.05, .62, .74); var belt = k.add(new T.CylinderGeometry(.185, .185, .055, 14), gear2, 0, 1.01, 0); belt.scale.z = .72;                    // hips, belt
       k.b(.07, .09, .05, gear, .15, .99, .07); k.b(.06, .1, .05, gear, -.03, .985, -.135); k.b(.09, .08, .05, gear, .09, .985, -.125);                                        // belt pouches
@@ -191,15 +235,18 @@ var SV = window.SV = window.SV || {};
       [-1, 1].forEach(function (sx) { k.cx(.042, .04, gear2, sx * .11, 1.575, .005, 10); }); k.b(.24, .012, .02, gear2, 0, 1.69, .0);                                           // headset
       k.b(.046, .04, .03, MAT.dark, 0, 1.69, .128); k.b(.012, .1, .008, pad, -.085, 1.53, .06); k.b(.012, .1, .008, pad, .085, 1.53, .06); k.b(.05, .02, .03, pad, 0, 1.49, .085);   // NVG shroud, chin strap
       // shouldered: the stock sits in the right shoulder (-X), right hand on the grip, left hand under the fore-end
-      var d = GUN[gunId](), gx = -.13, gy = 1.385, gz = .3; d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); body.add(d.g);
+      var d = GUN[gunId](), gx = -.13, gy = 1.385, gz = .3, gg = new T.Group(); d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);   // the weapon keeps its own (metal) material
+      k.b(.2, .012, .008, gear2, .02, 1.26, .15, 0, 0, .5); k.b(.03, .5, .012, gear2, -.12, 1.3, -.02, .5, 0, .2);                                                              // sling
       arm(body, V(-.215, 1.4, .01), V(gx - .01, gy + d.grip[1] + .02, gz + d.grip[0]), V(-.5, -1, -.35), cloth, gear2, teamM);
       if (d.fore) arm(body, V(.215, 1.4, .02), V(gx + .01, gy + d.fore[1] - .005, gz + d.fore[0]), V(.25, -1, .1), cloth, gear2, teamM);
       else arm(body, V(.215, 1.4, .02), V(.2, 1.0, .12), V(.3, 0, -1), cloth, gear2, teamM);
-      var lg = legs.map(function (l) { var gm = merge(l); gm.translate(0, -.92, 0); return gm; });
-      c = cache[key] = { body: merge(body), legL: lg[0], legR: lg[1], muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
+      var lg = legs.map(function (l) { var gm = merge(l); gm.translate(0, -HIP, 0); return gm; }), sg = shins.map(function (l) { var gm = merge(l); gm.translate(0, -KNEE, -.012); return gm; });
+      c = cache[key] = { body: merge(body), gun: merge(gg), legL: lg[0], legR: lg[1], shinL: sg[0], shinR: sg[1], muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
     }
-    var root = new T.Group(), b = new T.Mesh(c.body, SV.litMat), l = new T.Mesh(c.legL, SV.litMat), r = new T.Mesh(c.legR, SV.litMat);
-    l.position.y = r.position.y = .92; root.add(b); root.add(l); root.add(r);
-    return { root: root, legL: l, legR: r, muzzle: c.muzzle };
+    // root > upper (body + weapon), thighs pivoting at the hip, shins pivoting at the knee, and a soft shadow on the ground
+    var root = new T.Group(), up = new T.Group(), b = new T.Mesh(c.body, SV.clothMat), g = new T.Mesh(c.gun, SV.litMat), l = new T.Mesh(c.legL, SV.clothMat), r = new T.Mesh(c.legR, SV.clothMat), sl = new T.Mesh(c.shinL, SV.clothMat), sr = new T.Mesh(c.shinR, SV.clothMat);
+    l.position.y = r.position.y = HIP; sl.position.set(0, KNEE - HIP, .012); sr.position.set(0, KNEE - HIP, .012); l.add(sl); r.add(sr); up.add(b); up.add(g); root.add(up); root.add(l); root.add(r);
+    var sh = new T.Mesh(blob, blobMat); sh.position.y = .025; sh.renderOrder = 1; root.add(sh);
+    return { root: root, up: up, legL: l, legR: r, shinL: sl, shinR: sr, shadow: sh, muzzle: c.muzzle };
   };
 })();

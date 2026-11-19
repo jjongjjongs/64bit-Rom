@@ -30,7 +30,7 @@
   var hemi = new T.HemisphereLight(0xffffff, 0x222222, .6), sun = new T.DirectionalLight(0xffffff, .6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0008;
   scene.add(hemi); scene.add(sun); scene.add(sun.target);
   vmScene.add(new T.HemisphereLight(0xdfe6ea, 0x3a342b, 1)); var vmSun = new T.DirectionalLight(0xfff1dc, .5); vmSun.position.set(1, 2, 1); vmScene.add(vmSun);
-  var vmRoot = new T.Group(); vmScene.add(vmRoot);
+  var vmRoot = new T.Group(); vmScene.add(vmRoot); var vmLamp = new T.PointLight(0xffffff, 0, 0, 1); vmLamp.position.set(.5, 1.2, -.2); vmScene.add(vmLamp);
   var flash = new T.Mesh(new T.PlaneGeometry(.16, .16), new T.MeshBasicMaterial({ color: new T.Color(3.2, 2.2, 1.1), transparent: true, opacity: .9, depthTest: false })); flash.visible = false; vmRoot.add(flash);
   var vms = {}, vmCur = null, vmKick = 0, vmAds = 0, vmSwap = 0, bobT = 0;
 
@@ -251,7 +251,7 @@
     a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
-    if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); }
+    if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
   }
   function feed(k, v, head) { G.feed.unshift({ k: k, v: v, head: head, t: 5 }); if (G.feed.length > 4) G.feed.pop(); G.feedDirty = true; }
@@ -413,6 +413,7 @@
       if (!ai.path.length && !ai.use) { ai.strafeT -= dt; if (ai.strafeT <= 0) { ai.strafeT = rnd(.5, 1.5); ai.strafe = Math.random() < .5 ? -1 : Math.random() < .2 ? 0 : 1; } var s = Math.sin(wantYaw), c = Math.cos(wantYaw); vx = c * ai.strafe * 2.6; vz = -s * ai.strafe * 2.6; }
     }
     if (!tgt && !ai.path.length && ai.look) wantYaw = Math.atan2(a.pos.x - ai.look.x, a.pos.z - ai.look.z);
+    a.crouch = !!(ai.use || (G.bomb && !tgt && !ai.path.length && ai.look && (ai.holdI + a.idx) % 3 === 0));
     var turn = df.turn * dt; a.yaw += clamp(angd(wantYaw, a.yaw), -turn, turn); a.pitch += clamp(wantPitch - a.pitch, -turn, turn);
     a.moving = (vx || vz) !== 0; moveActor(a, vx, vz, dt);
     // unstick
@@ -507,11 +508,32 @@
     } else { bombLed.visible = true; B.t -= dt; if (!na) roundEnd(def, '공격 팀 전멸'); else if (!nd) roundEnd(B.atk, '수비 팀 전멸'); else if (B.t <= 0) roundEnd(def, '시간 종료'); }
     G.time = Math.max(0, B.planted ? B.planted.t : B.t);
   }
+  // ---------- lamps ----------
+  // A fixed set of point lights (so shaders never change) follows whichever of the map's lamps are nearest the camera.
+  var LAMPS = [], lampT = 0, lampNear = [];
+  (function () { for (var i = 0; i < 8; i++) LAMPS.push({ l: new T.PointLight(0xffffff, 0, 16, 1.5), src: null, k: 0 }); })();
+  function updLamps(dt) {
+    var src = G.map && G.map.lights, i, p, j, best = 0; if (!src || !src.length || !LAMPS[0].l.parent) return;
+    if ((lampT -= dt) <= 0) { lampT = .25; var cx = cam.position.x, cy = cam.position.y, cz = cam.position.z; lampNear = src.slice().sort(function (a, b) { return Math.hypot(a.x - cx, a.y - cy, a.z - cz) - Math.hypot(b.x - cx, b.y - cy, b.z - cz); }).slice(0, LAMPS.length); }
+    for (i = 0; i < LAMPS.length; i++) {
+      p = LAMPS[i];
+      if (p.src && lampNear.indexOf(p.src) >= 0) p.k = Math.min(1, p.k + dt * 3);
+      else { p.k -= dt * 3; if (p.k <= 0) { p.k = 0; p.src = null; for (j = 0; j < lampNear.length; j++) if (!LAMPS.some(function (q) { return q.src === lampNear[j]; })) { p.src = lampNear[j]; p.l.position.set(p.src.x, p.src.y, p.src.z); p.l.color.copy(p.src.c); p.l.distance = p.src.d; break; } } }
+      p.l.intensity = p.src ? p.src.i * p.k : 0;
+      if (p.src) { var dd = Math.hypot(p.src.x - cam.position.x, p.src.y - cam.position.y, p.src.z - cam.position.z), at = Math.max(0, 1 - dd / p.src.d) * p.k; if (at > best) { best = at; vmLamp.color.copy(p.src.c); } }
+    }
+    vmLamp.intensity += (best * 2.2 - vmLamp.intensity) * Math.min(1, dt * 6);   // the gun in your hands picks up the nearest lamp too
+  }
   function updModel(dt, a) {
     var m = a.model; if (!m) return;
-    if (!a.alive) { if (a.dead > 0) { a.dead = Math.min(a.dead + dt * 3.2, 1); m.root.rotation.x = -a.dead * PI / 2; m.root.position.set(a.pos.x, a.pos.y + a.dead * .12, a.pos.z); if (a.respawn < 1.2) m.root.visible = false; } return; }
-    m.root.position.copy(a.pos); m.root.rotation.set(0, a.yaw + PI, 0); m.root.scale.y = a.crouch ? .74 : 1;
-    if (a.moving) a.walk += dt * 9; var sw = a.moving ? Math.sin(a.walk) * .6 : 0; m.legL.rotation.x = sw; m.legR.rotation.x = -sw;
+    if (!a.alive) { if (a.dead > 0) { a.dead = Math.min(a.dead + dt * 3.2, 1); m.shadow.visible = false; m.root.rotation.x = -a.dead * PI / 2; m.root.position.set(a.pos.x, a.pos.y + a.dead * .12, a.pos.z); if (a.respawn < 1.2) m.root.visible = false; } return; }
+    m.root.position.copy(a.pos); m.root.rotation.set(0, a.yaw + PI, 0); m.shadow.visible = true;
+    // legs: thighs swing from the hip, the trailing knee bends; kneeling folds both and lowers the body
+    a.kneel = (a.kneel || 0) + ((a.crouch ? 1 : 0) - (a.kneel || 0)) * Math.min(1, dt * 9); a.gait = (a.gait || 0) + ((a.moving ? 1 : 0) - (a.gait || 0)) * Math.min(1, dt * 8);
+    if (a.moving) a.walk += dt * 9.5; var w = a.walk, k = a.kneel, g = a.gait * (1 - k * .5), drop = k * .34;
+    m.legL.rotation.x = -Math.sin(w) * .62 * g - k * 1.25; m.legR.rotation.x = Math.sin(w) * .62 * g - k * .35;
+    m.shinL.rotation.x = Math.max(0, Math.sin(w + 1.1)) * .95 * g + k * 1.45; m.shinR.rotation.x = Math.max(0, -Math.sin(w + 1.1)) * .95 * g + k * 1.75;
+    m.legL.position.y = m.legR.position.y = .93 - drop; m.up.position.y = -drop + Math.abs(Math.sin(w)) * .028 * g; m.up.rotation.x = .05 + g * .07 + k * .12; m.up.rotation.z = Math.sin(w) * .025 * g;
   }
 
   // ---------- match ----------
@@ -522,8 +544,9 @@
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
     setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
     map.group.traverse(function (o) { var m = o.material; if (m && m.userData.surf === 'conc' && map.rain) { m.roughness = .3; m.metalness = .05; m.envMapIntensity = 1.4; } });   // wet ground
-    hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2];
-    sun.color.setHex(map.sun[0]); sun.intensity = map.sun[1]; sun.position.fromArray(map.sun[2]); sun.target.position.set(0, 0, 0);
+    var lit = cfg.quality && map.lights.length > 0; vmLamp.intensity = 0; LAMPS.forEach(function (p) { p.src = null; p.k = 0; p.l.intensity = 0; if (lit) scene.add(p.l); else scene.remove(p.l); });
+    hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2] * (lit ? (map.dim || .62) : 1);
+    sun.color.setHex(map.sun[0]); sun.intensity = map.sun[1] * (lit ? (map.dim || .62) : 1); sun.position.fromArray(map.sun[2]); sun.target.position.set(0, 0, 0);
     var r = Math.max(map.bounds.maxx, map.bounds.maxz) + 8, sc = sun.shadow.camera; sc.left = sc.bottom = -r; sc.right = sc.top = r; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
     if (renderer) renderer.shadowMap.needsUpdate = true;
     if (map.rain) makeRain();
@@ -629,7 +652,7 @@
     requestAnimationFrame(frame); var dt = Math.min(.05, (t - prev) / 1000 || 0); prev = t;
     if (!renderer || G.state === 'menu') return;
     if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } }
-    updFx(dt); updRain(dt);
+    updFx(dt); updRain(dt); updLamps(dt);
     drawFrame();
   }
   requestAnimationFrame(frame);
