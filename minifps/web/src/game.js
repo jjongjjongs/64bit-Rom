@@ -83,8 +83,10 @@
     return t0;
   }
   function rayWorld(o, d, max) {
-    var best = max, i, t; if (d.y < -1e-6) { t = -o.y / d.y; if (t >= 0 && t < best) best = t; }
-    for (i = 0; i < boxes.length; i++) { if (boxes[i].soft) continue; t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, boxes[i]); if (t >= 0 && t < best) best = t; }
+    var best = max, i, t, b, ex, ez; if (d.y < -1e-6) { t = -o.y / d.y; if (t >= 0 && t < best) best = t; }
+    for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.soft) continue;
+      if (b.rot) { ex = o.x - b.ox; ez = o.z - b.oz; t = rayBox(ex * b.c - ez * b.s, o.y, ex * b.s + ez * b.c, d.x * b.c - d.z * b.s, d.y, d.x * b.s + d.z * b.c, b); } else t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b);
+      if (t >= 0 && t < best) best = t; }
     return best;
   }
   var tb = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
@@ -98,61 +100,80 @@
   }
   function height(a) { return a.crouch ? 1.25 : 1.75; }
   function collide(a) {
-    var h = height(a), f = a.pos.y, it, i, b, cx, cz, dx, dz, d2, d;
+    var h = height(a), f = a.pos.y, it, i, b, cx, cz, dx, dz, d2, d, px, pz;
     for (it = 0; it < 2; it++) for (i = 0; i < boxes.length; i++) {
       b = boxes[i]; if (b.maxy <= f + .45 || b.miny >= f + h) continue;
-      cx = clamp(a.pos.x, b.minx, b.maxx); cz = clamp(a.pos.z, b.minz, b.maxz); dx = a.pos.x - cx; dz = a.pos.z - cz; d2 = dx * dx + dz * dz;
+      px = a.pos.x; pz = a.pos.z; if (b.rot) { dx = px - b.ox; dz = pz - b.oz; px = dx * b.c - dz * b.s; pz = dx * b.s + dz * b.c; }   // into the box's own frame
+      cx = clamp(px, b.minx, b.maxx); cz = clamp(pz, b.minz, b.maxz); dx = px - cx; dz = pz - cz; d2 = dx * dx + dz * dz;
       if (d2 >= RAD * RAD) continue;
-      if (d2 > 1e-8) { d = Math.sqrt(d2); a.pos.x += dx / d * (RAD - d); a.pos.z += dz / d * (RAD - d); }
-      else { var l = a.pos.x - b.minx, r = b.maxx - a.pos.x, n = a.pos.z - b.minz, s = b.maxz - a.pos.z, m = Math.min(l, r, n, s); if (m === l) a.pos.x = b.minx - RAD; else if (m === r) a.pos.x = b.maxx + RAD; else if (m === n) a.pos.z = b.minz - RAD; else a.pos.z = b.maxz + RAD; }
+      if (d2 > 1e-8) { d = Math.sqrt(d2); px += dx / d * (RAD - d); pz += dz / d * (RAD - d); }
+      else { var l = px - b.minx, r = b.maxx - px, n = pz - b.minz, s = b.maxz - pz, m = Math.min(l, r, n, s); if (m === l) px = b.minx - RAD; else if (m === r) px = b.maxx + RAD; else if (m === n) pz = b.minz - RAD; else pz = b.maxz + RAD; }
+      if (b.rot) { a.pos.x = b.ox + px * b.c + pz * b.s; a.pos.z = b.oz - px * b.s + pz * b.c; } else { a.pos.x = px; a.pos.z = pz; }
     }
   }
   function groundAt(a) {
-    var g = 0, f = a.pos.y, i, b; for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.maxy <= f + .46 && b.maxy > g && a.pos.x > b.minx - .2 && a.pos.x < b.maxx + .2 && a.pos.z > b.minz - .2 && a.pos.z < b.maxz + .2) g = b.maxy; }
+    var g = 0, f = a.pos.y, i, b; for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.maxy <= f + .46 && b.maxy > g && inBox(b, a.pos.x, a.pos.z, .2)) g = b.maxy; }
     return g;
   }
   function moveActor(a, vx, vz, dt) {
-    a.pos.x += vx * dt; a.pos.z += vz * dt; collide(a);
-    a.vy -= 20 * dt; a.pos.y += a.vy * dt; var g = groundAt(a);
+    var lad = null, ls = G.map && G.map.ladders, i; a.pos.x += vx * dt; a.pos.z += vz * dt; collide(a);
+    if (ls) for (i = 0; i < ls.length; i++) if (a.pos.y < ls[i].y1 + .05 && Math.abs(a.pos.x - ls[i].x) < .55 && Math.abs(a.pos.z - ls[i].z) < .55) lad = ls[i];
+    // ladder: pushing into it climbs, anything else slides down slowly
+    if (lad && vx * lad.dx + vz * lad.dz > .5) a.vy = 3.4; else { a.vy -= 20 * dt; if (lad && a.vy < -3) a.vy = -3; } a.pos.y += a.vy * dt; var g = groundAt(a);
     if (a.pos.y <= g) { a.pos.y = g; a.vy = 0; a.ground = true; } else a.ground = a.pos.y - g < .05;
   }
 
   // ---------- navigation grid for bots ----------
   var nav = null;
+  function inBox(b, x, z, m) { if (b.rot) { var ex = x - b.ox, ez = z - b.oz, t = ex * b.c - ez * b.s; z = ex * b.s + ez * b.c; x = t; } return x > b.minx - m && x < b.maxx + m && z > b.minz - m && z < b.maxz + m; }
+  // One grid of 1 m cells per storey. Storey 1 exists where a box top lies at the map's upper-floor height (map.H). Stairs and
+  // ladders are explicit links between two cells (map.links); a path node reached through a link is flagged "jump".
+  function lvl(a) { return nav && nav.H && a.pos.y > nav.H - 1.2 ? 1 : 0; }
   function buildNav(map) {
-    var bd = map.bounds, nx = Math.ceil(bd.maxx - bd.minx), nz = Math.ceil(bd.maxz - bd.minz), blk = new Uint8Array(nx * nz), i, j, k, b;
-    for (k = 0; k < boxes.length; k++) {
-      b = boxes[k]; if (b.maxy <= .5 || b.miny >= 1.6) continue;
-      var i0 = Math.max(0, Math.floor(b.minx - .5 - bd.minx)), i1 = Math.min(nx - 1, Math.floor(b.maxx + .5 - bd.minx)), j0 = Math.max(0, Math.floor(b.minz - .5 - bd.minz)), j1 = Math.min(nz - 1, Math.floor(b.maxz + .5 - bd.minz));
-      for (i = i0; i <= i1; i++) for (j = j0; j <= j1; j++) { var cx = bd.minx + i + .5, cz = bd.minz + j + .5; if (cx > b.minx - .5 && cx < b.maxx + .5 && cz > b.minz - .5 && cz < b.maxz + .5) blk[j * nx + i] = 1; }
+    var bd = map.bounds, nx = Math.ceil(bd.maxx - bd.minx), nz = Math.ceil(bd.maxz - bd.minz), N = nx * nz, H = map.H || 0, blk = new Uint8Array(N * (H ? 2 : 1)), k, b, i;
+    function mark(b, base, m, val) {
+      var r = b.rot ? Math.hypot(b.maxx, b.maxz) + 1 : 0, x0 = b.rot ? b.ox - r : b.minx - 1, x1 = b.rot ? b.ox + r : b.maxx + 1, z0 = b.rot ? b.oz - r : b.minz - 1, z1 = b.rot ? b.oz + r : b.maxz + 1, i, j;
+      var i0 = Math.max(0, Math.floor(x0 - bd.minx)), i1 = Math.min(nx - 1, Math.floor(x1 - bd.minx)), j0 = Math.max(0, Math.floor(z0 - bd.minz)), j1 = Math.min(nz - 1, Math.floor(z1 - bd.minz));
+      for (i = i0; i <= i1; i++) for (j = j0; j <= j1; j++) if (inBox(b, bd.minx + i + .5, bd.minz + j + .5, m)) blk[base + j * nx + i] = val;
     }
-    nav = { nx: nx, nz: nz, blk: blk, ox: bd.minx, oz: bd.minz, g: new Float32Array(nx * nz), par: new Int32Array(nx * nz), stamp: new Int32Array(nx * nz), cl: new Int32Array(nx * nz), run: 0, free: [] };
-    for (i = 0; i < nx * nz; i++) if (!blk[i]) nav.free.push(i);
+    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > .5 && b.miny < 1.6) mark(b, 0, .5, 1); }
+    if (H) {
+      blk.fill(1, N);
+      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (!b.soft && Math.abs(b.maxy - H) < .15) mark(b, N, -.15, 0); }
+      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > H + .5 && b.miny < H + 1.6) mark(b, N, .5, 1); }
+    }
+    nav = { nx: nx, nz: nz, N: N, H: H, blk: blk, ox: bd.minx, oz: bd.minz, g: new Float32Array(blk.length), par: new Int32Array(blk.length), stamp: new Int32Array(blk.length), cl: new Int32Array(blk.length), jmp: new Uint8Array(blk.length), run: 0, free: [], links: {}, exact: {} };
+    for (i = 0; i < N; i++) if (!blk[i]) nav.free.push(i);
+    (map.links || []).forEach(function (L) {
+      var ca = freeNear(cellOf(L.a[0], L.a[1], L.a[2])), cb = freeNear(cellOf(L.b[0], L.b[1], L.b[2])), cost = Math.hypot(L.a[0] - L.b[0], L.a[1] - L.b[1]) + 2;
+      (nav.links[ca] = nav.links[ca] || []).push({ to: cb, cost: cost }); (nav.links[cb] = nav.links[cb] || []).push({ to: ca, cost: cost }); nav.exact[ca] = L.a; nav.exact[cb] = L.b;
+    });
   }
-  function cellOf(x, z) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return j * nav.nx + i; }
+  function cellOf(x, z, l) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return (l && nav.H ? nav.N : 0) + j * nav.nx + i; }
   function freeNear(c) {
-    if (!nav.blk[c]) return c; var ci = c % nav.nx, cj = (c / nav.nx) | 0, r, i, j;
-    for (r = 1; r < 8; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; if (!nav.blk[j * nav.nx + i]) return j * nav.nx + i; }
+    if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, r, i, j;
+    for (r = 1; r < 8; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; if (!nav.blk[base + j * nav.nx + i]) return base + j * nav.nx + i; }
     return c;
   }
-  function lineFree(x0, z0, x1, z1) { var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i; for (i = 1; i < n; i++) { var t = i / n; if (nav.blk[cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)]) return false; } return true; }
-  function findPath(x0, z0, x1, z1) {
-    var nx = nav.nx, s = freeNear(cellOf(x0, z0)), t = freeNear(cellOf(x1, z1)), run = ++nav.run, heap = [s], hf = {}, ti2 = t % nx, tj = (t / nx) | 0, guard = 0;
-    nav.g[s] = 0; nav.par[s] = -1; nav.stamp[s] = run; hf[s] = 0;
-    while (heap.length && guard++ < 20000) {
+  function lineFree(x0, z0, x1, z1, l) { var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i; for (i = 1; i < n; i++) { var t = i / n; if (nav.blk[cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, l)]) return false; } return true; }
+  function findPath(x0, z0, l0, x1, z1, l1) {
+    var nx = nav.nx, N = nav.N, s = freeNear(cellOf(x0, z0, l0)), t = freeNear(cellOf(x1, z1, l1)), run = ++nav.run, heap = [s], hf = {}, ti2 = (t % N) % nx, tj = ((t % N) / nx) | 0, guard = 0;
+    nav.g[s] = 0; nav.par[s] = -1; nav.stamp[s] = run; nav.jmp[s] = 0; hf[s] = 0;
+    function relax(c, n, ng, jump) { if (nav.stamp[n] === run && ng >= nav.g[n]) return; var nn = n % N; nav.g[n] = ng; nav.par[n] = c; nav.stamp[n] = run; nav.jmp[n] = jump; hf[n] = ng + Math.hypot(nn % nx - ti2, ((nn / nx) | 0) - tj); heap.push(n); }
+    while (heap.length && guard++ < 30000) {
       var bi = 0, k; for (k = 1; k < heap.length; k++) if (hf[heap[k]] < hf[heap[bi]]) bi = k;
       var c = heap[bi]; heap[bi] = heap[heap.length - 1]; heap.pop();
       if (c === t) break; if (nav.cl[c] === run) continue; nav.cl[c] = run;
-      var ci = c % nx, cj = (c / nx) | 0, di, dj;
+      var base = c >= N ? N : 0, cc = c - base, ci = cc % nx, cj = (cc / nx) | 0, di, dj;
       for (di = -1; di <= 1; di++) for (dj = -1; dj <= 1; dj++) {
         if (!di && !dj) continue; var ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= nx || nj >= nav.nz) continue;
-        var n = nj * nx + ni; if (nav.blk[n] || nav.cl[n] === run) continue; if (di && dj && (nav.blk[cj * nx + ni] || nav.blk[nj * nx + ci])) continue;
-        var ng = nav.g[c] + (di && dj ? 1.414 : 1); if (nav.stamp[n] === run && ng >= nav.g[n]) continue;
-        nav.g[n] = ng; nav.par[n] = c; nav.stamp[n] = run; hf[n] = ng + Math.hypot(ni - ti2, nj - tj); heap.push(n);
+        var n = base + nj * nx + ni; if (nav.blk[n] || nav.cl[n] === run) continue; if (di && dj && (nav.blk[base + cj * nx + ni] || nav.blk[base + nj * nx + ci])) continue;
+        relax(c, n, nav.g[c] + (di && dj ? 1.414 : 1), 0);
       }
+      var lk = nav.links[c]; if (lk) for (k = 0; k < lk.length; k++) if (nav.cl[lk[k].to] !== run) relax(c, lk[k].to, nav.g[c] + lk[k].cost, 1);
     }
     var out = []; if (nav.stamp[t] !== run) return out;
-    for (var q = t; q !== -1 && out.length < 400; q = nav.par[q]) out.push({ x: nav.ox + (q % nx) + .5, z: nav.oz + ((q / nx) | 0) + .5 });
+    for (var q = t; q !== -1 && out.length < 600; q = nav.par[q]) { var qq = q % N, e = nav.exact[q]; out.push({ x: e ? e[0] : nav.ox + (qq % nx) + .5, z: e ? e[1] : nav.oz + ((qq / nx) | 0) + .5, l: q >= N ? 1 : 0, jump: nav.jmp[q] === 1 }); }
     return out.reverse();
   }
 
@@ -199,7 +220,7 @@
     if (v.hp <= 0) {
       v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001;
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
-      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z); }
+      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z, lvl(v)); }
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
@@ -253,8 +274,8 @@
     for (var i = G.nades.length - 1; i >= 0; i--) {
       var n = G.nades[i], px = n.pos.x, py = n.pos.y, pz = n.pos.z, k, b, hit = false; n.vel.y -= 18 * dt; n.pos.addScaledVector(n.vel, dt);
       if (n.pos.y < .06) { n.pos.y = .06; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; }
-      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.x > b.minx && n.pos.x < b.maxx && n.pos.z > b.minz && n.pos.z < b.maxz && n.pos.y > b.miny && n.pos.y < b.maxy) { hit = true; break; } }
-      if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } }
+      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
+      if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
       n.m.position.copy(n.pos); n.m.rotation.x += dt * 8; n.t -= dt;
       if (n.t <= 0) {
         var bm = booms[i % booms.length]; bm.m.position.copy(n.pos); bm.m.visible = true; bm.life = .35; scene.remove(n.m); G.nades.splice(i, 1);
@@ -322,15 +343,15 @@
       d = canSee(a, e); if (d && d < bd) { bd = d; best = e; }
     }
     if (best !== ai.tgt) { ai.seen = 0; ai.tgt = best; }
-    if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z }; ai.lastSeenT = 0; best.spot = 1.5; }
+    if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; ai.lastSeenT = 0; best.spot = 1.5; }
     // choose where to walk
     var want = null, pref = { rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
     var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
-    if (ob && (!best || ob.force)) { if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2) { ai.path = []; ai.goal = null; } else want = ob; }
-    else if (best) { if (bd > pref) want = { x: best.pos.x, z: best.pos.z }; else { ai.path = []; ai.goal = null; } }
+    if (ob && (!best || ob.force)) { if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
+    else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; want = { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; } ai.goal = null; }
-    if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z }; ai.path = findPath(a.pos.x, a.pos.z, want.x, want.z); ai.pathT = 0; }
+    if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.goal.l !== (want.l || 0) || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z, l: want.l || 0 }; ai.path = findPath(a.pos.x, a.pos.z, lvl(a), want.x, want.z, want.l || 0); ai.pathT = 0; }
     var g = a.guns[a.slot]; if (!best && g.reload <= 0 && g.mag < W[g.id].mag * .4) reload(a);
   }
   function updBot(dt, a) {
@@ -339,8 +360,9 @@
     var vx = 0, vz = 0, sp = 4.1, tgt = ai.tgt, wantYaw = a.yaw, wantPitch = 0;
     if (tgt && !tgt.alive) { tgt = ai.tgt = null; }
     // follow the path
-    while (ai.path.length > 1 && lineFree(a.pos.x, a.pos.z, ai.path[1].x, ai.path[1].z)) ai.path.shift();
-    if (ai.path.length) { var wp = ai.path[0], dx = wp.x - a.pos.x, dz = wp.z - a.pos.z, d = Math.hypot(dx, dz); if (d < .55) ai.path.shift(); else { vx = dx / d * sp; vz = dz / d * sp; if (!tgt) wantYaw = Math.atan2(-dx, -dz); } }
+    var L = lvl(a); while (ai.path.length > 1 && !ai.path[0].jump && !ai.path[1].jump && ai.path[0].l === L && ai.path[1].l === L && lineFree(a.pos.x, a.pos.z, ai.path[1].x, ai.path[1].z, L)) ai.path.shift();
+    if (ai.path.length) { var wp = ai.path[0], dx = wp.x - a.pos.x, dz = wp.z - a.pos.z, d = Math.hypot(dx, dz); if (d < .55 && (!wp.jump || Math.abs(a.pos.y - (wp.l ? nav.H : 0)) < .7)) ai.path.shift(); else if (wp.jump && d < .5) { vx = vz = 0; }   // right above or below the far end of a ladder: let go and let it carry us
+      else { vx = dx / d * sp; vz = dz / d * sp; if (!tgt) wantYaw = Math.atan2(-dx, -dz); } }
     if (tgt) {
       ai.seen += dt; var tx = tgt.pos.x - a.pos.x, tz = tgt.pos.z - a.pos.z, td = Math.hypot(tx, tz), ty = tgt.pos.y + (tgt.crouch ? .85 : 1.25) - (a.pos.y + EYE);
       wantYaw = Math.atan2(-tx, -tz); wantPitch = Math.atan2(ty, td);
@@ -350,7 +372,7 @@
     var turn = df.turn * dt; a.yaw += clamp(angd(wantYaw, a.yaw), -turn, turn); a.pitch += clamp(wantPitch - a.pitch, -turn, turn);
     a.moving = (vx || vz) !== 0; moveActor(a, vx, vz, dt);
     // unstick
-    ai.stuckT += dt; if (ai.stuckT > 1.2) { if (a.moving && Math.hypot(a.pos.x - ai.lastX, a.pos.z - ai.lastZ) < .35) { ai.path = []; ai.goal = null; ai.lastSeenT = 99; } ai.lastX = a.pos.x; ai.lastZ = a.pos.z; ai.stuckT = 0; }
+    ai.stuckT += dt; if (ai.stuckT > 1.2) { if (a.moving && Math.hypot(a.pos.x - ai.lastX, a.pos.z - ai.lastZ) + Math.abs(a.pos.y - (ai.lastY || 0)) < .35) { ai.path = []; ai.goal = null; ai.lastSeenT = 99; } ai.lastX = a.pos.x; ai.lastZ = a.pos.z; ai.lastY = a.pos.y; ai.stuckT = 0; }
     // shoot
     if (!G.match.practice && !ai.use && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
       ai.pause -= dt;
@@ -367,24 +389,25 @@
   var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
   var bombMesh = new T.Mesh(new T.BoxGeometry(.36, .16, .24), new T.MeshLambertMaterial({ color: 0x2a2e31 })), bombLed = new T.Mesh(new T.BoxGeometry(.09, .05, .09), new T.MeshBasicMaterial({ color: 0xff3b2a, fog: false }));
   bombLed.position.y = .1; bombMesh.add(bombLed); bombMesh.visible = false; scene.add(bombMesh);
-  function snap(x, z) { var c = freeNear(cellOf(x, z)); return { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; }
+  function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: c >= nav.N ? nav.H : 0 }; }
+  function near(a, s, r) { return Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < r && Math.abs(a.pos.y - (s.y || 0)) < 1.2; }
   function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
-  function siteAt(pos) { var s = G.map.sites, i; for (i = 0; i < s.length; i++) if (Math.abs(pos.x - s[i].x) < 2.6 && Math.abs(pos.z - s[i].z) < 2.6) return s[i]; return null; }
+  function siteAt(pos) { var s = G.map.sites, i; for (i = 0; i < s.length; i++) if (Math.abs(pos.x - s[i].x) < 2.6 && Math.abs(pos.z - s[i].z) < 2.6 && Math.abs(pos.y - (s[i].y || 0)) < 1) return s[i]; return null; }
   // where a bot should be, and whether it should be holding "use" there
   function objective(a) {
     var B = G.bomb, atk = a.team === B.atk, off = POSTS[a.idx % POSTS.length], s, o, far = { x: G.map.spawns.B[2].x, z: 0 };
     if (B.phase !== 'live') return { x: a.pos.x, z: a.pos.z };
     if (B.planted) {
-      s = B.planted; if (atk) { o = snap(s.x + off[0] * 1.7, s.z + off[1] * 1.7); o.look = far; return o; }
-      return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.3, force: s.t < 14 || a.useP > 2.5 };
+      s = B.planted; if (atk) { o = snap(s.x + off[0] * 1.7, s.z + off[1] * 1.7, s.l); o.look = far; return o; }
+      return { x: s.x, z: s.z, l: s.l, use: near(a, s, 1.3), force: s.t < 14 || a.useP > 2.5 };
     }
-    if (!atk) { if (a.ai.fwd) { o = snap(a.ai.fwd[0], a.ai.fwd[1]); o.look = { x: G.map.spawns.A[2].x, z: 0 }; return o; } s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1]); o.look = { x: 0, z: 0 }; return o; }
-    if (B.drop) return { x: B.drop.x, z: B.drop.z, force: true };
+    if (!atk) { if (a.ai.fwd) { o = snap(a.ai.fwd[0], a.ai.fwd[1], a.ai.fwd[2]); o.look = { x: G.map.spawns.A[2].x, z: 0 }; return o; } s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1], s.l); o.look = { x: 0, z: 0 }; return o; }
+    if (B.drop) return { x: B.drop.x, z: B.drop.z, l: B.drop.l, force: true };
     s = G.map.sites[B.plan];
-    if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1]); }   // this round's route
-    if (B.carrier === a) return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.4, force: a.useP > 1.5 };
-    if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9);   // escort the player
-    o = snap(s.x + off[0], s.z + off[1]); o.look = far; return o;
+    if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4 && (a.ai.via[2] || 0) === lvl(a)) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1], a.ai.via[2]); }   // this round's route
+    if (B.carrier === a) return { x: s.x, z: s.z, l: s.l, use: near(a, s, 1.4), force: a.useP > 1.5 };
+    if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9, lvl(B.carrier));   // escort the player
+    o = snap(s.x + off[0], s.z + off[1], s.l); o.look = far; return o;
   }
   function roundEnd(winner, why) {
     var B = G.bomb; if (B.phase !== 'live') return; B.phase = 'post'; B.postT = 4; G.score[winner]++; B.round++; inp.use = false;
@@ -406,20 +429,20 @@
     if (B.phase === 'post') { B.postT -= dt; if (B.postT <= 0) { if (G.score.A >= B.need || G.score.B >= B.need) endMatch(); else newRound(); } return; }
     for (i = 0; i < G.actors.length; i++) {
       a = G.actors[i]; if (!a.alive) { a.useP = 0; a.useAt = null; continue; }
-      if (B.drop && a.team === B.atk && Math.hypot(a.pos.x - B.drop.x, a.pos.z - B.drop.z) < 1.5) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
-      if (B.carrier === a && !nav.blk[cellOf(a.pos.x, a.pos.z)]) a.lastFree = { x: a.pos.x, z: a.pos.z };   // if the carrier dies the bomb lands where bots can walk
+      if (B.drop && a.team === B.atk && near(a, B.drop, 1.5)) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
+      if (B.carrier === a && a.ground && !nav.blk[cellOf(a.pos.x, a.pos.z, lvl(a))]) a.lastFree = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a) };   // if the carrier dies the bomb lands where bots can walk
       kind = null; s = null;
       if (!B.planted) { if (B.carrier === a && (s = siteAt(a.pos))) kind = 'plant'; }
-      else if (a.team === def && Math.hypot(a.pos.x - B.planted.x, a.pos.z - B.planted.z) < 1.7) kind = 'defuse';
+      else if (a.team === def && near(a, B.planted, 1.7)) kind = 'defuse';
       if (a.isPlayer) B.can = kind;
       want = a.isPlayer ? inp.use : a.ai.use;
       if (!kind || !want) { a.useP = 0; a.useAt = null; continue; }
       if (!a.useAt || Math.hypot(a.pos.x - a.useAt.x, a.pos.z - a.useAt.z) > .35) { a.useAt = { x: a.pos.x, z: a.pos.z }; a.useP = 0; }   // moving starts over
       a.useP += dt;
-      if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
+      if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a), site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
       else if (kind === 'defuse' && a.useP >= DEFUSE) { bombMesh.visible = false; a.useP = 0; roundEnd(def, '폭탄 해제'); return; }
     }
-    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, .08, s.z);
+    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + .08, s.z);
     var na = aliveOf(B.atk), nd = aliveOf(def);
     if (B.planted) {
       s = B.planted; s.t -= dt; s.beep -= dt; bombLed.visible = s.beep > .12 || s.beep < .06;
@@ -481,7 +504,8 @@
   function set(id, v) { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } }
   function drawMini() {
     var cv = $('mini'), ctx = cv.getContext('2d'), b = G.map.bounds, w = cv.width, s = (w - 8) / Math.max(b.maxx - b.minx, b.maxz - b.minz), ox = (w - (b.maxx - b.minx) * s) / 2, oz = (w - (b.maxz - b.minz) * s) / 2, i, p = G.player;
-    if (!G.mini) { G.mini = document.createElement('canvas'); G.mini.width = G.mini.height = w; var c = G.mini.getContext('2d'); c.fillStyle = 'rgba(232,228,218,.42)'; for (i = 0; i < boxes.length; i++) { var q = boxes[i]; if (q.maxy < 1 || q.miny > 1.6 || (q.miny > .05 && !q.soft && q.maxy < 3.5 && q.maxx - q.minx < 1.3 && q.maxz - q.minz < 1.3)) continue; c.fillRect(ox + (q.minx - b.minx) * s, oz + (q.minz - b.minz) * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); } }
+    if (!G.mini) { G.mini = document.createElement('canvas'); G.mini.width = G.mini.height = w; var c = G.mini.getContext('2d'); c.fillStyle = 'rgba(232,228,218,.42)'; for (i = 0; i < boxes.length; i++) { var q = boxes[i]; if (q.maxy < 1 || q.miny > 1.6 || (q.miny > .05 && !q.soft && q.maxy < 3.5 && q.maxx - q.minx < 1.3 && q.maxz - q.minz < 1.3)) continue; if (q.rot) { c.save(); c.translate(ox + (q.ox - b.minx) * s, oz + (q.oz - b.minz) * s); c.rotate(Math.atan2(-q.s, q.c)); c.fillRect(q.minx * s, q.minz * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); c.restore(); }
+      else c.fillRect(ox + (q.minx - b.minx) * s, oz + (q.minz - b.minz) * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); } }
     ctx.clearRect(0, 0, w, w); ctx.drawImage(G.mini, 0, 0);
     if (G.bomb) { ctx.fillStyle = '#e2562f'; ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; G.map.sites.forEach(function (q) { ctx.fillText(q.id, ox + (q.x - b.minx) * s, oz + (q.z - b.minz) * s + 5); }); var bp = G.bomb.planted || G.bomb.drop; if (bp && (G.bomb.planted || p.team === G.bomb.atk)) { ctx.beginPath(); ctx.arc(ox + (bp.x - b.minx) * s, oz + (bp.z - b.minz) * s, 4, 0, 7); ctx.fill(); } }
     for (i = 0; i < G.actors.length; i++) { var a = G.actors[i]; if (!a.alive || a === p) continue; if (a.team !== p.team && a.spot <= 0) continue; ctx.fillStyle = a.team === 'A' ? '#ffb347' : '#6cc4e0'; var x = ox + (a.pos.x - b.minx) * s, z = oz + (a.pos.z - b.minz) * s; if (a.team === p.team) { ctx.beginPath(); ctx.arc(x, z, 3.2, 0, 7); ctx.fill(); } else ctx.fillRect(x - 3, z - 3, 6, 6); }

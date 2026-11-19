@@ -1,4 +1,4 @@
-// maps.js — the three battlegrounds. Each builder returns render meshes (grouped by surface texture) plus the collision boxes
+// maps.js — the four battlegrounds. Each builder returns render meshes (grouped by surface texture) plus the collision boxes
 // that movement, bullets and the bots' navigation grid use. All textures are painted on canvases at load.
 (function () {
   var T = THREE, PI = Math.PI;
@@ -111,6 +111,12 @@
       box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false) coll(x, z, w, d, h, y0); },
       cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false) coll(x, z, r * 1.7, r * 1.7, h, y0); },
       geo: function (g, c, t, opt) { push(g, c, t || 'plain', opt); },
+      // a box turned about the vertical axis. Its collision record keeps the box in its own frame (ox, oz, cos, sin).
+      rbox: function (x, z, w, d, h, c, y0, ang, solid, t, soft) {
+        y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.rotateY(ang); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null });
+        if (solid !== false) b.rsolid(x, z, w, d, h, y0, ang, soft);
+      },
+      rsolid: function (x, z, w, d, h, y0, ang, soft) { var q = { minx: -w / 2, maxx: w / 2, miny: y0 || 0, maxy: (y0 || 0) + h, minz: -d / 2, maxz: d / 2, rot: true, ox: x, oz: z, c: Math.cos(ang), s: Math.sin(ang) }; if (soft) q.soft = true; b.boxes.push(q); },
       solid: function (x, z, w, d, h, y0, soft) { coll(x, z, w, d, h, y0 || 0); if (soft) b.boxes[b.boxes.length - 1].soft = true; },   // soft: stops people, not bullets
       seg: function (x0, y0, z0, x1, y1, z1, w, c, t) {              // a beam between two points
         var a = new T.Vector3(x0, y0, z0), e = new T.Vector3(x1, y1, z1), dir = e.clone().sub(a), len = dir.length(), g = new T.BoxGeometry(w, len, w), m = new T.Matrix4();
@@ -381,7 +387,100 @@
       sites: [{ id: 'A', x: 27, z: -20, via: [[2, -29], [-18, -10], [2, -10], [18, 2], [-27, -19]] }, { id: 'B', x: 27, z: 21.5, via: [[2, 29], [-18, 10], [2, 10], [18, 2], [-8.5, 19]] }],
       fwd: [[18, -10], [18, 10], [2, 0], [27, -4], [14, -29], [18, 24]] };
   }
-  var MAKERS = [dock, warehouse, depot];
-  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 72 × 44 m', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 38 × 26 m', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 92 × 64 m', hint: '폭파 미션 가능', bomb: true }];
+  // 04 구시가지 — 88 x 60 m, 2층. 폭파 미션 맵들의 공통 짜임을 따랐다: 세 갈래 길과 그 사이 연결로, 양쪽 목표로 통하는 가운데
+  // 건물, 지점마다 성격이 다른 입구 셋 이상(큰길, 샛길, 윗길), 수비가 먼저 닿는 거리, 야외 지점 하나와 실내 지점 하나.
+  // 건물은 저마다 다른 각도로 놓여 길이 직각으로 만나지 않는다. 위층(H = 3.2 m)은 시장 옥상, 구름다리, A 옥상, B 중층이다.
+  function oldtown() {
+    var b = Builder(), H = 3.2, ROOF = !SV.noRoof, links = [], ladders = [], ST = 0xc9b79a, ST2 = 0xb9a488, TILE = 0x9a5a3c, DK = 0x4f585e, WD = 0x9c7a4a;
+    b.box(0, 0, 140, 110, .4, 0x8f897c, -.4, false, 'conc');
+    // a local frame: everything built through it is placed and turned together, so each building is laid out as a plain rectangle
+    function fr(cx, cz, ang) {
+      var c = Math.cos(ang), s = Math.sin(ang), f = {
+        p: function (lx, lz, l) { return [cx + lx * c + lz * s, cz - lx * s + lz * c, l || 0]; },
+        box: function (lx, lz, w, d, h, col, y0, solid, t, soft) { var q = f.p(lx, lz); b.rbox(q[0], q[1], w, d, h, col, y0 || 0, ang, solid, t, soft); },
+        wall: function (al, c0, a0, a1, gaps, y0, h, col) { var cur = a0; (gaps || []).concat([[a1, a1]]).forEach(function (g) { if (g[0] > cur + .01) { var m = (cur + g[0]) / 2, l = g[0] - cur; if (al === 'x') f.box(m, c0, l, .4, h, col || ST, y0, true, 'block'); else f.box(c0, m, .4, l, h, col || ST, y0, true, 'block'); } cur = g[1]; }); },
+        // waist-high railing: stops people, lets bullets through
+        rail: function (al, c0, a0, a1, gaps, y0) { var cur = a0; (gaps || []).concat([[a1, a1]]).forEach(function (g) { if (g[0] > cur + .01) { var m = (cur + g[0]) / 2, l = g[0] - cur; if (al === 'x') { f.box(m, c0, l, .12, .08, DK, y0 + .95, true, 'metal', true); f.box(m, c0, l, .06, .06, DK, y0 + .5, false, 'metal'); } else { f.box(c0, m, .12, l, .08, DK, y0 + .95, true, 'metal', true); f.box(c0, m, .06, l, .06, DK, y0 + .5, false, 'metal'); } var q = f.p(al === 'x' ? m : c0, al === 'x' ? c0 : m); b.rsolid(q[0], q[1], al === 'x' ? l : .12, al === 'x' ? .12 : l, 1.03, y0, ang, true); for (var k = cur; k <= g[0] + .01; k += Math.max(1, l / Math.round(l / 1.6))) f.box(al === 'x' ? k : c0, al === 'x' ? c0 : k, .08, .08, .95, DK, y0, false, 'metal'); } cur = g[1]; }); },
+        // eight steps up to the upper floor, starting at (lx, lz) and running along (dx, dz)
+        stairs: function (lx, lz, dx, dz, wd) { for (var i = 0; i < 8; i++) f.box(lx + dx * (i * .5 + .25), lz + dz * (i * .5 + .25), dx ? .5 : wd, dx ? wd : .5, .4 * (i + 1), 0xa39a88, 0, true, 'conc'); links.push({ a: f.p(lx - dx * .8, lz - dz * .8, 0), b: f.p(lx + dx * 4.9, lz + dz * 4.9, 1) }); },
+        // a ladder on a wall face at (lx, lz); (dx, dz) points into the wall
+        ladder: function (lx, lz, dx, dz) {
+          var i, q; [-.24, .24].forEach(function (o) { f.box(lx - dx * .1 + dz * o, lz - dz * .1 + dx * o, .07, .07, H + 1, 0x8d6a2e, 0, false, 'metal'); });
+          for (i = 1; i <= 10; i++) f.box(lx - dx * .1, lz - dz * .1, dx ? .05 : .5, dx ? .5 : .05, .05, 0x8d6a2e, i * .38, false, 'metal');
+          q = f.p(lx - dx * .42, lz - dz * .42); ladders.push({ x: q[0], z: q[1], dx: dx * c + dz * s, dz: -dx * s + dz * c, y1: H });
+          links.push({ a: f.p(lx - dx * .8, lz - dz * .8, 0), b: f.p(lx + dx * 1.3, lz + dz * 1.3, 1) });
+        } };
+      return f;
+    }
+    function crate(f, lx, lz, s, h, y0, col) { f.box(lx, lz, s, s, h, col || 0x9c8a62, y0 || 0, true, 'crate'); }
+    function site(id, x, z) { [[0, -2.6, 5.2, .35], [0, 2.6, 5.2, .35], [-2.6, 0, .35, 5.2], [2.6, 0, .35, 5.2]].forEach(function (q) { b.quad('hazard', x + q[0], .025, z + q[1], q[2], q[3], 0, { flat: true, rep: [q[2], q[3]] }); }); b.mark(id, x, .03, z, 2.6, 2.6, 0, '#e2562f', true); }
+    // the town wall: an eight-sided ring instead of a rectangle
+    var ring = [[-44, -10], [-24, -30], [30, -30], [44, -16], [44, 14], [28, 30], [-30, 30], [-44, 16]];
+    ring.forEach(function (p, i) { var q = ring[(i + 1) % ring.length], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz), ang = Math.atan2(-dz, dx), mx = (p[0] + q[0]) / 2, mz = (p[1] + q[1]) / 2; b.rbox(mx, mz, len + .6, .7, 5.4, 0xa89c88, 0, ang, false, 'block'); b.rbox(mx, mz, len + .9, 1, .3, 0x8a7f6e, 5.4, ang, false, 'conc'); b.rsolid(mx, mz, len + .6, .7, 10, 0, ang); });
+
+    // ----- market hall in the middle: open arcade below, terrace above
+    var M = fr(-6, 2, .3);
+    M.wall('x', -6, -9, 9, [[-6, -2], [1, 4]], 0, 3); M.wall('x', 6, -9, 9, [[-1, 3]], 0, 3); M.wall('z', -9, -6, 6, [[-2, 2]], 0, 3); M.wall('z', 9, -6, 6, [[-2, 2]], 0, 3);
+    M.box(0, 0, 17.6, 11.6, .02, 0xa8a294, 0, false, 'floor');
+    M.box(0, -1.25, 18.4, 9.5, .2, 0x8a8478, 3, true, 'conc'); M.box(3, 4.75, 12.4, 2.9, .2, 0x8a8478, 3, true, 'conc');   // terrace floor, with a well for the stairs
+    M.stairs(-7, 4.7, 1, 0, 2); M.ladder(6.5, -6.2, 0, 1);
+    M.rail('x', -6.1, -9.1, 9.1, [[5.8, 7.2]], H); M.rail('z', 9.1, -6.1, 6.1, [[-4.7, -1.3]], H); M.rail('x', 6.1, -3, 9.1, [], H); M.rail('z', -9.1, -6.1, 3.5, [], H); M.rail('x', 3.5, -9.1, -3, [], H);
+    M.wall('x', 6, -9, -3, [], 3, 1.25); M.wall('z', -9, 3.5, 6, [], 3, 1.25);
+    [[-8.5, -5.5], [8.5, -5.5], [8.5, 5.5], [0, -5.5], [0, 5.5]].forEach(function (q) { M.box(q[0], q[1], .35, .35, 2.8, WD, H, true); });
+    if (ROOF) { M.box(0, 0, 19.4, 13.2, .2, TILE, 6, false, 'panel'); }
+    crate(M, 0, -1, 1.5, 1.3, H); crate(M, -5, -3.5, 1.3, 1.1, H, 0x7c7a52); crate(M, 5.5, 3, 1.4, 1.2, H); M.box(-2, 2, 3, .5, 1.1, ST2, H, true, 'block');
+    M.box(2.5, -2.2, 3.2, 1.2, 1, WD, 0, true, 'crate'); M.box(-3.5, 1.6, 1.2, 3, 1, WD, 0, true, 'crate'); crate(M, 5.5, 2.6, 1.5, 1.4); crate(M, -1, -4, 1.3, 1.2, 0, 0x7c7a52);
+    b.mark('시장', M.p(-9.25, 0)[0], 2.2, M.p(-9.25, 0)[1], 2.4, .9, .3 - PI / 2, '#3a2f22');
+
+    // ----- A: a walled plaza with a rooftop walk along its west side
+    var A = fr(22, -12, -.2);
+    A.box(-9, -6.5, 6, 9, 3, ST2, 0, true, 'block'); A.box(-9, 6, 6, 10, 3, ST2, 0, true, 'block'); A.box(-9, 0, 6.4, 22.4, .2, 0x8a8478, 3, true, 'conc');   // row of houses, an archway through, roof on top
+    A.stairs(-4.8, 4, 0, 1, 2.4); A.box(-4.8, 9.5, 2.4, 3, H, 0xa39a88, 0, true, 'conc');
+    A.rail('z', -12.1, -11.1, 11.1, [[6.3, 9.7]], H); A.rail('x', -11.1, -12.1, -5.9, [], H); A.rail('x', 11.1, -12.1, -3.6, [], H); A.rail('z', -5.9, -11.1, 8, [], H); A.rail('z', -3.6, 8, 11.1, [], H);
+    A.box(-10, -6, 1.6, 1.2, 1.1, 0x9aa0a4, H, true, 'metal'); A.box(-8.4, 1.5, 1.2, 2.2, 1.2, 0x9aa0a4, H, true, 'metal'); A.box(-10.6, 4.4, .9, .9, 1.9, 0x8a5a44, H, true, 'block'); A.box(-7.6, -9.6, 1.4, 1.4, 1.2, 0x9c8a62, H, true, 'crate');
+    A.box(5, -10, 14, 2, 5.2, ST, 0, true, 'block'); A.box(11, -7, 2, 8, 5.2, ST, 0, true, 'block'); A.box(11, 5, 2, 8, 5.2, ST, 0, true, 'block'); A.box(1.2, 10, 9.6, 2, 5.2, ST, 0, true, 'block'); A.box(10.5, 10, 3, 2, 5.2, ST, 0, true, 'block');
+    if (ROOF) [[5, -10, 14.6, 2.6], [11, -7, 2.6, 8.6], [11, 5, 2.6, 8.6], [1.2, 10, 10.2, 2.6], [10.5, 10, 3.6, 2.6]].forEach(function (q) { A.box(q[0], q[1], q[2], q[3], .25, TILE, 5.2, false, 'panel'); });
+    var fa = A.p(3, -5.4); b.cyl(fa[0], fa[1], 1.6, .7, 0xa8a294, 0, true, 'conc', 1.6, 8); b.cyl(fa[0], fa[1], .3, 1.5, 0xa8a294, 0, false, 'conc', .4, 8);
+    crate(A, 7.6, 4.2, 1.5, 1.3); crate(A, -1.6, -6.4, 1.5, 1.3, 0, 0x7c7a52); A.box(.2, 5.6, 2.6, 1.2, 1, WD, 0, true, 'crate'); A.box(7, -5.5, 3, .5, 1.05, ST2, 0, true, 'block'); A.box(-2.6, 2.2, .5, 2.4, 1.05, ST2, 0, true, 'block');
+    var sa = A.p(3, 0); site('A', sa[0], sa[1]);
+
+    // ----- bridge from the market terrace to the A rooftop
+    var p0 = M.p(9.2, -3), p1 = A.p(-12.2, 8), bl = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), ba = Math.atan2(-(p1[1] - p0[1]), p1[0] - p0[0]), BR = fr((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, ba);
+    BR.box(0, 0, bl + 1, 3.4, .2, 0x8a7f6e, 3, true, 'conc'); BR.rail('x', -1.64, -bl / 2, bl / 2, [], H); BR.rail('x', 1.64, -bl / 2, bl / 2, [], H); BR.box(0, 0, .5, .5, 3, 0x8a7f6e, 0, true, 'conc');
+    links.push({ a: M.p(7.6, -3, 1), b: A.p(-10.4, 8, 1) }); links.push({ a: A.p(-4.8, 9.4, 1), b: A.p(-8, 9.4, 1) });
+
+    // ----- B: a two-storey storehouse; the bomb goes on the ground floor, a gallery looks down on it
+    var Bf = fr(20, 17, .2);
+    Bf.wall('z', -9, -6.5, 6.5, [], 0, H); Bf.wall('z', -9, -6.5, 6.5, [[1, 3]], H, 3); Bf.box(-9, 2, .4, 2, 1, ST, 5.2, true, 'block');
+    Bf.wall('x', 6.5, -9, 9, [[-6, -3]], 0, 6.2); Bf.box(-4.5, 6.5, 3, .4, 3.4, ST, 2.8, true, 'block'); Bf.wall('x', -6.5, -9, 9, [[2, 5]], 0, 6.2); Bf.box(3.5, -6.5, 3, .4, 3.2, ST, 3, true, 'block');
+    Bf.wall('z', 9, -6.5, 6.5, [[-1.5, 1.5]], 0, 6.2); Bf.box(9, 0, .4, 3, 3.2, ST, 3, true, 'block');
+    Bf.box(0, 0, 17.6, 12.6, .02, 0xa8acad, 0, false, 'floor'); Bf.box(-6.25, 0, 5.5, 12.6, .2, 0x7d766a, 3, true, 'conc'); [-2, 3.5].forEach(function (z) { Bf.box(-3.7, z, .25, .25, 3, DK, 0, true, 'metal'); });
+    Bf.stairs(.5, -5.2, -1, 0, 2); Bf.rail('z', -3.5, -4.2, 6.3, [], H); Bf.ladder(-9.2, 2, 1, 0);
+    if (ROOF) Bf.box(0, 0, 18.8, 13.8, .25, 0x5d666c, 6.2, false, 'panel');
+    crate(Bf, 6.6, -3.6, 1.6, 1.4); Bf.box(.4, 4.7, 2, 2, 1.6, 0x6f7350, 0, true, 'crate'); crate(Bf, 7.2, 4.6, 1.5, 1.3, 0, 0x7c7a52); crate(Bf, 7.2, 3.1, 1.2, 1.1); Bf.box(-7.9, -3.5, 1, 3.4, 2.2, 0x6f7350, 0, true, 'crate'); Bf.box(-1.4, .4, 1.4, 1.4, 1.2, 0x9c8a62, 0, true, 'crate');
+    crate(Bf, -7.6, -3, 1.3, 1.1, H); crate(Bf, -5, 5.2, 1.3, 1.2, H, 0x7c7a52);
+    var sb = Bf.p(3.5, 1); site('B', sb[0], sb[1]);
+
+    // ----- the houses that shape the lanes
+    [[-14, -17, .5, 12, 7, 5.6, ST], [-12, 21, -.25, 15, 6, 6, ST2], [-28, -5, .9, 6, 5, 4.6, ST2], [37.5, 8.5, -.45, 5, 4, 4.4, ST], [-27, 14, .15, 5, 4, 4.2, ST], [4, 24.5, .5, 4, 3, 3.6, ST2]].forEach(function (q) {
+      var f = fr(q[0], q[1], q[2]); f.box(0, 0, q[3], q[4], q[5], q[6], 0, true, 'block'); f.box(0, 0, q[3] + .6, q[4] + .6, .3, TILE, q[5], false, 'panel'); f.box(q[3] / 2 + .03, 0, .06, 1.1, 2.1, 0x5a4630, 0, false); f.box(-q[3] / 4, q[4] / 2 + .03, 1.2, .06, 1, 0x26303a, 1.3, false); f.box(q[3] / 4, -q[4] / 2 - .03, 1.2, .06, 1, 0x26303a, 1.3, false);
+    });
+    b.cyl(0, -18, 2.2, 3, ST2, 0, true, 'block', 2.2, 8); b.cyl(0, -18, 2.6, .9, TILE, 3, false, 'panel', .3, 8);               // kiosk on the north square
+    b.cyl(6.5, 8, 1.3, .9, 0xa8a294, 0, true, 'conc', 1.3, 10); b.seg(5.4, .9, 8, 5.4, 2.6, 8, .1, WD); b.seg(7.6, .9, 8, 7.6, 2.6, 8, .1, WD); b.seg(5.4, 2.6, 8, 7.6, 2.6, 8, .1, WD);   // well
+    // street cover
+    [[-22, -22, 2], [-3, -26.5, 1], [9, -24, 2], [-20, 6, 1], [-22, 26, 2], [0, 14, 1], [10, 27, 2], [33, 22, 1], [36, -8, 2], [14, 2.5, 1], [-33, -12, 1], [-4, -10.5, 2]].forEach(function (q, n) { b.pallet(q[0], q[1], 0); b.crate(q[0], q[1], 1.4, n % 2 ? 0x7c7a52 : 0x9c8a62, .14, 1.2); b.solid(q[0], q[1], 1.5, 1.5, .2); if (q[2] > 1) { b.crate(q[0] + .1, q[1], 1.2, 0x8a8660, 1.34, 1.1); b.solid(q[0], q[1], 1.3, 1.3, 1.1, 1.34); } });
+    [[-18, -27, C.olive], [-17.3, -26.7, C.red], [15, 9, C.blue], [-2, 28.4, C.olive], [31, 3, C.red], [31.6, 3.5, C.olive], [-34, 12, C.blue], [12.5, -27.5, C.olive]].forEach(function (q) { b.barrel(q[0], q[1], q[2]); });
+    b.jersey(-30, 2, 3, true); b.jersey(34, -2, 3, true); b.jersey(8, -3.5, 3, false); b.jersey(16, 28, 3, false); b.tires(-8, 28.6, 3); b.tires(30, -27, 3);
+    [[-30, -18, 1, 0], [-8, -27, 0, 1], [8, -16, -1, 0], [-20, 11, 1, 0], [-2, 27.5, 0, -1], [10, 4, 0, 1], [32, 5, -1, 0], [38, -12, -1, 0], [20, 28, 0, -1], [-36, 4, 1, 0], [24, -27, 0, 1]].forEach(function (q) { b.lamp(q[0], q[1], 5.5, q[2], q[3]); });
+    [[-10, -24], [6, -12], [-18, 14], [12, 12], [34, 12], [-34, -2]].forEach(function (q) { b.quad('puddle', q[0], .025, q[1], rnd(3, 5), rnd(2.4, 3.6), rnd(0, 3), { flat: true, mode: 'alpha' }); });
+    b.spawn('A', -39.5, 3); b.spawn('B', 39.5, -1);
+    return { name: '구시가지', b: b, bounds: { minx: -44, maxx: 44, minz: -30, maxz: 30 }, bg: 0x93a7b8, fog: [40, 190], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, .9, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4],
+      H: H, links: links, ladders: ladders,
+      sites: [{ id: 'A', x: sa[0], z: sa[1], l: 0, y: 0, via: [[-4, -25, 0], [-12, -8, 0], [5, -9, 0], M.p(0, -1, 1), A.p(-9, 6, 1)] }, { id: 'B', x: sb[0], z: sb[1], l: 0, y: 0, via: [[-2, 27, 0], [-8, 12.5, 0], [8, 11, 0], Bf.p(-6, 2, 1), M.p(3, 4.5, 1)] }],
+      fwd: [A.p(-9, 3, 1), M.p(6, 0, 1), [8, 3, 0], Bf.p(-6, -2, 1), [14, -27, 0], [8, 25, 0]] };
+  }
+
+  var MAKERS = [dock, warehouse, depot, oldtown];
+  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); if (m.sky) m.group.add(skyDome(m.sky[0], m.sky[1])); m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

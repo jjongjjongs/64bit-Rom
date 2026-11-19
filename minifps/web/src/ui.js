@@ -71,7 +71,7 @@
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }
   $('md-0').addEventListener('click', function () { match.mode = 0; save(); refresh('s-match'); });
-  $('md-1').addEventListener('click', function () { match.mode = 1; for (var i = 0; i < SV.MAPS.length; i++) if (SV.MAPS[i].bomb) match.map = i; save(); refresh('s-match'); });
+  $('md-1').addEventListener('click', function () { match.mode = 1; if (!SV.MAPS[match.map].bomb) for (var i = SV.MAPS.length - 1; i >= 0; i--) if (SV.MAPS[i].bomb) match.map = i; save(); refresh('s-match'); });
   stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
   function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = inp.use = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
   function resume() { if (G.state !== 'pause') return; show(null); G.state = 'play'; }
