@@ -36,6 +36,7 @@ others=$(gh release view "$TAG" --json body -q .body | grep -- '<!-- ' | grep -v
   echo "작업 브랜치의 최신 빌드입니다. 빌드할 때마다 같은 이름으로 덮어씁니다."
   echo
   echo "- \`app-debug.apk\` — 앱"
+  echo "- \`mini-fps.apk\` — Mini-FPS (오프라인 봇전 FPS)"
   echo "- \`android7-guest.zip\` — 게스트 이미지. 앱의 \"Android 7 구성 가져오기\"에 그대로 넣으면 됩니다."
   echo
   echo "### 어느 빌드인가"

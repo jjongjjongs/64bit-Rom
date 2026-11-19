@@ -1,0 +1,130 @@
+// ui.js — menus, settings, touch and keyboard input.
+(function () {
+  var $ = function (id) { return document.getElementById(id); }, G = SV.G, inp = SV.inp, cfg = SV.cfg, W = SV.W;
+  var match = { map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', minutes: 10 };
+  try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
+  function save() { try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
+  var SCR = ['s-title', 's-lobby', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res'], from = { 's-load': 's-team', 's-set': 's-lobby' };
+  var cur = 's-title';
+  function show(id) { cur = id; SCR.forEach(function (s) { $(s).hidden = s !== id; }); $('hud').hidden = !(id === null || id === 's-pause'); if (id) refresh(id); }
+  if (SV.fatal) { $('s-title').querySelector('.tag').textContent = SV.fatal; }
+
+  // ---------- option builders ----------
+  function seg(host, items, get, set) {
+    host.textContent = ''; items.forEach(function (it, n) {
+      var b = document.createElement('button'); b.className = 'opt'; b.id = host.id + '-' + n; b.textContent = it[0]; if (it[1]) { var s = document.createElement('small'); s.textContent = it[1]; b.appendChild(s); }
+      b.setAttribute('aria-pressed', get() === it[2] ? 'true' : 'false'); b.addEventListener('click', function () { set(it[2]); save(); refresh(host.closest('.scr').id); }); host.appendChild(b);
+    });
+  }
+  var GUNS = [['rifle', '중거리 만능. 연사 반동이 위로 올라갑니다.', [62, 70, 58, 66, 55]], ['smg', '가볍고 빠릅니다. 멀어질수록 약해집니다.', [40, 92, 48, 35, 88]], ['sniper', '한 발이 무겁습니다. 정조준하면 조준경이 열립니다.', [98, 12, 96, 100, 25]], ['shotgun', '좁은 통로의 주인. 여덟 알이 퍼져 나갑니다.', [90, 28, 30, 20, 60]]];
+  var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비'] };
+  function refresh(id) {
+    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; ['팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); }
+    if (id === 's-match') {
+      seg($('o-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; });
+      seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
+      $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
+    }
+    if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); $('ro-' + t).textContent = (match.team === t ? ['나'].concat(NAMES[t].slice(0, match.perTeam - 1)) : NAMES[t].slice(0, match.perTeam)).join(' · '); });
+    if (id === 's-load') {
+      seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, W[g[0]].mag + '발', g[0]]; }), function () { return match.primary; }, function (v) { match.primary = v; });
+      var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1];
+      var gb = $('gb'); gb.textContent = ''; ['위력', '연사', '정확도', '사거리', '기동성'].forEach(function (l, n) { var a = document.createElement('div'); a.textContent = l; var b = document.createElement('div'); b.className = 'bar'; var f = document.createElement('i'); f.style.width = g[2][n] + '%'; b.appendChild(f); gb.appendChild(a); gb.appendChild(b); });
+      var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? '다음 투입부터 적용' : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
+    }
+    if (id === 's-pause') board();
+    if (id === 's-set') {
+      [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
+      [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
+    }
+  }
+  function board() {
+    var host = $('board'), me = G.player; host.textContent = '';
+    ['A', 'B'].forEach(function (t) {
+      var col = document.createElement('div'), h = document.createElement('h3'); h.className = 't' + t; var a = document.createElement('span'); a.textContent = t === 'A' ? 'ALPHA' : 'BRAVO'; var b = document.createElement('span'); b.textContent = G.score[t]; h.appendChild(a); h.appendChild(b); col.appendChild(h);
+      SV.board().filter(function (x) { return x.team === t; }).forEach(function (x) { var r = document.createElement('div'); r.className = 'row' + (x === me ? ' me' : ''); [x.name, x.kills, x.deaths].forEach(function (v) { var s = document.createElement('span'); s.textContent = v; r.appendChild(s); }); col.appendChild(r); });
+      host.appendChild(col);
+    });
+  }
+  function applyCfg() { var h = $('hud'); h.style.setProperty('--bs', cfg.btnScale / 100); h.style.setProperty('--ba', cfg.btnAlpha / 100); $('b-lfire').hidden = !cfg.leftFire; SV.resize(); }
+
+  // ---------- navigation ----------
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { SV.audio(); var to = b.getAttribute('data-go'); if (b.hasAttribute('data-from')) from[to] = b.getAttribute('data-from'); show(to); }); });
+  $('ld-back').addEventListener('click', function () { show(from['s-load']); });
+  $('st-back').addEventListener('click', function () { show(from['s-set']); });
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); SV.start(match); applyCfg(); }
+  $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') show('s-pause'); else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
+  $('r-again').addEventListener('click', begin);
+  $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
+  function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }
+  stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
+  function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
+  function resume() { if (G.state !== 'pause') return; show(null); G.state = 'play'; }
+  $('b-pause').addEventListener('click', pause); $('b-score').addEventListener('click', pause); $('p-resume').addEventListener('click', resume);
+  $('p-quit').addEventListener('click', function () { SV.end(); show('s-lobby'); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); });
+  SV.onEnd = function (r) {
+    if (document.exitPointerLock) document.exitPointerLock();
+    $('r-eye').textContent = r.map + ' · 팀 데스매치'; $('r-title').textContent = r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.score.A; $('r-b').textContent = r.score.B;
+    var u = Math.round(r.used); $('r-time').textContent = ('0' + ((u / 60) | 0)).slice(-2) + ':' + ('0' + (u % 60)).slice(-2) + ' 소요';
+    $('r-k').textContent = r.stats.kills; $('r-d').textContent = r.stats.deaths; $('r-h').textContent = r.stats.heads;
+    var f = $('r-facts'); f.textContent = ''; [['명중률', r.stats.shots ? Math.round(r.stats.hits / r.stats.shots * 100) + '%' : '–'], ['최다 연속 킬', r.stats.streak], ['주 무기', r.weapon]].forEach(function (x) { var li = document.createElement('li'), a = document.createElement('span'), b = document.createElement('b'); a.textContent = x[0]; b.textContent = x[1]; li.appendChild(a); li.appendChild(b); f.appendChild(li); });
+    SV.end(); show('s-res');
+  };
+
+  // ---------- settings ----------
+  [['sens', 'sens'], ['ads', 'adsSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
+  [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
+
+  // ---------- touch ----------
+  var zone = $('zone'), stick = null, looks = {}, knob = $('knob'), stickEl = $('stick');
+  function knobAt(dx, dy) { knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; }
+  zone.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse') { if (zone.requestPointerLock && document.pointerLockElement !== zone) { try { var p = zone.requestPointerLock(); if (p && p.catch) p.catch(function () {}); } catch (er) {} } if (document.pointerLockElement !== zone) looks[e.pointerId] = { x: e.clientX, y: e.clientY }; return; }
+    try { zone.setPointerCapture(e.pointerId); } catch (er) {}
+    if (!stick && e.clientX < window.innerWidth * .42) { stick = { id: e.pointerId, x: e.clientX, y: e.clientY }; }
+    else looks[e.pointerId] = { x: e.clientX, y: e.clientY };
+  });
+  zone.addEventListener('pointermove', function (e) {
+    if (stick && e.pointerId === stick.id) { var dx = e.clientX - stick.x, dy = e.clientY - stick.y, d = Math.hypot(dx, dy), R = 52; if (d > R) { dx *= R / d; dy *= R / d; } inp.mx = dx / R; inp.mz = -dy / R; knobAt(dx * .7, dy * .7); return; }
+    var l = looks[e.pointerId]; if (l) { inp.lx += e.clientX - l.x; inp.ly += e.clientY - l.y; l.x = e.clientX; l.y = e.clientY; }
+  });
+  function zup(e) { if (stick && e.pointerId === stick.id) { stick = null; inp.mx = inp.mz = 0; knobAt(0, 0); } delete looks[e.pointerId]; }
+  zone.addEventListener('pointerup', zup); zone.addEventListener('pointercancel', zup);
+  function hold(id, down, up, look) {
+    var el = $(id), pt = null;
+    el.addEventListener('pointerdown', function (e) { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (er) {} pt = { id: e.pointerId, x: e.clientX, y: e.clientY }; el.classList.add('on'); down(); });
+    el.addEventListener('pointermove', function (e) { if (look && pt && e.pointerId === pt.id) { inp.lx += e.clientX - pt.x; inp.ly += e.clientY - pt.y; pt.x = e.clientX; pt.y = e.clientY; } });
+    function end(e) { if (pt && e.pointerId === pt.id) { pt = null; el.classList.remove('on'); if (up) up(); } }
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+  hold('b-fire', function () { inp.fire = true; }, function () { inp.fire = false; }, true);
+  hold('b-lfire', function () { inp.fire = true; }, function () { inp.fire = false; }, false);
+  var adsOn = false; hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
+  hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
+  hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nade = true; }, null, false);
+  [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('click', function () { inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
+
+  // ---------- mouse and keyboard ----------
+  var keys = {};
+  function axes() { inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0); inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0); if (!keys.ShiftLeft && (inp.mx || inp.mz)) { inp.mx *= .9; inp.mz *= .9; } }
+  window.addEventListener('keydown', function (e) {
+    if (G.state !== 'play') { if ((e.code === 'KeyP' || e.code === 'Escape') && G.state === 'pause') resume(); return; }
+    keys[e.code] = true; axes();
+    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nade = true;
+    else if (e.code === 'Digit1') inp.slot = 0; else if (e.code === 'Digit2') inp.slot = 1; else if (e.code === 'Digit3') inp.slot = 2; else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); pause(); }
+  });
+  window.addEventListener('keyup', function (e) { keys[e.code] = false; if (G.state === 'play') axes(); });
+  document.addEventListener('mousemove', function (e) { if (document.pointerLockElement === zone && G.state === 'play') { inp.lx += e.movementX * .5; inp.ly += e.movementY * .5; } });
+  zone.addEventListener('mousedown', function (e) { if (e.button === 0) inp.fire = true; if (e.button === 2) inp.ads = true; });
+  window.addEventListener('mouseup', function (e) { if (e.button === 0) inp.fire = false; if (e.button === 2) inp.ads = false; });
+  zone.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  document.addEventListener('pointerlockchange', function () { if (document.pointerLockElement !== zone && G.state === 'play' && window.matchMedia('(pointer: fine)').matches && SV.locked) pause(); SV.locked = document.pointerLockElement === zone; });
+
+  window.addEventListener('resize', SV.resize); if (window.ResizeObserver) new ResizeObserver(SV.resize).observe($('cv'));
+  if (window.matchMedia('(pointer: coarse)').matches) $('keys').hidden = true;
+  // Android back key: pause a running match, step back out of menus, and only then let the app close.
+  SV.back = function () { if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
+  SV.ui = { begin: begin, match: match, pause: pause, resume: resume };
+  applyCfg(); show('s-title');
+})();

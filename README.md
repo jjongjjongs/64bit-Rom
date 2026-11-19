@@ -18,6 +18,17 @@ VPhoneOS류의 안드로이드 가상 ROM 컨테이너 앱. QEMU aarch64 기반�
 가상롬(QEMU + 구글 SDK 의 Android 7.0 ARM32 시스템 이미지)은 앱 안에서 돈다. 따로 설치되는
 것은 없다.
 
+## Mini-FPS (두 번째 앱)
+
+`minifps/` 는 Mini Rom 과 별개인 작은 게임입니다. 봇과 두 팀으로 싸우는 오프라인 팀 데스매치 FPS 이고,
+가상롬 없이 64비트 폰에서 바로 돕니다.
+
+- 게임은 `minifps/web/src` 의 HTML 한 조각과 자바스크립트 다섯 파일입니다(three.js r128, 모델·맵·소리 모두 코드로 생성).
+- `python3 minifps/web/build.py` 가 그것을 `minifps/src/main/assets/index.html` 한 장으로 묶고, 앱은 전체 화면 WebView 로 엽니다.
+  네트워크 권한은 없습니다.
+- `.github/workflows/minifps.yml` 이 `minifps/**` 가 바뀔 때 빌드해 Releases 의 `latest` 에 `mini-fps.apk` 로 올립니다.
+- 브라우저에서 미리 보려면 `python3 minifps/web/build.py --artifact` 로 `minifps/web/out/mini-fps.html` 을 만듭니다.
+
 ## 이 저장소의 출처
 
 원본 Android Studio 프로젝트 소스가 유실되어, 빌드된 APK(`단일_32비트_가상롬.apk`,

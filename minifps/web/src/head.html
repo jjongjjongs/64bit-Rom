@@ -1,0 +1,240 @@
+<title>Mini-FPS</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--FONTS-->
+<style>
+/* Layout: one fixed game viewport. Menus are full-screen plates over the canvas; the HUD hugs the screen edges. Single dark look. */
+:root {
+  color-scheme: dark;
+  --ink: #0b0d0f; --ink-2: #14181b; --bone: #e8e4da; --bone-dim: #aeaba3; --line: rgba(232, 228, 218, .24);
+  --signal: #ffb347; --bravo: #6cc4e0; --alarm: #ff5a40;
+  --f-display: 'Big Shoulders Display', sans-serif-condensed, 'Noto Sans KR', 'Arial Narrow', sans-serif;
+  --f-body: 'Noto Sans KR', system-ui, sans-serif; --f-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --sl: max(16px, env(safe-area-inset-left, 0px)); --sr: max(16px, env(safe-area-inset-right, 0px)); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+}
+html, body { height: 100%; }
+body { background: var(--ink); color: var(--bone); font-family: var(--f-body); font-size: 15px; line-height: 1.4; overflow: hidden; overscroll-behavior: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+#app { position: fixed; inset: 0; background: var(--ink); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+/* ---- menus ---- */
+.scr { position: absolute; inset: 0; background: var(--ink); padding: calc(14px + var(--st)) var(--sr) calc(14px + var(--sb)) var(--sl); display: flex; flex-direction: column; gap: 12px; overflow-y: auto; touch-action: pan-y; }
+.scr.veil { background: rgba(11, 13, 15, .9); }
+.top { display: flex; align-items: center; gap: 12px; }
+.top h2 { margin: 0; font-weight: 900; font-size: 22px; }
+.top .step { margin-left: auto; font-family: var(--f-mono); font-size: 11px; color: var(--bone-dim); }
+.back { width: 44px; height: 44px; border: 1px solid var(--line); background: none; font-size: 20px; }
+.grow { flex: 1 1 auto; min-height: 0; }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.foot small { color: var(--bone-dim); font-size: 12px; }
+.cta { min-height: 48px; padding: 0 26px; border: 0; background: var(--signal); color: var(--ink); font-weight: 900; font-size: 17px; }
+.ghost { min-height: 46px; padding: 0 16px; border: 1px solid var(--line); background: none; font-weight: 700; font-size: 15px; text-align: left; }
+.lbl { font-size: 12px; font-weight: 700; color: var(--bone-dim); margin-bottom: 6px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.opt { min-height: 46px; border: 1px solid var(--line); background: none; font-weight: 700; font-size: 14px; padding: 4px 8px; }
+.opt[aria-pressed="true"] { background: var(--bone); border-color: var(--bone); color: var(--ink); font-weight: 900; }
+.opt small { display: block; font-weight: 500; font-size: 11px; opacity: .75; }
+.stepper { display: flex; align-items: center; border: 1px solid var(--line); height: 46px; }
+.stepper button { width: 46px; height: 46px; border: 0; background: none; font-size: 22px; }
+.stepper output { flex: 1; text-align: center; font-family: var(--f-display); font-weight: 700; font-size: 24px; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+#s-title { justify-content: center; gap: 6px; }
+#s-title h1 { margin: 0; font-family: var(--f-display); font-weight: 900; font-size: clamp(72px, 22vh, 132px); line-height: .86; letter-spacing: -2px; }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 2px; color: var(--signal); }
+.tag { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; margin: 8px 0 18px; }
+.tag i { width: 44px; height: 3px; background: var(--signal); }
+.lobby { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 20px; }
+.lobby nav { display: flex; flex-direction: column; gap: 8px; }
+.card { border: 1px solid var(--line); padding: 12px 14px; }
+.card b { font-weight: 900; font-size: 20px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chips span { padding: 3px 9px; background: rgba(232, 228, 218, .1); font-size: 13px; font-weight: 700; }
+.teams { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.team { border: 1px solid var(--line); background: var(--ink-2); padding: 12px 14px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+.team[aria-pressed="true"] { border: 2px solid var(--signal); }
+.team .nm { font-family: var(--f-display); font-weight: 900; font-size: 36px; line-height: 1; }
+.team small { color: var(--bone-dim); font-size: 12px; }
+.tA { color: var(--signal); } .tB { color: var(--bravo); }
+.load { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.guns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bars { display: grid; grid-template-columns: 52px 1fr; gap: 7px 10px; align-items: center; font-size: 12px; margin-top: 8px; }
+.bar { height: 8px; background: rgba(232, 228, 218, .14); } .bar i { display: block; height: 8px; background: var(--bone); }
+.board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; font-size: 13px; }
+.board h3 { margin: 0 0 4px; display: flex; justify-content: space-between; align-items: baseline; font-family: var(--f-display); font-weight: 900; font-size: 22px; border-bottom: 2px solid currentColor; }
+.board .row { display: grid; grid-template-columns: 1fr 30px 30px; padding: 4px 8px; background: rgba(232, 228, 218, .07); margin-bottom: 3px; color: var(--bone); font-variant-numeric: tabular-nums; }
+.board .row span + span { text-align: right; } .board .me { background: var(--bone); color: var(--ink); font-weight: 900; }
+.pause { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 20px; }
+.pause nav { display: flex; flex-direction: column; gap: 8px; }
+.set { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+.set label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; } .set output { font-family: var(--f-mono); color: var(--signal); }
+input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; margin: 0; }
+.tog { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; border-top: 1px solid var(--line); }
+.tog b { font-size: 14px; display: block; } .tog small { font-size: 11px; color: var(--bone-dim); }
+.sw { width: 52px; height: 30px; border-radius: 15px; border: 1px solid var(--line); background: none; padding: 2px; display: flex; flex: 0 0 auto; }
+.sw i { width: 24px; height: 24px; border-radius: 12px; background: var(--bone); }
+.sw[aria-checked="true"] { background: var(--signal); border-color: var(--signal); justify-content: flex-end; } .sw[aria-checked="true"] i { background: var(--ink); }
+.res { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.res h1 { margin: 0; font-family: var(--f-display); font-weight: 900; font-size: clamp(56px, 20vh, 92px); line-height: .9; }
+.big { font-family: var(--f-display); font-weight: 900; font-size: 48px; line-height: 1; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tiles div { border: 1px solid var(--line); padding: 8px 12px; } .tiles span { font-size: 12px; color: var(--bone-dim); display: block; } .tiles b { font-family: var(--f-display); font-weight: 900; font-size: 34px; line-height: 1; }
+.facts { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; } .facts li { display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(232, 228, 218, .07); margin-bottom: 3px; }
+.keys { font-family: var(--f-mono); font-size: 11px; color: var(--bone-dim); }
+
+/* ---- HUD ---- */
+#hud { position: absolute; inset: 0; --bs: 1; --ba: .6; }
+#zone { position: absolute; inset: 0; }
+.hb { position: absolute; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .6); background: rgba(11, 13, 15, .4); font-size: 12px; font-weight: 700; opacity: var(--ba); transform: scale(var(--bs)); display: flex; align-items: center; justify-content: center; touch-action: none; }
+.hb.on { background: rgba(232, 228, 218, .35); }
+#b-fire { right: calc(var(--sr) + 96px); bottom: calc(var(--sb) + 58px); width: 86px; height: 86px; border: 3px solid var(--alarm); background: rgba(255, 90, 64, .22); font-size: 16px; font-weight: 900; }
+#b-ads { right: calc(var(--sr) + 28px); bottom: calc(var(--sb) + 134px); width: 60px; height: 60px; }
+#b-jump { right: calc(var(--sr) + 18px); bottom: calc(var(--sb) + 58px); width: 62px; height: 62px; font-size: 13px; }
+#b-crouch { right: calc(var(--sr) + 98px); bottom: calc(var(--sb) + 4px); width: 50px; height: 50px; }
+#b-reload { right: calc(var(--sr) + 192px); bottom: calc(var(--sb) + 52px); width: 52px; height: 52px; }
+#b-nade { right: calc(var(--sr) + 178px); bottom: calc(var(--sb) + 116px); width: 48px; height: 48px; font-size: 11px; }
+#b-lfire { left: calc(var(--sl) + 6px); top: 42%; width: 54px; height: 54px; border-color: rgba(255, 90, 64, .8); }
+#stick { position: absolute; left: calc(var(--sl) + 24px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; }
+#knob { position: absolute; left: 36px; top: 36px; width: 56px; height: 56px; border-radius: 50%; background: rgba(232, 228, 218, .5); }
+#score { position: absolute; left: 50%; top: calc(var(--st) + 8px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 3px 12px; background: rgba(11, 13, 15, .6); pointer-events: none; }
+#score b { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: 1; } #sc-t { font-family: var(--f-mono); font-size: 13px; }
+#mini { position: absolute; left: var(--sl); top: calc(var(--st) + 8px); width: 96px; height: 96px; border: 1px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .6); pointer-events: none; }
+#feed { position: absolute; right: calc(var(--sr) + 104px); top: calc(var(--st) + 8px); display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 12px; pointer-events: none; }
+#feed div { padding: 2px 8px; background: rgba(11, 13, 15, .6); }
+.sq { position: absolute; top: calc(var(--st) + 8px); width: 44px; height: 44px; border: 1px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .6); font-size: 11px; font-weight: 700; }
+#b-pause { right: var(--sr); } #b-score { right: calc(var(--sr) + 50px); }
+#bottom { position: absolute; left: 50%; bottom: calc(var(--sb) + 6px); transform: translateX(-50%); display: flex; align-items: flex-end; gap: 12px; }
+#hp { width: 110px; font-size: 11px; font-weight: 700; } #hp div:first-child { display: flex; justify-content: space-between; } #hpn { font-family: var(--f-mono); }
+#hpb { height: 8px; background: rgba(11, 13, 15, .6); } #hpf { height: 8px; width: 100%; background: var(--bone); }
+#slots { display: flex; gap: 4px; }
+.slot { min-width: 46px; height: 44px; padding: 0 6px; border: 1px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .6); font-size: 11px; font-weight: 700; }
+.slot[aria-pressed="true"] { border: 2px solid var(--signal); }
+#ammo { display: flex; align-items: baseline; gap: 4px; padding: 0 8px; background: rgba(11, 13, 15, .6); pointer-events: none; }
+#am { font-family: var(--f-display); font-weight: 900; font-size: 36px; line-height: 44px; min-width: 34px; text-align: right; } #ar { font-family: var(--f-mono); font-size: 13px; color: var(--bone-dim); }
+#cross { position: absolute; left: 50%; top: 50%; --g: 8px; pointer-events: none; }
+#cross i { position: absolute; background: var(--bone); }
+#cross i:nth-child(1) { width: 2px; height: 9px; left: -1px; top: calc(-9px - var(--g)); } #cross i:nth-child(2) { width: 2px; height: 9px; left: -1px; top: var(--g); }
+#cross i:nth-child(3) { height: 2px; width: 9px; top: -1px; left: calc(-9px - var(--g)); } #cross i:nth-child(4) { height: 2px; width: 9px; top: -1px; left: var(--g); }
+#hitm { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -13px 0 0 -13px; border: 2px solid var(--bone); transform: rotate(45deg); pointer-events: none; }
+#dmg { position: absolute; inset: 0; box-shadow: inset 0 0 90px 30px rgba(255, 60, 40, .55); opacity: 0; pointer-events: none; }
+#scope { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at center, transparent 0, transparent 38vh, #000 38.5vh); }
+#scope::before, #scope::after { content: ""; position: absolute; background: rgba(0, 0, 0, .8); } #scope::before { left: 50%; top: 12vh; bottom: 12vh; width: 1px; } #scope::after { top: 50%; left: calc(50% - 38vh); right: calc(50% - 38vh); height: 1px; }
+#msg { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); padding: 6px 16px; background: rgba(11, 13, 15, .72); font-weight: 900; font-size: 17px; white-space: nowrap; pointer-events: none; }
+#rot { position: absolute; inset: 0; background: var(--ink); display: none; align-items: center; justify-content: center; text-align: center; padding: 32px; font-weight: 900; font-size: 20px; z-index: 9; }
+@media (orientation: portrait) and (pointer: coarse) { #rot { display: flex; } }
+@media (max-width: 620px) { .lobby, .pause, .res, .load { grid-template-columns: minmax(0, 1fr); } .set { grid-template-columns: minmax(0, 1fr); } }
+@media (pointer: fine) { #stick, .hb { display: none; } }
+</style>
+
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <div id="hud" hidden>
+    <div id="zone"></div>
+    <div id="dmg"></div>
+    <div id="scope" hidden></div>
+    <div id="cross"><i></i><i></i><i></i><i></i></div>
+    <div id="hitm" hidden></div>
+    <canvas id="mini" width="192" height="192"></canvas>
+    <div id="score"><b id="sc-a" class="tA">0</b><span id="sc-t">10:00</span><b id="sc-b" class="tB">0</b></div>
+    <div id="feed"></div>
+    <button class="sq" id="b-score">점수</button>
+    <button class="sq" id="b-pause" aria-label="일시정지">Ⅱ</button>
+    <div id="stick"><div id="knob"></div></div>
+    <button class="hb" id="b-lfire" aria-label="왼손 사격">사격</button>
+    <button class="hb" id="b-fire" aria-label="사격">사격</button>
+    <button class="hb" id="b-ads">정조준</button>
+    <button class="hb" id="b-jump">점프</button>
+    <button class="hb" id="b-crouch">앉기</button>
+    <button class="hb" id="b-reload">장전</button>
+    <button class="hb" id="b-nade"><span id="nn">투척</span></button>
+    <div id="bottom">
+      <div id="hp"><div><span>체력</span><span id="hpn">100</span></div><div id="hpb"><div id="hpf"></div></div></div>
+      <div id="slots"><button class="slot" id="slot0" aria-pressed="true">소총</button><button class="slot" id="slot1" aria-pressed="false">권총</button><button class="slot" id="slot2" aria-pressed="false">칼</button></div>
+      <div id="ammo"><span id="am">30</span><span id="ar">/ 90</span></div>
+    </div>
+    <div id="msg" hidden></div>
+  </div>
+
+  <section class="scr" id="s-title">
+    <div class="eyebrow">v0.1 · 오프라인 봇전</div>
+    <h1>Mini-FPS</h1>
+    <div class="tag"><i></i>팀 데스매치 · 맵 2개 · 무기 7종</div>
+    <div><button class="cta" data-go="s-lobby" id="go-start">시작</button></div>
+    <div class="keys" id="keys">PC: WASD 이동 · 마우스 조준 · 좌클릭 사격 · 우클릭 정조준 · R 장전 · G 투척 · C 앉기 · 1 2 3 무기 · P 정지</div>
+  </section>
+
+  <section class="scr" id="s-lobby" hidden>
+    <div class="top"><h2 style="font-family:var(--f-display);font-size:36px">Mini-FPS</h2><span class="step">오프라인 · 계정 없음</span></div>
+    <div class="lobby grow">
+      <nav><button class="cta" data-go="s-match" id="go-match">전투 시작</button><button class="ghost" data-go="s-load" data-from="s-lobby" id="go-armory">무기 선택</button><button class="ghost" data-go="s-set" data-from="s-lobby" id="go-set">설정</button></nav>
+      <div class="card"><div class="eyebrow">지금 설정</div><b id="lb-map"></b><div class="chips" id="lb-chips"></div></div>
+    </div>
+  </section>
+
+  <section class="scr" id="s-match" hidden>
+    <div class="top"><button class="back" data-go="s-lobby" aria-label="뒤로">‹</button><h2>매치 설정</h2><span class="step">1 / 3</span></div>
+    <div class="cols grow">
+      <div><div class="lbl">맵</div><div class="seg" id="o-map"></div></div>
+      <div><div class="lbl">봇 난이도</div><div class="seg" id="o-diff"></div></div>
+      <div><div class="lbl">한 팀 인원 (나 포함)</div><div class="stepper"><button id="pt-" aria-label="인원 줄이기">−</button><output id="pt"></output><button id="pt+" aria-label="인원 늘리기">+</button></div></div>
+      <div><div class="lbl">목표 킬</div><div class="stepper"><button id="tk-" aria-label="목표 줄이기">−</button><output id="tk"></output><button id="tk+" aria-label="목표 늘리기">+</button></div></div>
+    </div>
+    <div class="foot"><small>제한 시간 10분 · 죽으면 3초 뒤 다시 투입</small><button class="cta" data-go="s-team" id="go-team">다음 · 팀 선택</button></div>
+  </section>
+
+  <section class="scr" id="s-team" hidden>
+    <div class="top"><button class="back" data-go="s-match" aria-label="뒤로">‹</button><h2>팀 선택</h2><span class="step">2 / 3</span></div>
+    <div class="teams grow">
+      <button class="team" id="tm-A" aria-pressed="true"><span class="nm tA">ALPHA</span><small>주황 · 서쪽에서 시작</small><span id="ro-A"></span></button>
+      <button class="team" id="tm-B" aria-pressed="false"><span class="nm tB">BRAVO</span><small>하늘 · 동쪽에서 시작</small><span id="ro-B"></span></button>
+    </div>
+    <div class="foot"><small>같은 팀은 맞지 않습니다</small><button class="cta" data-go="s-load" data-from="s-team" id="go-load">다음 · 무기 선택</button></div>
+  </section>
+
+  <section class="scr" id="s-load" hidden>
+    <div class="top"><button class="back" id="ld-back" aria-label="뒤로">‹</button><h2>무기 선택</h2><span class="step" id="ld-step">3 / 3</span></div>
+    <div class="load grow">
+      <div class="guns" id="o-gun"></div>
+      <div class="card"><b id="gn"></b><div id="gd" style="font-size:13px;color:var(--bone-dim)"></div><div class="bars" id="gb"></div><div style="font-size:12px;color:var(--bone-dim);margin-top:8px">보조 권총 · 나이프 · 수류탄 1개는 항상 지급</div></div>
+    </div>
+    <div class="foot"><small id="ld-note">모든 무기가 처음부터 열려 있습니다</small><button class="cta" id="go-fight">전투 투입</button></div>
+  </section>
+
+  <section class="scr veil" id="s-pause" hidden>
+    <div class="pause grow">
+      <nav><div class="eyebrow">일시정지</div><button class="cta" id="p-resume">계속하기</button><button class="ghost" data-go="s-load" data-from="s-pause" id="p-load">무기 바꾸기</button><button class="ghost" data-go="s-set" data-from="s-pause" id="p-set">설정</button><button class="ghost" id="p-quit" style="color:#ff8a73">전투 나가기</button></nav>
+      <div class="board" id="board"></div>
+    </div>
+  </section>
+
+  <section class="scr" id="s-set" hidden>
+    <div class="top"><button class="back" id="st-back" aria-label="뒤로">‹</button><h2>설정</h2><span class="step">바꾸면 바로 저장</span></div>
+    <div class="set grow">
+      <div><label for="c-sens"><span>시점 감도</span><output id="v-sens"></output></label><input id="c-sens" type="range" min="10" max="100"></div>
+      <div><label for="c-ads"><span>정조준 감도</span><output id="v-ads"></output></label><input id="c-ads" type="range" min="10" max="100"></div>
+      <div><label for="c-bs"><span>버튼 크기</span><output id="v-bs"></output></label><input id="c-bs" type="range" min="70" max="140"></div>
+      <div><label for="c-ba"><span>버튼 진하기</span><output id="v-ba"></output></label><input id="c-ba" type="range" min="25" max="100"></div>
+      <div class="tog"><div><b>조준 보조</b><small>적 근처에서 시점이 느려짐</small></div><button class="sw" role="switch" id="c-assist" aria-label="조준 보조"><i></i></button></div>
+      <div class="tog"><div><b>자동 사격</b><small>조준선이 적에 닿으면 발사</small></div><button class="sw" role="switch" id="c-auto" aria-label="자동 사격"><i></i></button></div>
+      <div class="tog"><div><b>왼손 사격 버튼</b><small>조준하면서 왼손으로 발사</small></div><button class="sw" role="switch" id="c-left" aria-label="왼손 사격 버튼"><i></i></button></div>
+      <div class="tog"><div><b>소리</b><small>총성과 효과음</small></div><button class="sw" role="switch" id="c-sound" aria-label="소리"><i></i></button></div>
+      <div class="tog"><div><b>고화질</b><small>끄면 더 부드럽게 돌아감</small></div><button class="sw" role="switch" id="c-quality" aria-label="고화질"><i></i></button></div>
+    </div>
+  </section>
+
+  <section class="scr" id="s-res" hidden>
+    <div class="res grow">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="eyebrow" id="r-eye"></div><h1 id="r-title"></h1>
+        <div><span class="big tA" id="r-a"></span> <span class="big" style="color:var(--bone-dim);font-size:28px">:</span> <span class="big tB" id="r-b"></span> <span class="keys" id="r-time"></span></div>
+        <div class="grow"></div>
+        <div style="display:flex;gap:8px"><button class="cta" id="r-again">한 판 더</button><button class="ghost" data-go="s-lobby" id="r-menu">메인 메뉴</button></div>
+      </div>
+      <div><div class="lbl">내 기록</div><div class="tiles"><div><span>킬</span><b id="r-k"></b></div><div><span>데스</span><b id="r-d"></b></div><div><span>헤드샷</span><b id="r-h"></b></div></div><ul class="facts" id="r-facts"></ul></div>
+    </div>
+  </section>
+
+  <div id="rot">폰을 가로로 돌려 주세요</div>
+</div>

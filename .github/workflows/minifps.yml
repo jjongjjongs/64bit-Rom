@@ -1,0 +1,63 @@
+name: minifps
+
+# Mini-FPS APK. 게임 소스(minifps/**)가 바뀔 때만 돈다.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "minifps/**"
+      - "settings.gradle.kts"
+      - ".github/workflows/minifps.yml"
+      - ".github/scripts/publish-latest.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install SDK platform 34 / build-tools 34
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Bundle the game into assets
+        run: |
+          python3 minifps/web/build.py
+          # 문법 오류가 있는 채로 APK 가 되면 폰에서는 빈 화면만 보인다.
+          for f in minifps/web/src/*.js; do node --check "$f"; done
+
+      - name: Assemble debug APK
+        run: ./gradlew :minifps:assembleDebug --stacktrace
+
+      - name: Verify the game is inside the APK
+        run: |
+          apk=minifps/build/outputs/apk/debug/minifps-debug.apk
+          unzip -l "$apk" | grep -E "assets/(index\.html|three\.min\.js)$"
+          [ "$(unzip -l "$apk" | grep -cE 'assets/(index\.html|three\.min\.js)$')" = 2 ] \
+            || { echo "::error::게임 파일이 APK 에 없다"; exit 1; }
+          cp "$apk" "$RUNNER_TEMP/mini-fps.apk"
+          ls -l "$RUNNER_TEMP/mini-fps.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mini-fps-apk
+          path: ${{ runner.temp }}/mini-fps.apk
+          if-no-files-found: error
+
+      - name: Publish to latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .github/scripts/publish-latest.sh minifps "Mini-FPS (mini-fps.apk)" "$RUNNER_TEMP/mini-fps.apk"
