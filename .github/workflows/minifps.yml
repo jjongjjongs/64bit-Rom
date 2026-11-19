@@ -49,6 +49,9 @@ jobs:
             || { echo "::error::게임 파일이 APK 에 없다"; exit 1; }
           cp "$apk" "$RUNNER_TEMP/mini-fps.apk"
           ls -l "$RUNNER_TEMP/mini-fps.apk"
+          # 앱 안 업데이트가 읽는 설명. 버전은 build.gradle.kts, 바뀐 점은 release-notes.txt 에서 온다.
+          python3 minifps/release-meta.py "$RUNNER_TEMP/mini-fps.apk" > "$RUNNER_TEMP/mini-fps.json"
+          cat "$RUNNER_TEMP/mini-fps.json"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -60,4 +63,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          .github/scripts/publish-latest.sh minifps "Mini-FPS (mini-fps.apk)" "$RUNNER_TEMP/mini-fps.apk"
+          .github/scripts/publish-latest.sh minifps "Mini-FPS (mini-fps.apk)" "$RUNNER_TEMP/mini-fps.apk" "$RUNNER_TEMP/mini-fps.json"

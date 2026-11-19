@@ -2,6 +2,7 @@ package com.example.minifps;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -13,10 +14,12 @@ import android.webkit.WebViewClient;
 
 /**
  * 게임 한 장을 전체 화면 WebView 로 띄운다. 게임 코드는 assets/index.html 에 통째로 들어 있고
- * (minifps/web/build.py 가 만든다) 네트워크는 쓰지 않는다.
+ * (minifps/web/build.py 가 만든다) 게임은 네트워크를 쓰지 않는다. 네트워크는 {@link Updater} 가 새 버전을
+ * 확인하고 받을 때만 쓴다.
  */
 public final class MainActivity extends Activity {
     private WebView web;
+    private Updater updater;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -46,6 +49,8 @@ public final class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setAllowFileAccess(true);
         web.setWebViewClient(new WebViewClient());
+        updater = new Updater(this, web);
+        web.addJavascriptInterface(updater, "MiniUpdate");
         setContentView(web);
         if (savedInstanceState == null) {
             web.loadUrl("file:///android_asset/index.html");
@@ -53,6 +58,14 @@ public final class MainActivity extends Activity {
             web.restoreState(savedInstanceState);
         }
         immersive();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (Updater.ACTION_STATUS.equals(intent.getAction())) {
+            updater.onStatus(intent);
+        }
     }
 
     @Override

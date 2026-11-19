@@ -5,9 +5,9 @@
   try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
   var stats = { w: 0, l: 0, k: 0, d: 0 }; try { var s0 = JSON.parse(localStorage.getItem('minifps.stats') || 'null'); if (s0) for (var k1 in stats) if (typeof s0[k1] === 'number') stats[k1] = s0[k1]; } catch (e) {}
   function save() { try { localStorage.setItem('minifps.stats', JSON.stringify(stats)); } catch (e) {} try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
-  var SCR = ['s-title', 's-lobby', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res'], from = { 's-load': 's-team', 's-set': 's-lobby' };
+  var SCR = ['s-title', 's-lobby', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res', 's-upd'], from = { 's-load': 's-team', 's-set': 's-lobby' };
   var cur = 's-title';
-  function show(id) { cur = id; SCR.forEach(function (s) { $(s).hidden = s !== id; }); $('hud').hidden = !(id === null || id === 's-pause'); if (id) refresh(id); }
+  function show(id) { cur = id; if (id === 's-lobby' && window.MiniUpdate && cfg.autoUpdate && !upd.asked) { upd.asked = true; setTimeout(function () { updCheck(false); }, 400); } SCR.forEach(function (s) { $(s).hidden = s !== id; }); $('hud').hidden = !(id === null || id === 's-pause'); if (id) refresh(id); }
   if (SV.fatal) { $('s-title').querySelector('.tag').textContent = SV.fatal; }
 
   // ---------- option builders ----------
@@ -37,7 +37,7 @@
     if (id === 's-pause') board();
     if (id === 's-set') {
       [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['gs', 'gyroSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
-      [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
+      [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro'], ['autoup', 'autoUpdate']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
     }
   }
   function board() {
@@ -86,7 +86,36 @@
   // ---------- settings ----------
   [['sens', 'sens'], ['ads', 'adsSens'], ['gs', 'gyroSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
   $('c-reset').addEventListener('click', function () { var d = SV.cfgDefaults; for (var k in d) cfg[k] = JSON.parse(JSON.stringify(d[k])); save(); refresh('s-set'); applyCfg(); });
-  [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
+  [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro'], ['autoup', 'autoUpdate']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
+
+  // ---------- in-app update (Android only: the app exposes window.MiniUpdate) ----------
+  var MU = window.MiniUpdate, upd = { meta: null, phase: 'idle', manual: false, back: 's-lobby', asked: false }, mine = {};
+  if (MU) { try { mine = JSON.parse(MU.version() || '{}'); } catch (e) {} $('up-row').hidden = false; $('up-auto-row').hidden = false; $('up-ver').textContent = mine.name || ''; }
+  function kb(n) { return Math.round(n / 1024).toLocaleString('ko-KR') + ' KB'; }
+  function updShow(phase, msg) {
+    var m = upd.meta || {}; upd.phase = phase; if (cur !== 's-upd') upd.back = cur === 's-set' ? 's-set' : 's-lobby';
+    $('u-cur').textContent = '지금 ' + (mine.name || ''); $('u-title').textContent = m.versionName || ''; $('u-size').textContent = m.size ? '약 ' + kb(m.size) : '';
+    var ul = $('u-notes'); ul.textContent = ''; (m.notes || []).slice(0, 4).forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }); ul.hidden = phase !== 'notice';
+    $('u-prog').hidden = phase !== 'down'; $('u-skip').hidden = phase !== 'notice';
+    $('u-eye').textContent = { notice: '새 버전이 있습니다', down: '새 버전을 받는 중', ready: '받기 완료 · 파일 확인됨', installing: '설치하는 중', error: '업데이트 실패' }[phase];
+    $('u-go').textContent = { notice: '지금 업데이트', down: '받는 중…', ready: '설치', installing: '설치 창을 확인해 주세요', error: '다시 확인' }[phase]; $('u-go').disabled = phase === 'down' || phase === 'installing';
+    $('u-later').textContent = phase === 'down' ? '취소' : phase === 'error' ? '닫기' : '나중에';
+    $('u-msg').textContent = msg || { notice: '설정, 전적, 버튼 배치는 그대로 남습니다.', down: '', ready: '설치를 누르면 안드로이드의 설치 확인 창이 뜰 수 있습니다. 받은 파일은 설치 뒤 자동으로 지웁니다.', installing: '설치가 끝나면 앱이 닫힙니다. 다시 열면 새 버전입니다.', error: '' }[phase];
+    show('s-upd');
+  }
+  SV.upd = { on: function (ev, d) {
+    if (ev === 'checked') { upd.meta = d; $('up-state').textContent = d.newer ? '새 버전 ' + d.versionName + ' 이 있습니다' : '최신 버전입니다'; if (d.newer && (upd.manual || d.versionCode !== cfg.skipCode) && G.state === 'menu') updShow('notice'); upd.manual = false; }
+    else if (ev === 'progress') { if (upd.phase === 'down') { $('u-fill').style.width = d.pct + '%'; $('u-bar').setAttribute('aria-valuenow', d.pct); $('u-msg').textContent = d.pct + '% · ' + kb(d.done) + ' / ' + kb(d.total); } }
+    else if (ev === 'ready') { if (G.state === 'menu') updShow('ready'); else upd.phase = 'ready'; }
+    else if (ev === 'installing') { if (cur === 's-upd') updShow('installing'); }
+    else if (ev === 'cancelled') { upd.phase = 'idle'; if (cur === 's-upd') show(upd.back); }
+    else if (ev === 'error') { $('up-state').textContent = d.message; if (cur === 's-upd' || upd.manual) updShow('error', d.message); upd.manual = false; }
+  } };
+  function updCheck(manual) { if (!MU) return; upd.manual = manual; if (manual) $('up-state').textContent = '확인하는 중…'; MU.check(); }
+  $('up-check').addEventListener('click', function () { updCheck(true); });
+  $('u-go').addEventListener('click', function () { if (upd.phase === 'notice') { $('u-fill').style.width = '0'; updShow('down'); MU.download(); } else if (upd.phase === 'ready') MU.install(); else if (upd.phase === 'error') { show(upd.back); updCheck(true); } });
+  $('u-later').addEventListener('click', function () { if (upd.phase === 'down' || upd.phase === 'ready') MU.cancel(); upd.phase = 'idle'; show(upd.back); });
+  $('u-skip').addEventListener('click', function () { cfg.skipCode = upd.meta.versionCode; save(); upd.phase = 'idle'; show(upd.back); });
 
   // ---------- button layout editor ----------
   var hud = $('hud'), sel = null, dragB = null;
@@ -160,7 +189,7 @@
   window.addEventListener('resize', SV.resize); if (window.ResizeObserver) new ResizeObserver(SV.resize).observe($('cv'));
   if (window.matchMedia('(pointer: coarse)').matches) $('keys').hidden = true;
   // Android back key: pause a running match, step back out of menus, and only then let the app close.
-  SV.back = function () { if (cur === 'edit') { editOff(); return true; } if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
+  SV.back = function () { if (cur === 'edit') { editOff(); return true; } if (cur === 's-upd') { if (upd.phase !== 'installing') $('u-later').click(); return true; } if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
   SV.ui = { begin: begin, match: match, pause: pause, resume: resume, edit: editOn };
   applyCfg(); show('s-title');
 })();
