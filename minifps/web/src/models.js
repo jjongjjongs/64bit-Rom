@@ -163,6 +163,25 @@ var SV = window.SV = window.SV || {};
   SV.gunMetal = new T.MeshStandardMaterial({ vertexColors: true, roughness: .34, metalness: .88, envMapIntensity: 1.25, side: T.DoubleSide });
   SV.gunSoft = new T.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: 0, envMapIntensity: .4, side: T.DoubleSide });
   SV.clothMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .92, metalness: 0, envMapIntensity: .35 });   // fabric and webbing: no shine
+  // Fine surface detail without UVs: a small tiling texture is projected along whichever axis the surface faces, and its value
+  // nudges colour, roughness and the shading normal. Metal gets scratches and handling marks, fabric gets a weave.
+  function detTex(fn) { var c = document.createElement('canvas'); c.width = c.height = 256; var x = c.getContext('2d'); x.fillStyle = '#808080'; x.fillRect(0, 0, 256, 256); fn(x); var t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; return t; }
+  var tMetal = detTex(function (x) { var i, v; for (i = 0; i < 2600; i++) { v = Math.random() < .5 ? 40 : 215; x.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + Math.random() * .22 + ')'; x.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 2, 1); }
+    for (i = 0; i < 90; i++) { v = Math.random() < .65 ? 235 : 30; x.strokeStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + (.12 + Math.random() * .3) + ')'; x.lineWidth = .6 + Math.random(); var px = Math.random() * 256, py = Math.random() * 256, a = (Math.random() - .5) * .7, l = 8 + Math.random() * 60; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke(); }
+    for (i = 0; i < 14; i++) { var bx = Math.random() * 256, by = Math.random() * 256, r = 14 + Math.random() * 30, g = x.createRadialGradient(bx, by, 0, bx, by, r); v = Math.random() < .5 ? 50 : 200; g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.2)'); g.addColorStop(1, 'rgba(128,128,128,0)'); x.fillStyle = g; x.fillRect(bx - r, by - r, r * 2, r * 2); } });
+  var tCloth = detTex(function (x) { var i, j; for (j = 0; j < 256; j += 4) for (i = 0; i < 256; i += 4) { var o = ((i + j) >> 2) % 3; x.fillStyle = o === 0 ? 'rgba(30,30,30,.45)' : o === 1 ? 'rgba(220,220,220,.3)' : 'rgba(110,110,110,.2)'; x.fillRect(i, j, 3, 3); x.fillStyle = 'rgba(20,20,20,.35)'; x.fillRect(i + 3, j, 1, 4); x.fillRect(i, j + 3, 4, 1); }
+    for (i = 0; i < 20; i++) { var bx = Math.random() * 256, by = Math.random() * 256, r = 20 + Math.random() * 40, g = x.createRadialGradient(bx, by, 0, bx, by, r), v = Math.random() < .5 ? 60 : 190; g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.18)'); g.addColorStop(1, 'rgba(128,128,128,0)'); x.fillStyle = g; x.fillRect(bx - r, by - r, r * 2, r * 2); } });
+  function detail(mat, tex, scale, albedo, rough, bump) {
+    mat.onBeforeCompile = function (sh) {
+      sh.uniforms.tDet = { value: tex }; sh.uniforms.uDet = { value: new T.Vector4(scale, albedo, rough, bump) };
+      sh.vertexShader = 'varying vec3 vOP; varying vec3 vON;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vOP = position; vON = normal;');
+      sh.fragmentShader = 'uniform sampler2D tDet; uniform vec4 uDet; varying vec3 vOP; varying vec3 vON;\n' + sh.fragmentShader
+        .replace('#include <color_fragment>', '#include <color_fragment>\n vec3 dW = abs(vON); vec2 dUv = (dW.x > dW.y && dW.x > dW.z ? vOP.zy : (dW.y > dW.z ? vOP.xz : vOP.xy)) * uDet.x; float dH = texture2D(tDet, dUv).r; diffuseColor.rgb *= 1. + (dH - .5) * uDet.y;')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor + (dH - .5) * uDet.z, .05, 1.);')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n { vec3 dSx = dFdx(-vViewPosition), dSy = dFdy(-vViewPosition), dR1 = cross(dSy, normal), dR2 = cross(normal, dSx); float dFd = dot(dSx, dR1); vec3 dGr = sign(dFd) * (dFdx(dH) * dR1 + dFdy(dH) * dR2) * uDet.w; normal = normalize(abs(dFd) * normal - dGr); }');
+    };
+  }
+  detail(SV.gunMetal, tMetal, 9, .5, .55, .0011); detail(SV.gunSoft, tCloth, 60, .32, .25, .0007); detail(SV.clothMat, tCloth, 34, .5, .2, .0016); detail(SV.litMat, tMetal, 9, .4, .5, .0008);
 
   // A limb: a tapered tube between two points with a ball at the far joint.
   function tube(g, a, b, r0, r1, mat) {

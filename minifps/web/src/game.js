@@ -31,7 +31,22 @@
   scene.add(hemi); scene.add(sun); scene.add(sun.target);
   vmScene.add(new T.HemisphereLight(0xdfe6ea, 0x3a342b, 1)); var vmSun = new T.DirectionalLight(0xfff1dc, .5); vmSun.position.set(1, 2, 1); vmScene.add(vmSun);
   var vmRoot = new T.Group(); vmScene.add(vmRoot); var vmLamp = new T.PointLight(0xffffff, 0, 0, 1); vmLamp.position.set(.5, 1.2, -.2); vmScene.add(vmLamp);
-  var flash = new T.Mesh(new T.PlaneGeometry(.16, .16), new T.MeshBasicMaterial({ color: new T.Color(3.2, 2.2, 1.1), transparent: true, opacity: .9, depthTest: false })); flash.visible = false; vmRoot.add(flash);
+  function paint(n, fn) { var c = document.createElement('canvas'); c.width = c.height = n; fn(c.getContext('2d'), n); var t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return t; }
+  var TX = {
+    star: paint(128, function (x, n) { var g = x.createRadialGradient(64, 64, 0, 64, 64, 46), i; g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,225,150,.95)'); g.addColorStop(.6, 'rgba(255,140,40,.4)'); g.addColorStop(1, 'rgba(255,90,0,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n);
+      x.translate(64, 64); for (i = 0; i < 7; i++) { x.rotate(.6 + Math.random() * .9); var l = 34 + Math.random() * 28, w = 5 + Math.random() * 6, q = x.createLinearGradient(0, 0, l, 0); q.addColorStop(0, 'rgba(255,240,200,.95)'); q.addColorStop(1, 'rgba(255,120,20,0)'); x.fillStyle = q; x.beginPath(); x.moveTo(0, -w); x.lineTo(l, 0); x.lineTo(0, w); x.fill(); } }),
+    flame: paint(128, function (x, n) { var g = x.createRadialGradient(40, 64, 0, 40, 64, 62); g.addColorStop(0, 'rgba(255,255,240,1)'); g.addColorStop(.3, 'rgba(255,205,110,.85)'); g.addColorStop(.7, 'rgba(255,110,25,.3)'); g.addColorStop(1, 'rgba(255,60,0,0)'); x.save(); x.translate(0, 64); x.scale(1, .42); x.translate(0, -64); x.fillStyle = g; x.fillRect(0, 0, n, n); x.restore(); }),
+    soft: paint(64, function (x, n) { var g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.5, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n); }),
+    hole: paint(64, function (x, n) { var g = x.createRadialGradient(32, 32, 0, 32, 32, 30), i; g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.28, 'rgba(8,8,8,.95)'); g.addColorStop(.45, 'rgba(40,36,32,.55)'); g.addColorStop(1, 'rgba(30,28,26,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n); x.strokeStyle = 'rgba(15,15,15,.6)'; x.lineWidth = 1; for (i = 0; i < 7; i++) { var a = Math.random() * 6.28, r = 12 + Math.random() * 16; x.beginPath(); x.moveTo(32 + Math.cos(a) * 7, 32 + Math.sin(a) * 7); x.lineTo(32 + Math.cos(a + .2) * r, 32 + Math.sin(a + .2) * r); x.stroke(); } })
+  };
+  var FIRE = new T.Color(3.6, 2.5, 1.2), FLSIZE = { rifle: 1, smg: .8, sniper: 1.6, shotgun: 1.7, pistol: .7 };
+  var flash = new T.Group(); flash.visible = false; vmRoot.add(flash);
+  (function () {
+    var ms = new T.MeshBasicMaterial({ map: TX.star, color: FIRE, transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false }), mf = new T.MeshBasicMaterial({ map: TX.flame, color: FIRE, transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false, side: T.DoubleSide });
+    flash.add(new T.Mesh(new T.PlaneGeometry(.2, .2), ms));
+    var g1 = new T.PlaneGeometry(.3, .13); g1.rotateY(PI / 2); g1.translate(0, 0, -.11); flash.add(new T.Mesh(g1, mf)); var g2 = new T.PlaneGeometry(.3, .13); g2.rotateX(-PI / 2); g2.rotateY(PI / 2); g2.translate(0, 0, -.11); flash.add(new T.Mesh(g2, mf));
+  })();
+  var mzLight = new T.PointLight(0xffb060, 0, 10, 1.4), vmFlash = new T.PointLight(0xffb060, 0, 0, 1); scene.add(mzLight); vmFlash.position.set(.25, .1, -.9); vmScene.add(vmFlash);
   var vms = {}, vmCur = null, vmKick = 0, vmAds = 0, vmSwap = 0, bobT = 0;
 
   // ---------- post-processing ----------
@@ -84,23 +99,48 @@
   };
 
   // ---------- effects ----------
-  var tracers = [], puffs = [], booms = [], fx = new T.Group(); scene.add(fx);
+  var tracers = [], booms = [], fx = new T.Group(), parts = [], decals = [], shells = [], di = 0, si = 0; scene.add(fx);
   (function () {
     var i, m;
     for (i = 0; i < 28; i++) { m = new T.Line(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)), new T.LineBasicMaterial({ color: new T.Color(2.4, 1.8, 1), transparent: true, opacity: .8 })); m.visible = false; m.frustumCulled = false; fx.add(m); tracers.push({ m: m, life: 0 }); }
-    var bg = new T.BoxGeometry(.09, .09, .09);
-    for (i = 0; i < 36; i++) { m = new T.Mesh(bg, new T.MeshBasicMaterial({ color: 0xffffff })); m.visible = false; fx.add(m); puffs.push({ m: m, life: 0, max: 1 }); }
     var sg = new T.IcosahedronGeometry(1, 1);
     for (i = 0; i < 4; i++) { m = new T.Mesh(sg, new T.MeshBasicMaterial({ color: new T.Color(4, 2.2, .8), transparent: true, opacity: .8 })); m.visible = false; fx.add(m); booms.push({ m: m, life: 0 }); }
+    // sprites: each has its own material, so colour and opacity are per particle
+    for (i = 0; i < 64; i++) { m = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, transparent: true, depthWrite: false, fog: false })); m.visible = false; fx.add(m); parts.push({ m: m, life: 0, max: 1, v: new T.Vector3(), g: 0, s0: 1, s1: 1, a: 1 }); }
+    var dg = new T.PlaneGeometry(.11, .11), dm = new T.MeshBasicMaterial({ map: TX.hole, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    for (i = 0; i < 48; i++) { m = new T.Mesh(dg, dm); m.visible = false; fx.add(m); decals.push(m); }
+    var cg = new T.CylinderGeometry(.0055, .0055, .024, 6), cm = new T.MeshStandardMaterial({ color: 0xc9a14a, roughness: .3, metalness: .9 });
+    for (i = 0; i < 12; i++) { m = new T.Mesh(cg, cm); m.visible = false; fx.add(m); shells.push({ m: m, life: 0, v: new T.Vector3(), floor: 0, hit: false }); }
   })();
   var ti = 0, pi2 = 0;
-  function tracer(a, b) { var t = tracers[ti = (ti + 1) % tracers.length], p = t.m.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true; t.m.visible = true; t.life = .07; }
-  function puff(p, color, life, size) { var q = puffs[pi2 = (pi2 + 1) % puffs.length]; q.m.position.copy(p); q.m.material.color.setHex(color).convertSRGBToLinear(); q.m.scale.setScalar(size || 1); q.m.visible = true; q.life = q.max = life || .22; }
+  function tracer(a, b) { var t = tracers[ti = (ti + 1) % tracers.length], p = t.m.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true; t.m.visible = true; t.life = .05; }
+  // one particle: texture, colour (may be brighter than white), additive or not, life, start and end size, opacity, velocity, gravity
+  function part(tex, col, add, pos, life, s0, s1, alpha, vx, vy, vz, grav) {
+    var q = parts[pi2 = (pi2 + 1) % parts.length], mt = q.m.material; mt.map = tex; mt.color.copy(col); mt.blending = add ? T.AdditiveBlending : T.NormalBlending; mt.rotation = Math.random() * 6.28;
+    q.m.position.copy(pos); q.life = q.max = life; q.s0 = s0; q.s1 = s1; q.a = alpha; q.v.set(vx || 0, vy || 0, vz || 0); q.g = grav || 0; q.m.scale.setScalar(s0); mt.opacity = alpha; q.m.visible = true;
+  }
+  var cSmoke = new T.Color(.5, .5, .5), cDust = new T.Color(.62, .58, .5), cBlood = new T.Color(.32, .02, .02), cSpark = new T.Color(4, 2.6, 1), vP = new T.Vector3(), vQ = new T.Vector3();
+  function puff(p, color, life, size) { part(TX.soft, color === 0xc23b2a ? cBlood : cDust, false, p, life + .15, .08 * size, .4 * size, .5, 0, .3, 0, 0); }
+  // a bullet striking the world: a hole on the surface, a puff of dust thrown back along the normal, a few sparks
+  function impact(p, n) {
+    var d = decals[di = (di + 1) % decals.length], i; d.position.copy(p).addScaledVector(n, .012); d.lookAt(vP.copy(d.position).add(n)); d.rotation.z = Math.random() * 6.28; d.scale.setScalar(.7 + Math.random() * .7); d.visible = true;
+    part(TX.soft, cDust, false, p, .45, .07, .5, .45, n.x * .9, n.y * .9 + .25, n.z * .9, 0);
+    for (i = 0; i < 3; i++) if (Math.random() < .6) part(TX.soft, cSpark, true, p, .16 + Math.random() * .14, .035, .012, 1, n.x * 3 + rnd(-2, 2), n.y * 3 + rnd(0, 2.5), n.z * 3 + rnd(-2, 2), 9);
+  }
+  function muzzleFx(p, dir, size, mine) {
+    if (!mine) part(TX.star, FIRE, true, p, .055, .45 * size, .7 * size, 1, 0, 0, 0, 0);
+    part(TX.soft, cSmoke, false, vP.copy(p).addScaledVector(dir, .12), .55 + Math.random() * .3, .07 * size, .55 * size, .2, dir.x * 1.1, .35, dir.z * 1.1, 0);
+    mzLight.position.copy(p).addScaledVector(dir, .3); mzLight.intensity = 3.2 * size; if (mine) vmFlash.intensity = 2.6 * size;
+  }
+  function shell(p, vx, vy, vz, floor) { var q = shells[si = (si + 1) % shells.length]; q.m.position.copy(p); q.v.set(vx, vy, vz); q.life = 1.3; q.floor = floor + .008; q.hit = false; q.m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); q.m.visible = true; }
   function updFx(dt) {
-    var i, o;
+    var i, o, k;
     for (i = 0; i < tracers.length; i++) { o = tracers[i]; if (o.life > 0) { o.life -= dt; if (o.life <= 0) o.m.visible = false; } }
-    for (i = 0; i < puffs.length; i++) { o = puffs[i]; if (o.life > 0) { o.life -= dt; o.m.scale.multiplyScalar(1 - dt * 3); if (o.life <= 0) o.m.visible = false; } }
-    for (i = 0; i < booms.length; i++) { o = booms[i]; if (o.life > 0) { o.life -= dt; var k = 1 - o.life / .35; o.m.scale.setScalar(.6 + k * 5); o.m.material.opacity = .85 * (1 - k); if (o.life <= 0) o.m.visible = false; } }
+    for (i = 0; i < parts.length; i++) { o = parts[i]; if (o.life <= 0) continue; o.life -= dt; if (o.life <= 0) { o.m.visible = false; continue; } k = 1 - o.life / o.max; o.v.y -= o.g * dt; o.m.position.addScaledVector(o.v, dt); o.m.scale.setScalar(o.s0 + (o.s1 - o.s0) * k); o.m.material.opacity = o.a * (1 - k * k); }
+    for (i = 0; i < shells.length; i++) { o = shells[i]; if (o.life <= 0) continue; o.life -= dt; if (o.life <= 0) { o.m.visible = false; continue; } o.v.y -= 9.8 * dt; o.m.position.addScaledVector(o.v, dt); o.m.rotation.x += dt * 14; o.m.rotation.z += dt * 9;
+      if (o.m.position.y < o.floor) { o.m.position.y = o.floor; o.v.y *= -.35; o.v.x *= .5; o.v.z *= .5; if (!o.hit) { o.hit = true; ping(4200 + Math.random() * 2400, .045); } } }
+    for (i = 0; i < booms.length; i++) { o = booms[i]; if (o.life > 0) { o.life -= dt; k = 1 - o.life / .35; o.m.scale.setScalar(.6 + k * 5); o.m.material.opacity = .85 * (1 - k); if (o.life <= 0) o.m.visible = false; } }
+    mzLight.intensity *= Math.exp(-dt * 34); vmFlash.intensity *= Math.exp(-dt * 34);
   }
 
   // ---------- rain ----------
@@ -118,18 +158,20 @@
 
   // ---------- collision ----------
   var boxes = [];
+  var rbAx = -1, rbSg = 1, hitNrm = new T.Vector3(0, 1, 0);   // which face the last rayBox entered through; rayWorld turns it into a world normal
   function rayBox(ox, oy, oz, dx, dy, dz, b) {
-    var t0 = 0, t1 = 1e9, a, c, inv;
-    if (Math.abs(dx) < 1e-9) { if (ox < b.minx || ox > b.maxx) return -1; } else { inv = 1 / dx; a = (b.minx - ox) * inv; c = (b.maxx - ox) * inv; if (a > c) { var s = a; a = c; c = s; } if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 > t1) return -1; }
-    if (Math.abs(dy) < 1e-9) { if (oy < b.miny || oy > b.maxy) return -1; } else { inv = 1 / dy; a = (b.miny - oy) * inv; c = (b.maxy - oy) * inv; if (a > c) { var s2 = a; a = c; c = s2; } if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 > t1) return -1; }
-    if (Math.abs(dz) < 1e-9) { if (oz < b.minz || oz > b.maxz) return -1; } else { inv = 1 / dz; a = (b.minz - oz) * inv; c = (b.maxz - oz) * inv; if (a > c) { var s3 = a; a = c; c = s3; } if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 > t1) return -1; }
-    return t0;
+    var t0 = 0, t1 = 1e9, a, c, inv, s, ax = -1;
+    if (Math.abs(dx) < 1e-9) { if (ox < b.minx || ox > b.maxx) return -1; } else { inv = 1 / dx; a = (b.minx - ox) * inv; c = (b.maxx - ox) * inv; if (a > c) { s = a; a = c; c = s; } if (a > t0) { t0 = a; ax = 0; } if (c < t1) t1 = c; if (t0 > t1) return -1; }
+    if (Math.abs(dy) < 1e-9) { if (oy < b.miny || oy > b.maxy) return -1; } else { inv = 1 / dy; a = (b.miny - oy) * inv; c = (b.maxy - oy) * inv; if (a > c) { s = a; a = c; c = s; } if (a > t0) { t0 = a; ax = 1; } if (c < t1) t1 = c; if (t0 > t1) return -1; }
+    if (Math.abs(dz) < 1e-9) { if (oz < b.minz || oz > b.maxz) return -1; } else { inv = 1 / dz; a = (b.minz - oz) * inv; c = (b.maxz - oz) * inv; if (a > c) { s = a; a = c; c = s; } if (a > t0) { t0 = a; ax = 2; } if (c < t1) t1 = c; if (t0 > t1) return -1; }
+    rbAx = ax; rbSg = ax === 0 ? (dx > 0 ? -1 : 1) : ax === 1 ? (dy > 0 ? -1 : 1) : (dz > 0 ? -1 : 1); return t0;
   }
   function rayWorld(o, d, max) {
-    var best = max, i, t, b, ex, ez; if (d.y < -1e-6) { t = -o.y / d.y; if (t >= 0 && t < best) best = t; }
+    var best = max, i, t, b, ex, ez, hb = null, hax = 1, hsg = 1; if (d.y < -1e-6) { t = -o.y / d.y; if (t >= 0 && t < best) best = t; }
     for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.soft) continue;
       if (b.rot) { ex = o.x - b.ox; ez = o.z - b.oz; t = rayBox(ex * b.c - ez * b.s, o.y, ex * b.s + ez * b.c, d.x * b.c - d.z * b.s, d.y, d.x * b.s + d.z * b.c, b); } else t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b);
-      if (t >= 0 && t < best) best = t; }
+      if (t >= 0 && t < best) { best = t; hb = b; hax = rbAx; hsg = rbSg; } }
+    if (!hb || hax < 0) hitNrm.set(0, 1, 0); else if (hax === 1) hitNrm.set(0, hsg, 0); else { ex = hax === 0 ? hsg : 0; ez = hax === 2 ? hsg : 0; if (hb.rot) hitNrm.set(ex * hb.c + ez * hb.s, 0, -ex * hb.s + ez * hb.c); else hitNrm.set(ex, 0, ez); }
     return best;
   }
   var tb = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
@@ -221,18 +263,47 @@
   }
 
   // ---------- sound ----------
-  var ac = null, noise = null;
+  // Every sound is synthesised. A gunshot is three layers started together: a bright crack (high-passed noise, a few tens of
+  // milliseconds), the body of the report (low-passed noise whose filter closes as it decays) and a low thump (a sine falling in
+  // pitch). The sum is saturated, compressed, and part of it sent through a reverb made from a decaying noise burst. Distance
+  // delays the sound, dulls it, and leaves more of the echo than the shot.
+  var ac = null, noise = null, master = null, verb = null, irOut = null, irIn = null;
+  var SND = { rifle: { b: 2600, t: [150, 48], len: .19, crk: .9, tail: .5, g: 1 }, smg: { b: 3400, t: [210, 80], len: .13, crk: .8, tail: .32, g: .8 }, sniper: { b: 1700, t: [105, 32], len: .36, crk: 1.1, tail: 1, g: 1.3 },
+    shotgun: { b: 1300, t: [120, 36], len: .3, crk: .7, tail: .8, g: 1.25 }, pistol: { b: 3000, t: [190, 70], len: .12, crk: .85, tail: .38, g: .85 }, boom: { b: 700, t: [80, 24], len: .75, crk: .4, tail: 1.3, g: 1.6 } };
+  function impulse(len, decay, slap) {
+    var n = (ac.sampleRate * len) | 0, buf = ac.createBuffer(2, n, ac.sampleRate), ch, i;
+    for (ch = 0; ch < 2; ch++) { var d = buf.getChannelData(ch), lp = 0; for (i = 0; i < n; i++) { var t = i / ac.sampleRate, k = Math.min(.9, .15 + t / len * .8); lp += ((Math.random() * 2 - 1) - lp) * (1 - k); d[i] = lp * Math.exp(-t * decay) * (1 + (slap && Math.abs(t - slap) < .012 ? 2.2 : 0)); } }
+    return buf;
+  }
   SV.audio = function () {
-    if (ac || !cfg.sound) return; try { ac = new (window.AudioContext || window.webkitAudioContext)(); var n = ac.sampleRate * .6, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0); for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; noise = buf; } catch (e) { ac = null; }
+    if (ac || !cfg.sound) return;
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)(); var n = ac.sampleRate * .6, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0), i; for (i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; noise = buf;
+      var sh = ac.createWaveShaper(), cv2 = new Float32Array(257), comp = ac.createDynamicsCompressor(), vg = ac.createGain(); for (i = 0; i < 257; i++) cv2[i] = Math.tanh((i / 128 - 1) * 1.8); sh.curve = cv2;
+      master = ac.createGain(); master.gain.value = .9; master.connect(sh); sh.connect(comp); comp.connect(ac.destination);
+      irOut = impulse(1.5, 3.1, .17); irIn = impulse(.8, 5.5, .05); verb = ac.createConvolver(); verb.buffer = G.map && G.map.indoor ? irIn : irOut; vg.gain.value = .5; verb.connect(vg); vg.connect(comp);
+    } catch (e) { ac = null; }
   };
-  function sndShot(rate, vol) {
-    if (!ac || !cfg.sound || vol < .02) return; var s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
-    s.buffer = noise; s.playbackRate.value = rate; f.type = 'lowpass'; f.frequency.setValueAtTime(4200 * rate, t); f.frequency.exponentialRampToValueAtTime(500, t + .14);
-    g.gain.setValueAtTime(.5 * vol, t); g.gain.exponentialRampToValueAtTime(.001, t + .22 / Math.max(rate, .5)); s.connect(f); f.connect(g); g.connect(ac.destination); s.start(t); s.stop(t + .5);
+  function env(t, peak, dur) { var g = ac.createGain(); g.gain.setValueAtTime(Math.max(peak, .0002), t); g.gain.exponentialRampToValueAtTime(.0002, t + dur); return g; }
+  function nsrc(t, dur, rate) { var s = ac.createBufferSource(); s.buffer = noise; s.playbackRate.value = rate || 1; s.start(t, Math.random() * .25); s.stop(t + dur + .02); return s; }
+  function gunSnd(id, vol, dist) {
+    if (!ac || !cfg.sound || vol < .02) return; dist = dist || 0;
+    var P = SND[id], t = ac.currentTime + Math.min(.3, dist / 340), k = P.g * vol, out = ac.createBiquadFilter(), send = ac.createGain(), f;
+    out.type = 'lowpass'; out.frequency.value = 15000 / (1 + dist / 9); out.connect(master); send.gain.value = P.tail * (.3 + Math.min(1, dist / 40) * .6); out.connect(send); send.connect(verb);
+    var a = nsrc(t, .1), hp = ac.createBiquadFilter(), ga = env(t, P.crk * k * .9, .028 + P.len * .1); hp.type = 'highpass'; hp.frequency.value = 1700; a.connect(hp); hp.connect(ga); ga.connect(out);
+    var b = nsrc(t, P.len, .7), gb = env(t, k * 1.1, P.len); f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(P.b, t); f.frequency.exponentialRampToValueAtTime(260, t + P.len); b.connect(f); f.connect(gb); gb.connect(out);
+    var o = ac.createOscillator(), go = env(t, k * 1.25, P.len * .8); o.frequency.setValueAtTime(P.t[0], t); o.frequency.exponentialRampToValueAtTime(P.t[1], t + P.len * .6); o.connect(go); go.connect(out); o.start(t); o.stop(t + P.len + .05);
+  }
+  // small mechanical noises: a filtered click (bolt, magazine), a metallic ping (spent case), a dull thud (footstep)
+  function tick(delay, freq, vol, q) { if (!ac || !cfg.sound) return; var t = ac.currentTime + delay, s = nsrc(t, .05), f = ac.createBiquadFilter(), g = env(t, vol, .035); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 3; s.connect(f); f.connect(g); g.connect(master); }
+  function ping(freq, vol) { if (!ac || !cfg.sound) return; var t = ac.currentTime, o = ac.createOscillator(), g = env(t, vol, .09); o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(master); o.start(t); o.stop(t + .1); }
+  function thud(vol) { if (!ac || !cfg.sound) return; var t = ac.currentTime, s = nsrc(t, .08, .5), f = ac.createBiquadFilter(), g = env(t, vol, .07); f.type = 'lowpass'; f.frequency.value = 260; s.connect(f); f.connect(g); g.connect(master); }
+  function sndShot(rate, vol) {   // the knife's swish
+    if (!ac || !cfg.sound || vol < .02) return; var t = ac.currentTime, s = nsrc(t, .2, rate), f = ac.createBiquadFilter(), g = env(t, .4 * vol, .16); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(3800, t + .12); f.Q.value = 1.2; s.connect(f); f.connect(g); g.connect(master);
   }
   function sndTone(freq, dur, vol, type) {
     if (!ac || !cfg.sound) return; var o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime; o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); o.connect(g); g.connect(master || ac.destination); o.start(t); o.stop(t + dur);
   }
 
   // ---------- actors ----------
@@ -280,7 +351,7 @@
     for (i = 0; i < G.actors.length; i++) { e = G.actors[i]; if (!e.alive || e.team === a.team) continue; r = rayActor(o, d, e); if (r && r.t < tw && (!best || r.t < best.t)) { best = r; best.actor = e; } }
     return best || { t: tw, actor: null, world: tw < range };
   }
-  function reload(a) { var g = a.guns[a.slot], w = W[g.id]; if (w.melee || g.reload > 0 || g.mag >= w.mag || g.res <= 0) return; g.reload = w.reload; a.ads = false; if (a.isPlayer) { sndTone(300, .05, .08); vmSwap = .25; } }
+  function reload(a) { var g = a.guns[a.slot], w = W[g.id]; if (w.melee || g.reload > 0 || g.mag >= w.mag || g.res <= 0) return; g.reload = w.reload; a.ads = false; if (a.isPlayer) { vmSwap = .25; tick(.12, 1800, .22); tick(w.reload * .55, 900, .3, 2); tick(w.reload * .84, 2600, .22); tick(w.reload * .9, 1500, .22); } }
   function fire(a, o, dir, muzzle) {
     var g = a.guns[a.slot], w = W[g.id], i, res;
     if (g.cool > 0 || g.reload > 0) return false;
@@ -299,11 +370,14 @@
       res = castShot(a, o, vD, w.range); vH.copy(o).addScaledVector(vD, res.t);
       if (i < 3) tracer(muzzle, vH);
       if (res.actor) { var dmg = w.dmg * (res.t > w.fall ? Math.max(.45, 1 - (res.t - w.fall) / w.range) : 1) * (res.head ? w.head : 1); if (hurt(res.actor, dmg, a, res.head, g.id)) { puff(vH, 0xc23b2a, .2, 1.3); if (a.isPlayer) G.stats.hits += 1 / w.pellets; } }
-      else if (res.world) puff(vH, 0xd8d2c4, .2, 1);
+      else if (res.world) impact(vH, hitNrm);
     }
     a.bloom = Math.min(a.bloom + w.bloom, .04);
-    if (a.isPlayer) { G.stats.shots++; a.pitch = clamp(a.pitch + w.recoil * rnd(.7, 1.2), -1.5, 1.5); a.yaw += w.recoil * rnd(-.35, .35); vmKick = 1; flash.visible = true; G.flashT = .045; sndShot(w.snd, 1); if (w.scope) a.ads = false; }
-    else { puff(muzzle, 0xffc977, .06, 2.2); var dd = Math.hypot(a.pos.x - G.player.pos.x, a.pos.z - G.player.pos.z); sndShot(w.snd * .9, clamp(1 - dd / 60, 0, 1) * .55); }
+    if (a.isPlayer) { G.stats.shots++; a.pitch = clamp(a.pitch + w.recoil * rnd(.7, 1.2), -1.5, 1.5); a.yaw += w.recoil * rnd(-.35, .35); vmKick = 1; flash.visible = true; G.flashT = .05; flash.rotation.z = Math.random() * 6.28; flash.scale.setScalar((FLSIZE[g.id] || 1) * rnd(.8, 1.25)); muzzleFx(muzzle, dir, FLSIZE[g.id] || 1, true);
+      gunSnd(g.id, 1, 0); tick(.035, 3400, .12); if (g.id === 'sniper') { tick(.45, 2200, .2); tick(.62, 1500, .24, 2); tick(.8, 2600, .2); } else if (g.id === 'shotgun') { tick(.3, 1200, .28, 2); tick(.44, 1700, .26, 2); }
+      vP.copy(o).addScaledVector(dir, .35).addScaledVector(vR, -.14); vP.y -= .08; shell(vP, -vR.x * 2 + dir.x * .4 + rnd(-.3, .3), 1.6 + rnd(0, .6), -vR.z * 2 + dir.z * .4 + rnd(-.3, .3), a.pos.y);   // spent case, thrown to the right
+      if (w.scope) a.ads = false; }
+    else { var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); if (dd < 70) muzzleFx(muzzle, dir, FLSIZE[g.id] || 1, false); gunSnd(g.id, clamp(1 - dd / 95, 0, 1) * .8, dd); }
     if (g.mag <= 0 && !a.isPlayer) reload(a);
     return true;
   }
@@ -322,7 +396,7 @@
       n.m.position.copy(n.pos); n.m.rotation.x += dt * 8; n.t -= dt;
       if (n.t <= 0) {
         var bm = booms[i % booms.length]; bm.m.position.copy(n.pos); bm.m.visible = true; bm.life = .35; scene.remove(n.m); G.nades.splice(i, 1);
-        var dp = Math.hypot(n.pos.x - G.player.pos.x, n.pos.z - G.player.pos.z); sndShot(.3, clamp(1.4 - dp / 40, 0, 1.2)); if (dp < 12) G.shake = .35;
+        var dp = Math.hypot(n.pos.x - G.player.pos.x, n.pos.z - G.player.pos.z); gunSnd('boom', clamp(1.4 - dp / 40, 0, 1.2), dp); if (dp < 12) G.shake = .35; for (k = 0; k < 6; k++) part(TX.soft, k < 2 ? cSpark : cSmoke, k < 2, n.pos, k < 2 ? .25 : 1.1, k < 2 ? 1.2 : .6, k < 2 ? 3 : 3.2, k < 2 ? 1 : .35, rnd(-1.5, 1.5), rnd(.5, 2.4), rnd(-1.5, 1.5), 0); mzLight.position.copy(n.pos); mzLight.intensity = 9;
         for (k = 0; k < G.actors.length; k++) { var e = G.actors[k]; if (!e.alive || (e.team === n.by.team && e !== n.by)) continue; eye(e, vH); vO.copy(n.pos); vO.y += .3; vD.subVectors(vH, vO); var d = vD.length(); if (d > 6) continue; vD.normalize(); if (rayWorld(vO, vD, d) < d - .3) continue; hurt(e, 150 * (1 - d / 6.5), n.by, false, 'grenade'); }
       }
     }
@@ -359,6 +433,7 @@
     var s = Math.sin(p.yaw), c = Math.cos(p.yaw), vx = (inp.mx * c - inp.mz * s) * sp, vz = (-inp.mx * s - inp.mz * c) * sp;
     if (inp.jump) { if (p.ground) { p.vy = 6.6; p.crouch = false; } inp.jump = false; }
     p.moving = mag > .1; moveActor(p, vx, vz, dt);
+    if (p.moving && p.ground) { G.stepT = (G.stepT || 0) - dt * sp / 4.4; if (G.stepT <= 0) { G.stepT = .36; thud(p.crouch ? .05 : .11); } }
     eye(p, vO); vD.set(-Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch), -Math.cos(p.yaw) * Math.cos(p.pitch));
     // aim assist: slow the view near a visible enemy, and optionally pull the trigger
     G.assistSlow = false; var onTarget = false;
@@ -500,7 +575,7 @@
       s = B.planted; s.t -= dt; s.beep -= dt; bombLed.visible = s.beep > .12 || s.beep < .06;
       if (s.beep <= 0) { s.beep = s.t > 10 ? 1 : s.t > 5 ? .5 : .22; sndTone(1250, .05, clamp(.2 - Math.hypot(s.x - p.pos.x, s.z - p.pos.z) / 220, .02, .2), 'square'); }
       if (s.t <= 0) {
-        var bm = booms[0]; bm.m.position.set(s.x, 1, s.z); bm.m.visible = true; bm.life = .5; G.shake = .9; sndShot(.2, 1.4); bombMesh.visible = false;
+        var bm = booms[0]; bm.m.position.set(s.x, 1, s.z); bm.m.visible = true; bm.life = .5; G.shake = .9; gunSnd('boom', 1.4, Math.hypot(s.x - p.pos.x, s.z - p.pos.z)); bombMesh.visible = false;
         for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (a.alive && Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < 9) { a.prot = 0; hurt(a, 500, a, false, 'grenade'); } }
         roundEnd(B.atk, '폭탄 폭발'); return;
       }
@@ -542,6 +617,7 @@
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
+    if (verb) verb.buffer = map.indoor ? irIn : irOut;
     setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
     map.group.traverse(function (o) { var m = o.material; if (m && m.userData.surf === 'conc' && map.rain) { m.roughness = .3; m.metalness = .05; m.envMapIntensity = 1.4; } });   // wet ground
     var lit = cfg.quality && map.lights.length > 0; vmLamp.intensity = 0; LAMPS.forEach(function (p) { p.src = null; p.k = 0; p.l.intensity = 0; if (lit) scene.add(p.l); else scene.remove(p.l); });
