@@ -19,7 +19,7 @@
   var EYE = 1.63, EYEC = 1.12, RAD = .35;
 
   var G = SV.G = { state: 'menu', actors: [], nades: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
-  var inp = SV.inp = { gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
+  var inp = SV.inp = { use: false, gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
   var cfg = SV.cfg;
 
   // ---------- renderer ----------
@@ -175,16 +175,16 @@
   function guns(primary, bot) { return [primary, 'pistol', 'knife'].map(function (id) { return { id: id, mag: W[id].mag, res: bot ? 9999 : W[id].res, cool: 0, reload: 0 }; }); }
   function actor(team, name, isPlayer, primary) {
     var a = { team: team, name: name, isPlayer: isPlayer, primary: primary, pos: new T.Vector3(), vy: 0, yaw: 0, pitch: 0, hp: 100, alive: false, respawn: 0, prot: 0, crouch: false, ground: true,
-      kills: 0, deaths: 0, slot: 0, guns: null, nade: 1, bloom: 0, ads: false, walk: 0, moving: false, dead: 0, spot: 0, model: null,
+      kills: 0, deaths: 0, slot: 0, guns: null, nade: 1, bloom: 0, ads: false, walk: 0, moving: false, dead: 0, spot: 0, model: null, useP: 0, useAt: null, idx: 0,
       ai: { tgt: null, seen: 0, path: [], pathT: 0, goal: null, think: Math.random() * .2, strafe: 1, strafeT: 0, burst: 0, pause: 0, lastX: 0, lastZ: 0, stuckT: 0, hurtBy: null, lastSeen: null, lastSeenT: 99 } };
     if (!isPlayer) { a.model = SV.soldier(team, primary); scene.add(a.model.root); a.model.root.visible = false; if (team === G.match.team) { var mk = new T.Mesh(new T.OctahedronGeometry(.09), new T.MeshBasicMaterial({ color: team === 'A' ? 0xffb347 : 0x6cc4e0, fog: false })); mk.position.y = 2.1; a.model.root.add(mk); } }
     return a;
   }
   function eye(a, out) { return out.set(a.pos.x, a.pos.y + (a.crouch ? EYEC : EYE), a.pos.z); }
   function spawn(a) {
-    var pts = G.map.spawns[a.team], best = pts[0], bd = -1, i, j;
+    var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
-    a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = a.team === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
+    a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); }
@@ -198,11 +198,12 @@
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
       v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001;
-      if (by !== v) { by.kills++; G.score[by.team]++; }
+      if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
+      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = snap(v.pos.x, v.pos.z); }
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
-      if (G.score[by.team] >= G.match.target) endMatch();
+      if (!G.bomb && G.score[by.team] >= G.match.target) endMatch();
     }
     return true;
   }
@@ -324,7 +325,9 @@
     if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z }; ai.lastSeenT = 0; best.spot = 1.5; }
     // choose where to walk
     var want = null, pref = { rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
-    if (best) { if (bd > pref) want = { x: best.pos.x, z: best.pos.z }; else { ai.path = []; ai.goal = null; } }
+    var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
+    if (ob && (!best || ob.force)) { if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2) { ai.path = []; ai.goal = null; } else want = ob; }
+    else if (best) { if (bd > pref) want = { x: best.pos.x, z: best.pos.z }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; want = { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; } ai.goal = null; }
     if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z }; ai.path = findPath(a.pos.x, a.pos.z, want.x, want.z); ai.pathT = 0; }
@@ -341,14 +344,15 @@
     if (tgt) {
       ai.seen += dt; var tx = tgt.pos.x - a.pos.x, tz = tgt.pos.z - a.pos.z, td = Math.hypot(tx, tz), ty = tgt.pos.y + (tgt.crouch ? .85 : 1.25) - (a.pos.y + EYE);
       wantYaw = Math.atan2(-tx, -tz); wantPitch = Math.atan2(ty, td);
-      if (!ai.path.length) { ai.strafeT -= dt; if (ai.strafeT <= 0) { ai.strafeT = rnd(.5, 1.5); ai.strafe = Math.random() < .5 ? -1 : Math.random() < .2 ? 0 : 1; } var s = Math.sin(wantYaw), c = Math.cos(wantYaw); vx = c * ai.strafe * 2.6; vz = -s * ai.strafe * 2.6; }
+      if (!ai.path.length && !ai.use) { ai.strafeT -= dt; if (ai.strafeT <= 0) { ai.strafeT = rnd(.5, 1.5); ai.strafe = Math.random() < .5 ? -1 : Math.random() < .2 ? 0 : 1; } var s = Math.sin(wantYaw), c = Math.cos(wantYaw); vx = c * ai.strafe * 2.6; vz = -s * ai.strafe * 2.6; }
     }
+    if (!tgt && !ai.path.length && ai.look) wantYaw = Math.atan2(a.pos.x - ai.look.x, a.pos.z - ai.look.z);
     var turn = df.turn * dt; a.yaw += clamp(angd(wantYaw, a.yaw), -turn, turn); a.pitch += clamp(wantPitch - a.pitch, -turn, turn);
     a.moving = (vx || vz) !== 0; moveActor(a, vx, vz, dt);
     // unstick
     ai.stuckT += dt; if (ai.stuckT > 1.2) { if (a.moving && Math.hypot(a.pos.x - ai.lastX, a.pos.z - ai.lastZ) < .35) { ai.path = []; ai.goal = null; ai.lastSeenT = 99; } ai.lastX = a.pos.x; ai.lastZ = a.pos.z; ai.stuckT = 0; }
     // shoot
-    if (!G.match.practice && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
+    if (!G.match.practice && !ai.use && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
       ai.pause -= dt;
       if (ai.pause <= 0 && g.cool <= 0) {
         eye(a, vO); vD.set(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch));
@@ -356,6 +360,73 @@
         a.ads = w.scope; if (fire(a, vO, vD, vM)) { if (w.auto) { if (ai.burst <= 0) ai.burst = (rnd(3, 7)) | 0; if (--ai.burst <= 0) ai.pause = rnd(.25, .65); } else ai.pause = rnd(.05, .3) + (w.scope ? .3 : 0); }
       }
     }
+  }
+  // ---------- bomb mission ----------
+  // Rounds without respawn. The attacking side carries one bomb to site A or B and holds "use" for 3 s; it goes off 35 s later
+  // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
+  var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0]], PLANT = 3, DEFUSE = 5, FUSE = 35;
+  var bombMesh = new T.Mesh(new T.BoxGeometry(.36, .16, .24), new T.MeshLambertMaterial({ color: 0x2a2e31 })), bombLed = new T.Mesh(new T.BoxGeometry(.09, .05, .09), new T.MeshBasicMaterial({ color: 0xff3b2a, fog: false }));
+  bombLed.position.y = .1; bombMesh.add(bombLed); bombMesh.visible = false; scene.add(bombMesh);
+  function snap(x, z) { var c = freeNear(cellOf(x, z)); return { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; }
+  function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
+  function siteAt(pos) { var s = G.map.sites, i; for (i = 0; i < s.length; i++) if (Math.abs(pos.x - s[i].x) < 2.6 && Math.abs(pos.z - s[i].z) < 2.6) return s[i]; return null; }
+  // where a bot should be, and whether it should be holding "use" there
+  function objective(a) {
+    var B = G.bomb, atk = a.team === B.atk, off = POSTS[a.idx % POSTS.length], s, o, far = { x: G.map.spawns.B[2].x, z: 0 };
+    if (B.phase !== 'live') return { x: a.pos.x, z: a.pos.z };
+    if (B.planted) {
+      s = B.planted; if (atk) { o = snap(s.x + off[0] * 1.7, s.z + off[1] * 1.7); o.look = far; return o; }
+      return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.3, force: s.t < 14 || a.useP > 2.5 };
+    }
+    if (!atk) { s = G.map.sites[a.idx % 2]; o = snap(s.x + off[0], s.z + off[1]); o.look = { x: 0, z: 0 }; return o; }
+    if (B.drop) return { x: B.drop.x, z: B.drop.z, force: true };
+    s = G.map.sites[B.plan];
+    if (B.carrier === a) return { x: s.x, z: s.z, use: Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 1.4, force: a.useP > 1.5 };
+    if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9);   // escort the player
+    o = snap(s.x + off[0], s.z + off[1]); o.look = far; return o;
+  }
+  function roundEnd(winner, why) {
+    var B = G.bomb; if (B.phase !== 'live') return; B.phase = 'post'; B.postT = 4; G.score[winner]++; B.round++; inp.use = false;
+    var won = winner === G.player.team; showMsg((won ? '라운드 승리' : '라운드 패배') + ' · ' + why, 3.8); sndTone(won ? 880 : 220, .35, .15);
+  }
+  function newRound() {
+    var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
+    B.phase = 'live'; B.t = 120; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; bombMesh.visible = false; G.killer = null;
+    G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
+    G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
+    at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
+    showMsg('라운드 ' + B.round + (B.swapped && B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2);
+  }
+  function updBomb(dt) {
+    var B = G.bomb, def = B.atk === 'A' ? 'B' : 'A', i, a, s, kind, want, p = G.player;
+    if (B.phase === 'post') { B.postT -= dt; if (B.postT <= 0) { if (G.score.A >= B.need || G.score.B >= B.need) endMatch(); else newRound(); } return; }
+    for (i = 0; i < G.actors.length; i++) {
+      a = G.actors[i]; if (!a.alive) { a.useP = 0; a.useAt = null; continue; }
+      if (B.drop && a.team === B.atk && Math.hypot(a.pos.x - B.drop.x, a.pos.z - B.drop.z) < 1.5) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
+      kind = null; s = null;
+      if (!B.planted) { if (B.carrier === a && (s = siteAt(a.pos))) kind = 'plant'; }
+      else if (a.team === def && Math.hypot(a.pos.x - B.planted.x, a.pos.z - B.planted.z) < 1.7) kind = 'defuse';
+      if (a.isPlayer) B.can = kind;
+      want = a.isPlayer ? inp.use : a.ai.use;
+      if (!kind || !want) { a.useP = 0; a.useAt = null; continue; }
+      if (!a.useAt || Math.hypot(a.pos.x - a.useAt.x, a.pos.z - a.useAt.z) > .35) { a.useAt = { x: a.pos.x, z: a.pos.z }; a.useP = 0; }   // moving starts over
+      a.useP += dt;
+      if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
+      else if (kind === 'defuse' && a.useP >= DEFUSE) { bombMesh.visible = false; a.useP = 0; roundEnd(def, '폭탄 해제'); return; }
+    }
+    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, .08, s.z);
+    var na = aliveOf(B.atk), nd = aliveOf(def);
+    if (B.planted) {
+      s = B.planted; s.t -= dt; s.beep -= dt; bombLed.visible = s.beep > .12 || s.beep < .06;
+      if (s.beep <= 0) { s.beep = s.t > 10 ? 1 : s.t > 5 ? .5 : .22; sndTone(1250, .05, clamp(.2 - Math.hypot(s.x - p.pos.x, s.z - p.pos.z) / 220, .02, .2), 'square'); }
+      if (s.t <= 0) {
+        var bm = booms[0]; bm.m.position.set(s.x, 1, s.z); bm.m.visible = true; bm.life = .5; G.shake = .9; sndShot(.2, 1.4); bombMesh.visible = false;
+        for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (a.alive && Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < 9) { a.prot = 0; hurt(a, 500, a, false, 'grenade'); } }
+        roundEnd(B.atk, '폭탄 폭발'); return;
+      }
+      if (!nd) roundEnd(B.atk, '수비 팀 전멸');
+    } else { bombLed.visible = true; B.t -= dt; if (!na) roundEnd(def, '공격 팀 전멸'); else if (!nd) roundEnd(B.atk, '수비 팀 전멸'); else if (B.t <= 0) roundEnd(def, '시간 종료'); }
+    G.time = Math.max(0, B.planted ? B.planted.t : B.t);
   }
   function updModel(dt, a) {
     var m = a.model; if (!m) return;
@@ -382,19 +453,21 @@
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
     for (i = 0; i < (match.enemies || match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
-    G.actors.forEach(spawn); G.mini = null; G.state = 'play'; SV.resize(); showMsg(match.practice ? '연습장 · 봇은 쏘지 않습니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
+    var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
+    G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
+    G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '연습장 · 봇은 쏘지 않습니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
   };
   SV.end = function () {
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); G.map = null; }
     G.actors.forEach(function (a) { if (a.model) scene.remove(a.model.root); }); G.actors = [];
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
     if (rain) { scene.remove(rain); rain.geometry.dispose(); rain = null; }
-    for (var k in vms) { vmRoot.remove(vms[k]); } vms = {}; vmCur = null; G.state = 'menu';
+    for (var k in vms) { vmRoot.remove(vms[k]); } vms = {}; vmCur = null; G.state = 'menu'; G.bomb = null; bombMesh.visible = false;
   };
   function endMatch() {
     if (G.state !== 'play') return; G.state = 'over'; inp.fire = false;
     var p = G.player, mine = G.score[p.team], theirs = G.score[p.team === 'A' ? 'B' : 'A'];
-    setTimeout(function () { SV.onEnd({ win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: (G.match.minutes * 60 - G.time), map: G.map.name, weapon: W[G.match.primary].name, practice: !!G.match.practice }); }, 1200);
+    setTimeout(function () { SV.onEnd({ win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: G.bomb ? G.elapsed : (G.match.minutes * 60 - G.time), mode: G.bomb ? 1 : 0, map: G.map.name, weapon: W[G.match.primary].name, practice: !!G.match.practice }); }, 1200);
     showMsg(mine > theirs ? '승리' : mine === theirs ? '무승부' : '패배', 5);
   }
 
@@ -405,6 +478,7 @@
     var cv = $('mini'), ctx = cv.getContext('2d'), b = G.map.bounds, w = cv.width, s = (w - 8) / Math.max(b.maxx - b.minx, b.maxz - b.minz), ox = (w - (b.maxx - b.minx) * s) / 2, oz = (w - (b.maxz - b.minz) * s) / 2, i, p = G.player;
     if (!G.mini) { G.mini = document.createElement('canvas'); G.mini.width = G.mini.height = w; var c = G.mini.getContext('2d'); c.fillStyle = 'rgba(232,228,218,.42)'; for (i = 0; i < boxes.length; i++) { var q = boxes[i]; if (q.maxy < 1 || q.miny > 1.6 || (q.miny > .05 && !q.soft && q.maxy < 3.5 && q.maxx - q.minx < 1.3 && q.maxz - q.minz < 1.3)) continue; c.fillRect(ox + (q.minx - b.minx) * s, oz + (q.minz - b.minz) * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); } }
     ctx.clearRect(0, 0, w, w); ctx.drawImage(G.mini, 0, 0);
+    if (G.bomb) { ctx.fillStyle = '#e2562f'; ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; G.map.sites.forEach(function (q) { ctx.fillText(q.id, ox + (q.x - b.minx) * s, oz + (q.z - b.minz) * s + 5); }); var bp = G.bomb.planted || G.bomb.drop; if (bp && (G.bomb.planted || p.team === G.bomb.atk)) { ctx.beginPath(); ctx.arc(ox + (bp.x - b.minx) * s, oz + (bp.z - b.minz) * s, 4, 0, 7); ctx.fill(); } }
     for (i = 0; i < G.actors.length; i++) { var a = G.actors[i]; if (!a.alive || a === p) continue; if (a.team !== p.team && a.spot <= 0) continue; ctx.fillStyle = a.team === 'A' ? '#ffb347' : '#6cc4e0'; var x = ox + (a.pos.x - b.minx) * s, z = oz + (a.pos.z - b.minz) * s; if (a.team === p.team) { ctx.beginPath(); ctx.arc(x, z, 3.2, 0, 7); ctx.fill(); } else ctx.fillRect(x - 3, z - 3, 6, 6); }
     var px = ox + (p.pos.x - b.minx) * s, pz = oz + (p.pos.z - b.minz) * s; ctx.save(); ctx.translate(px, pz); ctx.rotate(-p.yaw); ctx.fillStyle = '#e8e4da'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
   }
@@ -423,7 +497,13 @@
     if (G.feedDirty || G.feed.length) { var ch = false; G.feed.forEach(function (f) { f.t -= dt; }); while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) { G.feed.pop(); ch = true; }
       if (G.feedDirty || ch) { G.feedDirty = false; var box = $('feed'); box.textContent = ''; G.feed.forEach(function (f) { var d = document.createElement('div'), a = document.createElement('b'), b2 = document.createElement('b'); a.textContent = f.k.name; a.className = 't' + f.k.team; b2.textContent = f.v.name; b2.className = 't' + f.v.team; d.appendChild(a); d.appendChild(document.createTextNode(f.head ? ' ◆ ' : ' ▸ ')); d.appendChild(b2); box.appendChild(d); }); } }
     if (msgT > 0) { msgT -= dt; if (msgT <= 0 && p.alive) $('msg').hidden = true; }
-    if (!p.alive && G.state === 'play') { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + Math.ceil(p.respawn) + '초 뒤 다시 투입'; msgT = .1; }
+    if (!p.alive && G.state === 'play' && !(G.bomb && G.bomb.phase === 'post')) { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + (G.bomb ? '다음 라운드까지 관전' : Math.ceil(p.respawn) + '초 뒤 다시 투입'); msgT = .1; }
+    var B = G.bomb, can = B && p.alive && B.phase === 'live' ? B.can : null, ot = '', ut = can === 'plant' ? '설치' : can === 'defuse' ? '해제' : '', up = can ? Math.round(p.useP / (can === 'plant' ? PLANT : DEFUSE) * 100) : 0, red = !!(B && B.planted);
+    if (B) ot = B.planted ? (p.team === B.atk ? B.planted.site + ' 지점 설치 완료 · 폭탄을 지키세요' : B.planted.site + ' 지점에 폭탄 · 해제하세요') : p.team === B.atk ? (B.carrier === p ? '폭탄 소지 · A 또는 B에 설치' : B.drop ? '폭탄이 떨어져 있습니다 · 주우세요' : '공격 · ' + (B.carrier ? B.carrier.name + ' 이(가) 폭탄 운반 중' : '')) : '수비 · A, B 지점 방어';
+    set('obj', ot); if (last.objh !== !B) { last.objh = !B; $('obj').hidden = !B; }
+    if (last.use !== ut) { last.use = ut; $('b-use').hidden = !ut; $('use-t').textContent = ut; if (!ut) inp.use = false; }
+    if (last.up !== up) { last.up = up; $('usef').style.width = up + '%'; }
+    if (last.red !== red) { last.red = red; $('sc-t').style.color = red ? '#ff5a40' : ''; }
     miniT -= dt; if (miniT <= 0) { miniT = .12; drawMini(); }
   }
   SV.botGun = function (n, map) { var id = BOTGUN[n % BOTGUN.length]; return map === 1 && id === 'sniper' ? 'smg' : id; };
@@ -444,20 +524,23 @@
 
   // ---------- main loop ----------
   function step(dt) {
-    var i, a, p = G.player; G.time -= dt; if (G.time <= 0) { endMatch(); return; }
+    var i, a, p = G.player; G.elapsed += dt;
+    if (G.bomb) { updBomb(dt); if (G.state !== 'play') return; } else { G.time -= dt; if (G.time <= 0) { endMatch(); return; } }
     for (i = 0; i < G.actors.length; i++) {
       a = G.actors[i]; a.prot = Math.max(0, a.prot - dt); a.spot = Math.max(0, a.spot - dt); a.bloom = Math.max(0, a.bloom - dt * .05);
-      if (!a.alive) { a.respawn -= dt; if (a.respawn <= 0) spawn(a); continue; }
+      if (!a.alive) { if (!G.bomb) { a.respawn -= dt; if (a.respawn <= 0) spawn(a); } continue; }
       for (var k = 0; k < 3; k++) { var g = a.guns[k]; if (g.cool > 0) g.cool -= dt; if (k === a.slot && g.reload > 0) { g.reload -= dt; if (g.reload <= 0) { var n = Math.min(W[g.id].mag - g.mag, g.res); g.mag += n; g.res -= n; } } }
       if (a.isPlayer) updPlayer(dt, a); else updBot(dt, a);
     }
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt);
-    if (p.alive) { cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
+    if (p.alive) { G.deadT = 0; cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
+    else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
     if (G.shake > 0) { G.shake -= dt; cam.position.x += rnd(-1, 1) * G.shake * .12; cam.position.y += rnd(-1, 1) * G.shake * .12; }
     if (G.flashT > 0) { G.flashT -= dt; if (G.flashT <= 0) flash.visible = false; }
   }
+  function watch(p) { var i, a, any = null; for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (!a.alive) continue; if (a.team === p.team) return a; any = any || a; } return any; }
   var prev = 0;
   function frame(t) {
     requestAnimationFrame(frame); var dt = Math.min(.05, (t - prev) / 1000 || 0); prev = t;
@@ -469,5 +552,5 @@
   }
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
-  SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
+  SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

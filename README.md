@@ -20,12 +20,13 @@ VPhoneOS류의 안드로이드 가상 ROM 컨테이너 앱. QEMU aarch64 기반�
 
 ## Mini-FPS (두 번째 앱)
 
-`minifps/` 는 Mini Rom 과 별개인 작은 게임입니다. 봇과 두 팀으로 싸우는 오프라인 팀 데스매치 FPS 이고,
-가상롬 없이 64비트 폰에서 바로 돕니다.
+`minifps/` 는 Mini Rom 과 별개인 작은 게임입니다. 봇과 두 팀으로 싸우는 오프라인 FPS 이고(팀 데스매치, 폭파 미션),
+가상롬 없이 64비트 폰에서 바로 돕니다. 맵은 컨테이너 부두, 물류 창고, 보급기지(폭파 미션 가능) 셋입니다.
 
 - 게임은 `minifps/web/src` 의 HTML 한 조각과 자바스크립트 다섯 파일입니다(three.js r128, 모델·맵·소리 모두 코드로 생성).
 - `python3 minifps/web/build.py` 가 그것을 `minifps/src/main/assets/index.html` 한 장으로 묶고, 앱은 전체 화면 WebView 로 엽니다.
-  네트워크 권한은 없습니다.
+  게임은 네트워크를 쓰지 않고, 앱 안 업데이트(`Updater.java`)만 Releases 에서 새 버전을 확인하고 받습니다.
+- 새 버전을 낼 때는 `minifps/build.gradle.kts` 의 `versionCode` 를 올리고 `minifps/release-notes.txt` 를 고칩니다.
 - `.github/workflows/minifps.yml` 이 `minifps/**` 가 바뀔 때 빌드해 Releases 의 `latest` 에 `mini-fps.apk` 로 올립니다.
 - 브라우저에서 미리 보려면 `python3 minifps/web/build.py --artifact` 로 `minifps/web/out/mini-fps.html` 을 만듭니다.
 

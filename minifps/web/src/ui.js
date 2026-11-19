@@ -1,8 +1,9 @@
 // ui.js — menus, settings, touch and keyboard input.
 (function () {
   var $ = function (id) { return document.getElementById(id); }, G = SV.G, inp = SV.inp, cfg = SV.cfg, W = SV.W;
-  var match = { map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', minutes: 10 };
+  var match = { mode: 0, map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', minutes: 10 };
   try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
+  if (!SV.MAPS[match.map]) match.map = 0; if (match.mode !== 1 || !SV.MAPS[match.map].bomb) match.mode = 0;
   var stats = { w: 0, l: 0, k: 0, d: 0 }; try { var s0 = JSON.parse(localStorage.getItem('minifps.stats') || 'null'); if (s0) for (var k1 in stats) if (typeof s0[k1] === 'number') stats[k1] = s0[k1]; } catch (e) {}
   function save() { try { localStorage.setItem('minifps.stats', JSON.stringify(stats)); } catch (e) {} try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
   var SCR = ['s-title', 's-lobby', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res', 's-upd'], from = { 's-load': 's-team', 's-set': 's-lobby' };
@@ -21,12 +22,15 @@
   var GUNS = [['rifle', '중거리 만능. 연사 반동이 위로 올라갑니다.', [62, 70, 58, 66, 55]], ['smg', '가볍고 빠릅니다. 멀어질수록 약해집니다.', [40, 92, 48, 35, 88]], ['sniper', '한 발이 무겁습니다. 정조준하면 조준경이 열립니다.', [98, 12, 96, 100, 25]], ['shotgun', '좁은 통로의 주인. 여덟 알이 퍼져 나갑니다.', [90, 28, 30, 20, 60]]];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비'] };
   function refresh(id) {
-    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; ['팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
+    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [match.mode ? '폭파 미션' : '팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, match.mode ? '5라운드 선승' : '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
     if (id === 's-match') {
-      seg($('o-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; });
+      seg($('o-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; if (!SV.MAPS[v].bomb) match.mode = 0; setTimeout(function () { refresh('s-match'); }, 0); });
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
       $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
+      $('md-0').setAttribute('aria-pressed', match.mode ? 'false' : 'true'); $('md-1').setAttribute('aria-pressed', match.mode ? 'true' : 'false'); $('tk-box').hidden = !!match.mode;
+      $('mt-foot').textContent = match.mode ? '5라운드 선승 · 라운드 2분 · 부활 없음 · 4라운드 뒤 공수 교대' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
     }
+    if (id === 's-team') { $('tm-A-s').textContent = match.mode ? '주황 · 먼저 공격 (폭탄 설치)' : '주황 · 서쪽에서 시작'; $('tm-B-s').textContent = match.mode ? '하늘 · 먼저 수비 (설치 저지)' : '하늘 · 동쪽에서 시작'; }
     if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
     if (id === 's-load') {
       seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, '', g[0], SV.thumb(g[0])]; }), function () { return match.primary; }, function (v) { match.primary = v; });
@@ -60,21 +64,23 @@
   var practice = false;
   $('go-practice').addEventListener('click', function () { practice = true; begin(); });
   $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
-  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.map = 1; m.perTeam = 1; m.enemies = 3; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = 1; m.perTeam = 1; m.enemies = 3; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
   var lastPractice = false;
   $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') show('s-pause'); else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
   $('r-again').addEventListener('click', function () { practice = lastPractice; begin(); });
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }
+  $('md-0').addEventListener('click', function () { match.mode = 0; save(); refresh('s-match'); });
+  $('md-1').addEventListener('click', function () { match.mode = 1; for (var i = 0; i < SV.MAPS.length; i++) if (SV.MAPS[i].bomb) match.map = i; save(); refresh('s-match'); });
   stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
-  function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
+  function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = inp.use = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
   function resume() { if (G.state !== 'pause') return; show(null); G.state = 'play'; }
   $('b-pause').addEventListener('click', pause); $('b-score').addEventListener('click', pause); $('p-resume').addEventListener('click', resume);
   $('p-quit').addEventListener('click', function () { SV.end(); show('s-lobby'); });
   document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); });
   SV.onEnd = function (r) {
     if (document.exitPointerLock) document.exitPointerLock();
-    $('r-eye').textContent = r.map + ' · 팀 데스매치'; $('r-title').textContent = r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.score.A; $('r-b').textContent = r.score.B;
+    $('r-eye').textContent = r.map + (r.mode ? ' · 폭파 미션' : ' · 팀 데스매치'); $('r-title').textContent = r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.score.A; $('r-b').textContent = r.score.B;
     var u = Math.round(r.used); $('r-time').textContent = ('0' + ((u / 60) | 0)).slice(-2) + ':' + ('0' + (u % 60)).slice(-2) + ' 소요';
     $('r-k').textContent = r.stats.kills; $('r-d').textContent = r.stats.deaths; $('r-h').textContent = r.stats.heads;
     var nem = '없음', nb = 0; for (var nk in r.stats.by) if (r.stats.by[nk] > nb) { nb = r.stats.by[nk]; nem = nk + ' · ' + nb + '회'; }
@@ -160,6 +166,7 @@
   hold('b-lfire', function () { inp.fire = true; }, function () { inp.fire = false; }, false);
   var adsOn = false; hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
   hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
+  hold('b-use', function () { inp.use = true; }, function () { inp.use = false; }, false);
   hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nade = true; }, null, false);
   [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('click', function () { inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
 
@@ -169,10 +176,10 @@
   window.addEventListener('keydown', function (e) {
     if (G.state !== 'play') { if ((e.code === 'KeyP' || e.code === 'Escape') && G.state === 'pause') resume(); return; }
     keys[e.code] = true; axes();
-    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nade = true;
+    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nade = true; else if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = true;
     else if (e.code === 'Digit1') inp.slot = 0; else if (e.code === 'Digit2') inp.slot = 1; else if (e.code === 'Digit3') inp.slot = 2; else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); pause(); }
   });
-  window.addEventListener('keyup', function (e) { keys[e.code] = false; if (G.state === 'play') axes(); });
+  window.addEventListener('keyup', function (e) { keys[e.code] = false; if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = false; if (G.state === 'play') axes(); });
   document.addEventListener('mousemove', function (e) { if (document.pointerLockElement === zone && G.state === 'play') { inp.lx += e.movementX * .5; inp.ly += e.movementY * .5; } });
   zone.addEventListener('mousedown', function (e) { if (e.button === 0) inp.fire = true; if (e.button === 2) inp.ads = true; });
   window.addEventListener('mouseup', function (e) { if (e.button === 0) inp.fire = false; if (e.button === 2) inp.ads = false; });
