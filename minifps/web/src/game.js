@@ -318,25 +318,38 @@
       var sh = ac.createWaveShaper(), cv2 = new Float32Array(257), comp = ac.createDynamicsCompressor(), vg = ac.createGain(); for (i = 0; i < 257; i++) cv2[i] = Math.tanh((i / 128 - 1) * 1.8); sh.curve = cv2; hard = new Float32Array(257); for (i = 0; i < 257; i++) hard[i] = Math.tanh((i / 128 - 1) * 4) * .85;
       comp.threshold.value = -20; comp.ratio.value = 9; comp.attack.value = .001; comp.release.value = .14;
       master = ac.createGain(); master.gain.value = .9; master.connect(sh); sh.connect(comp); comp.connect(ac.destination);
-      irOut = impulse(1.5, 3.1, .17); irIn = impulse(.8, 5.5, .05); verb = ac.createConvolver(); verb.buffer = G.map && G.map.indoor ? irIn : irOut; vg.gain.value = .5; verb.connect(vg); vg.connect(comp);
+      irOut = impulse(1.5, 3.1, .17); irIn = impulse(.8, 5.5, .05); verb = ac.createConvolver(); verb.buffer = G.map && G.map.indoor ? irIn : irOut; vg.gain.value = .5; verb.connect(vg); vg.connect(comp); renderShots();
     } catch (e) { ac = null; }
   };
-  function env(t, peak, dur) { var g = ac.createGain(); g.gain.setValueAtTime(Math.max(peak, .0002), t); g.gain.exponentialRampToValueAtTime(.0002, t + dur); return g; }
-  function nsrc(t, dur, rate) { var s = ac.createBufferSource(); s.buffer = noise; s.loop = true; s.playbackRate.value = rate || 1; s.start(t, Math.random() * .5); s.stop(t + dur + .02); return s; }
+  function env(t, peak, dur, cx) { var g = (cx || ac).createGain(); g.gain.setValueAtTime(Math.max(peak, .0002), t); g.gain.exponentialRampToValueAtTime(.0002, t + dur); return g; }
+  function nsrc(t, dur, rate, cx) { var s = (cx || ac).createBufferSource(); s.buffer = noise; s.loop = true; s.playbackRate.value = rate || 1; s.start(t, Math.random() * .5); s.stop(t + dur + .02); return s; }
+  // One shot costs about twenty audio nodes to synthesise. Eight rifles firing would mean hundreds of live nodes, which a phone
+  // cannot keep up with: the output crackles and then drops out. So each weapon's report is rendered once into a buffer (a
+  // close and a distant version); firing then plays that buffer through a filter and a gain, and the number of voices is capped.
+  var shotBuf = {}, voices = 0, lastBot = 0;
+  function shotGraph(cx, P, near, dest) {
+    var t = .005, k = P.g, drive = cx.createWaveShaper(); drive.curve = hard; drive.connect(dest);
+    var c = nsrc(t, .01, 1, cx), gc = env(t, 2.2 * k * (.35 + near * .65), .004 + P.len * .01, cx); c.connect(gc); gc.connect(drive);                                  // snap
+    var a = nsrc(t, .1, 1, cx), hp = cx.createBiquadFilter(), ga = env(t, P.crk * k * 1.1, .03 + P.len * .1, cx); hp.type = 'highpass'; hp.frequency.value = 2200; a.connect(hp); hp.connect(ga); ga.connect(drive);   // crack
+    [[P.b * .28, 1.6, 1.5], [P.b * .1, 1.2, 1.7]].forEach(function (q) { var bb = nsrc(t, P.len, .8, cx), bp = cx.createBiquadFilter(), gb = env(t, k * q[2], P.len * .75, cx); bp.type = 'bandpass'; bp.frequency.setValueAtTime(q[0], t); bp.frequency.exponentialRampToValueAtTime(q[0] * .55, t + P.len); bp.Q.value = q[1]; bb.connect(bp); bp.connect(gb); gb.connect(drive); });   // body
+    var o = cx.createOscillator(), go = env(t, k * 1.6, P.len * .7, cx); o.frequency.setValueAtTime(P.t[0], t); o.frequency.exponentialRampToValueAtTime(P.t[1], t + P.len * .5); o.connect(go); go.connect(drive); o.start(t); o.stop(t + P.len + .05);   // thump
+    var r = nsrc(t, P.len * 3.5, .5, cx), lr = cx.createBiquadFilter(), gr = env(t + .01, k * .32, P.len * 3.5, cx); lr.type = 'lowpass'; lr.frequency.value = 900; r.connect(lr); lr.connect(gr); gr.connect(dest);   // roll-off
+  }
+  function renderShots() {
+    var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OC || !ac) return;
+    Object.keys(SND).forEach(function (id) { [1, 0].forEach(function (near) {
+      try { var P = SND[id], cx = new OC(1, Math.ceil(ac.sampleRate * (P.len * 3.6 + .08)), ac.sampleRate); shotGraph(cx, P, near, cx.destination); var done = function (buf) { shotBuf[id + near] = buf; }, pr = cx.startRendering(); if (pr && pr.then) pr.then(done); else cx.oncomplete = function (e) { done(e.renderedBuffer); }; } catch (e) { }
+    }); });
+  }
   function gunSnd(id, vol, dist) {
-    if (!ac || !cfg.sound || vol < .02) return; dist = dist || 0;
-    var P = SND[id], t = ac.currentTime + Math.min(.3, dist / 340), k = P.g * vol, out = ac.createBiquadFilter(), drive = ac.createWaveShaper(), send = ac.createGain(), f, near = Math.max(0, 1 - dist / 25);
-    drive.curve = hard; out.type = 'lowpass'; out.frequency.value = 16000 / (1 + dist / 8); drive.connect(out); out.connect(master); send.gain.value = P.tail * (.35 + Math.min(1, dist / 40) * .6); out.connect(send); send.connect(verb);
-    // 1. the snap: a couple of milliseconds of full-band noise at full level. This instant onset is what separates a shot from a hiss.
-    var c = nsrc(t, .01), gc = env(t, 2.2 * k * (.35 + near * .65), .004 + P.len * .01); c.connect(gc); gc.connect(drive);
-    // 2. crack: bright noise for a few tens of milliseconds
-    var a = nsrc(t, .1), hp = ac.createBiquadFilter(), ga = env(t, P.crk * k * 1.1, .03 + P.len * .1); hp.type = 'highpass'; hp.frequency.value = 2200; a.connect(hp); hp.connect(ga); ga.connect(drive);
-    // 3. body: two resonant bands (chest and bark) whose level falls quickly, pushed hard into the saturator
-    [[P.b * .28, 1.6, 1.5], [P.b * .1, 1.2, 1.7]].forEach(function (q) { var b = nsrc(t, P.len, .8), bp = ac.createBiquadFilter(), gb = env(t, k * q[2], P.len * .75); bp.type = 'bandpass'; bp.frequency.setValueAtTime(q[0], t); bp.frequency.exponentialRampToValueAtTime(q[0] * .55, t + P.len); bp.Q.value = q[1]; b.connect(bp); bp.connect(gb); gb.connect(drive); });
-    // 4. thump: a sine dropping an octave or two
-    var o = ac.createOscillator(), go = env(t, k * 1.6, P.len * .7); o.frequency.setValueAtTime(P.t[0], t); o.frequency.exponentialRampToValueAtTime(P.t[1], t + P.len * .5); o.connect(go); go.connect(drive); o.start(t); o.stop(t + P.len + .05);
-    // 5. roll-off: dull noise that outlasts the shot, the sound carrying away
-    var r = nsrc(t, P.len * 3.5, .5), lr = ac.createBiquadFilter(), gr = env(t + .01, k * .32, P.len * 3.5); lr.type = 'lowpass'; lr.frequency.value = 900; r.connect(lr); lr.connect(gr); gr.connect(out);
+    if (!ac || !cfg.sound || vol < .04) return; dist = dist || 0;
+    var own = dist === 0, now = ac.currentTime, buf = shotBuf[id + (dist < 18 ? 1 : 0)]; if (!buf) return;
+    if (!own) { if (voices >= 7 || (now - lastBot < .045 && vol < .5)) return; lastBot = now; }   // other people's shots give way first
+    else if (voices >= 10) return;
+    var P = SND[id], t = now + Math.min(.3, dist / 340), src = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain(), send = ac.createGain();
+    src.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 16000 / (1 + dist / 8); g.gain.value = vol / Math.sqrt(1 + voices * .35); send.gain.value = P.tail * (.35 + Math.min(1, dist / 40) * .6);
+    src.connect(lp); lp.connect(g); g.connect(master); g.connect(send); send.connect(verb);
+    voices++; src.onended = function () { voices--; try { send.disconnect(); g.disconnect(); lp.disconnect(); } catch (e) { } }; src.start(t);
   }
   // small mechanical noises: a filtered click (bolt, magazine), a metallic ping (spent case), a dull thud (footstep)
   function tick(delay, freq, vol, q) { if (!ac || !cfg.sound) return; var t = ac.currentTime + delay, s = nsrc(t, .05), f = ac.createBiquadFilter(), g = env(t, vol, .035); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 3; s.connect(f); f.connect(g); g.connect(master); }
