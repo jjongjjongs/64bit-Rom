@@ -457,8 +457,10 @@
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
     var art = vmCur.userData.art;
     if (art) {   // a picture: pinned to the lower right of the screen; aiming slides its optic window onto the crosshair
-      var hh = Math.tan(vmCam.fov * PI / 360), hw = hh * vmCam.aspect, sc = 1 + (art.zoom - 1) * k + vmKick * .035, hs = 2 * hh * art.h / art.frame * sc, ws = hs * art.w / art.h;
-      var cx0 = hw + .03 - ws / 2, cy0 = -hh - .04 + hs / 2, cx1 = -(art.eye[0] / art.w - .5) * ws, cy1 = -(.5 - art.eye[1] / art.h) * hs;
+      var hh = Math.tan(vmCam.fov * PI / 360), hw = hh * vmCam.aspect, sc = 1 + vmKick * .035, hs = 2 * hh * art.h / art.frame * sc, ws = hs * art.w / art.h;
+      // One picture cannot be turned to look straight down the sights, so aiming lowers the gun out of the way and the view
+      // zooms on the dot instead (a picture drawn looking down the sights can replace this later).
+      var cx0 = hw + .03 - ws / 2, cy0 = -hh - .04 + hs / 2, cx1 = cx0 - hw * .1, cy1 = cy0 - hs * .45;
       var cx = cx0 * (1 - k) + cx1 * k + bx * 2.5 + vmKick * .012, cy = cy0 * (1 - k) + cy1 * k + bob * 2.5 - vmKick * .014 * (1 - k) - vmSwap * 1.6;
       if (w.melee) { cx -= vmKick * .34; cy -= vmKick * .05; }   // a knife sweeps across instead of kicking back
       vmRoot.rotation.set(0, 0, w.melee ? vmKick * .7 : 0); vmRoot.position.set(cx, cy, -1); vmCur.scale.set(ws, hs, 1); vmRoot.visible = !(w.scope && vmAds > .8);
