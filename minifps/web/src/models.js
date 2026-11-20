@@ -158,7 +158,7 @@ var SV = window.SV = window.SV || {};
     out.setAttribute('position', new T.Float32BufferAttribute(P, 3)); out.setAttribute('normal', new T.Float32BufferAttribute(N, 3)); out.setAttribute('color', new T.Float32BufferAttribute(Cc, 3));
     return out;
   }
-  SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk;
+  SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk; SV.exg = exg;
   SV.litMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .3, envMapIntensity: .55 });
   SV.gunMetal = new T.MeshStandardMaterial({ vertexColors: true, roughness: .34, metalness: .88, envMapIntensity: 1.25, side: T.DoubleSide });
   SV.gunSoft = new T.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: 0, envMapIntensity: .4, side: T.DoubleSide });
@@ -210,13 +210,30 @@ var SV = window.SV = window.SV || {};
 
   // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
   // Returns { root, legL, legR } with the legs pivoting at the hip.
-  function arm(g, S, Tg, bend, cloth, glove, band) {
+  // A limb or strap turned on a lathe between two points: [[fraction along, radius], ...]
+  function limb(g, a, b, prof, mat, seg) {
+    var dir = new T.Vector3().subVectors(b, a), len = dir.length(), geo = new T.LatheGeometry(prof.map(function (p) { return new T.Vector2(p[1], p[0] * len); }), seg || 12), m = new T.Mesh(geo, mat);
+    m.position.copy(a); m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize()); g.add(m); return m;
+  }
+  // a bevelled slab: outline in x-y, thickness along z, then placed and turned
+  function slab(k, pts, depth, bv, mat, x, y, z, rx, ry, rz) { var g = exg(pts, -depth / 2, depth / 2, bv); return k.add(g, mat, x, y, z, rx, ry, rz); }
+  function rect(w, h) { return [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]; }
+  var UP = [[0, .066], [.12, .074], [.45, .07], [1, .054]], FORE = [[0, .054], [.25, .06], [.7, .046], [1, .04]];
+  function arm(g, S, Tg, bend, cloth, glove, band, pad) {
     var L = .31, v = new T.Vector3().subVectors(Tg, S), d = Math.min(v.length(), L * 2 - .01); v.normalize();
     var h = Math.sqrt(Math.max(L * L - d * d / 4, 0)), perp = bend.clone().addScaledVector(v, -bend.dot(v)).normalize();
-    var E = S.clone().addScaledVector(v, d / 2).addScaledVector(perp, h), H = S.clone().addScaledVector(v, d);
-    ball(g, S, .078, cloth, 1, 1, 1); tube(g, S, E, .064, .052, cloth); ball(g, E, .054, cloth); tube(g, E, H, .05, .04, cloth);
-    tube(g, S.clone().lerp(E, .3), S.clone().lerp(E, .48), .066, .063, band);                                   // team armband
-    ball(g, E, .05, glove, 1.1, 1.1, .8); tube(g, E.clone().lerp(H, .8), H, .043, .044, glove); ball(g, H, .046, glove, 1, 1.15, 1.2);   // elbow pad, cuff, glove
+    var E = S.clone().addScaledVector(v, d / 2).addScaledVector(perp, h), H = S.clone().addScaledVector(v, d), k = kit(g), i;
+    ball(g, S, .08, cloth, 1.05, .95, 1); limb(g, S, E, UP, cloth); ball(g, E, .055, cloth); limb(g, E, H, FORE, cloth);
+    limb(g, S.clone().lerp(E, .3), S.clone().lerp(E, .5), [[0, .0725], [1, .067]], band);                                           // team armband
+    limb(g, S.clone().lerp(E, .12), S.clone().lerp(E, .26), [[0, .076], [1, .075]], pad);                                           // shoulder pocket
+    var ep = ball(g, E, .052, pad, 1.15, 1.25, .8); ep.lookAt(S);                                                                    // elbow pad
+    limb(g, E.clone().lerp(H, .78), E.clone().lerp(H, .97), [[0, .044], [.5, .047], [1, .045]], glove);                              // glove cuff
+    // hand: a palm and four fingers curled round whatever it holds
+    var f = new T.Vector3().subVectors(H, E).normalize(), side = new T.Vector3().crossVectors(f, new T.Vector3(0, 1, 0)).normalize(), up = new T.Vector3().crossVectors(side, f).normalize();
+    var palm = ball(g, H.clone().addScaledVector(f, .03), .042, glove, 1, 1.25, .62); palm.lookAt(H.clone().add(side));
+    for (i = 0; i < 4; i++) { var b0 = H.clone().addScaledVector(f, .06).addScaledVector(up, .036 - i * .024), b1 = b0.clone().addScaledVector(f, .03).addScaledVector(side, -.045), b2 = b1.clone().addScaledVector(f, -.03).addScaledVector(side, -.022); limb(g, b0, b1, [[0, .0115], [1, .0105]], glove, 6); limb(g, b1, b2, [[0, .0105], [1, .009]], glove, 6); ball(g, b1, .0115, glove); }
+    limb(g, H.clone().addScaledVector(f, .02).addScaledVector(up, .04), H.clone().addScaledVector(f, .075).addScaledVector(up, .05).addScaledVector(side, -.02), [[0, .013], [1, .011]], glove, 6);   // thumb
+    k.add(new T.BoxGeometry(.05, .03, .012), pad, 0, 0, 0).position.copy(H).addScaledVector(f, .04).addScaledVector(side, .03);                                                               // knuckle guard
   }
   var cache = {}, HIP = .93, KNEE = .52, blob = new T.CircleGeometry(.5, 20), blobMat = new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .42, depthWrite: false });
   blob.rotateX(-PI / 2); (function () { var p = blob.attributes.position, c = [], i; for (i = 0; i < p.count; i++) { var k = 1 - .62 * Math.pow(1 - Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / .5), 1.4); c.push(k, k, k); } blob.setAttribute('color', new T.Float32BufferAttribute(c, 3)); })();
@@ -225,40 +242,66 @@ var SV = window.SV = window.SV || {};
     var key = team + gunId, c = cache[key];
     if (!c) {
       var A = team === 'A', tc = A ? 0xffb347 : 0x6cc4e0, cloth = A ? camo(0x8a7a58, 0x6b5d40, 0x4d4733) : camo(0x5d6a70, 0x44525a, 0x2c363d), cloth2 = A ? camo(0x7b6c4c, 0x5e5239, 0x433d2c) : camo(0x525e64, 0x3c4950, 0x283137);
-      var gear = mk(A ? 0x5a4f3a : 0x2d3338), gear2 = mk(A ? 0x463d2d : 0x202529), pad = mk(0x1a1c1e), boot = mk(A ? 0x4a3d2a : 0x1c1e20), teamM = mk(tc), skin = MAT.skin, hood = mk(0x1d2022), body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()], V = function (x, y, z) { return new T.Vector3(x, y, z); };
-      var shins = [new T.Group(), new T.Group()];
+      var gear = mk(A ? 0x5f543d : 0x30363b), gear2 = mk(A ? 0x4a402f : 0x22272b), pad = mk(0x1a1c1e), boot = mk(A ? 0x55452f : 0x1c1e20), teamM = mk(tc), skin = MAT.skin, hood = mk(0x1d2022), strap = mk(A ? 0x3a3326 : 0x15181b);
+      var body = new T.Group(), k = kit(body), legs = [new T.Group(), new T.Group()], shins = [new T.Group(), new T.Group()], V = function (x, y, z) { return new T.Vector3(x, y, z); }, i;
       [-1, 1].forEach(function (sx, n) {
-        var x = sx * .1, l = legs[n], sh = shins[n], lk = kit(l), sk = kit(sh);
-        tube(l, V(x, .94, 0), V(x, .52, .012), .098, .076, cloth2); lk.b(.075, .11, .05, gear, x + sx * .085, .76, .01); lk.b(.078, .014, .054, gear2, x + sx * .085, .8, .01);   // thigh, cargo pocket and flap
-        if (sx < 0) { lk.b(.05, .15, .09, gear2, x - .105, .78, .02); lk.b(.03, .05, .05, MAT.steel, x - .11, .87, 0); lk.b(.012, .03, .2, gear2, x - .09, .84, 0); lk.b(.012, .03, .2, gear2, x - .09, .72, 0); }   // drop-leg holster, straps
-        ball(sh, V(x, .52, .012), .076, cloth2); ball(sh, V(x, .52, .055), .068, pad, 1.05, 1.3, .62); sk.b(.11, .016, .1, pad, x, .47, .02);                                 // knee, knee pad, strap
-        tube(sh, V(x, .52, .012), V(x, .2, 0), .072, .056, cloth2); tube(sh, V(x, .21, 0), V(x, .3, 0), .06, .058, cloth2);                                                     // shin, bloused cuff
-        tube(sh, V(x, .26, 0), V(x, .07, 0), .054, .06, boot); for (var q = 0; q < 4; q++) sk.b(.05, .008, .012, pad, x, .11 + q * .04, .056);                                 // boot shaft, laces
-        ball(sh, V(x, .06, .06), .058, boot, 1, .85, 2.1); ball(sh, V(x, .07, .14), .05, boot, 1.05, .8, 1); sk.b(.105, .028, .27, MAT.rubber, x, .014, .05); sk.b(.09, .022, .06, MAT.rubber, x, .036, -.06);   // boot, toe cap, sole, heel
+        var x = sx * .1, l = legs[n], sh = shins[n], lk = kit(l), sk = kit(sh), q;
+        limb(l, V(x, .95, 0), V(x, .52, .012), [[0, .1], [.2, .106], [.65, .09], [1, .078]], cloth2, 14);                                                   // thigh
+        slab(lk, rect(.11, .15), .05, .014, gear, x + sx * .092, .74, .01, 0, PI / 2, 0); slab(lk, rect(.118, .05), .056, .01, gear2, x + sx * .094, .8, .01, 0, PI / 2, 0); lk.b(.012, .012, .012, pad, x + sx * .125, .785, .01);   // cargo pocket, flap, snap
+        if (sx < 0) {   // drop-leg holster with a pistol in it
+          slab(lk, [[-.04, -.1], [.04, -.1], [.05, .02], [.03, .07], [-.05, .07]], .045, .01, gear2, x - .115, .78, .015, 0, PI / 2, 0); slab(lk, [[-.02, 0], [.03, 0], [.045, .07], [-.01, .08]], .03, .006, MAT.poly, x - .118, .86, .0, 0, PI / 2, 0);
+          limb(l, V(x, .86, 0), V(x, .835, .002), [[0, .104], [1, .103]], strap); limb(l, V(x, .72, .004), V(x, .695, .006), [[0, .096], [1, .094]], strap); lk.b(.03, .1, .012, strap, x - .1, .93, .0);
+        }
+        ball(sh, V(x, .52, .012), .078, cloth2);
+        q = slab(sk, [[-.062, -.07], [.062, -.07], [.072, .01], [.05, .085], [-.05, .085], [-.072, .01]], .04, .016, pad, x, .515, .078); limb(sh, V(x, .56, .012), V(x, .545, .012), [[0, .082], [1, .081]], strap); limb(sh, V(x, .47, .012), V(x, .455, .012), [[0, .079], [1, .078]], strap);   // knee pad and straps
+        limb(sh, V(x, .52, .012), V(x, .2, 0), [[0, .078], [.22, .086], [.6, .07], [1, .058]], cloth2, 14);                                                // calf
+        limb(sh, V(x, .2, 0), V(x, .29, 0), [[0, .062], [.6, .067], [1, .06]], cloth2);                                                                     // trouser bloused over the boot
+        // boot: upper and sole cut from side profiles, with a toe cap and laces
+        var up = exg([[-.085, .03], [.17, .03], [.185, .06], [.16, .095], [.09, .115], [.045, .15], [.04, .27], [-.065, .27], [-.085, .12]], -.048, .048, .014), so = exg([[-.095, 0], [.185, 0], [.195, .02], [.19, .034], [-.095, .034]], -.054, .054, .006);
+        up.rotateY(-PI / 2); so.rotateY(-PI / 2); sk.add(up, boot, x, 0, 0); sk.add(so, MAT.rubber, x, 0, 0); sk.b(.11, .012, .05, MAT.rubber, x, .012, -.065);
+        for (i = 0; i < 5; i++) sk.b(.05, .007, .01, pad, x, .13 + i * .028, .049 - i * .002); sk.b(.02, .05, .01, pad, x, .2, -.07);
       });
-      k.s(.165, cloth2, 0, .96, 0, 1.05, .62, .74); var belt = k.add(new T.CylinderGeometry(.185, .185, .055, 14), gear2, 0, 1.01, 0); belt.scale.z = .72;                    // hips, belt
-      k.b(.07, .09, .05, gear, .15, .99, .07); k.b(.06, .1, .05, gear, -.03, .985, -.135); k.b(.09, .08, .05, gear, .09, .985, -.125);                                        // belt pouches
-      var torso = k.add(new T.CylinderGeometry(.2, .168, .5, 14, 5), cloth, 0, 1.24, 0); torso.scale.z = .62; k.s(.17, cloth, 0, 1.43, 0, 1.28, .46, .76);                    // torso, shoulders
-      var cb = k.add(new T.CylinderGeometry(.205, .19, .24, 14), gear, 0, 1.17, 0); cb.scale.z = .68;                                                                        // cummerbund
-      k.b(.27, .3, .045, gear, 0, 1.27, .125); k.s(.135, gear, 0, 1.41, .118, 1, .34, .2); k.b(.27, .3, .045, gear, 0, 1.27, -.125); k.s(.135, gear, 0, 1.41, -.118, 1, .34, .2);   // front and back plates
-      [-1, 1].forEach(function (sx) { k.b(.055, .03, .26, gear2, sx * .1, 1.455, 0); });                                                                                     // shoulder straps
-      for (var i = -1; i <= 1; i++) { k.b(.072, .13, .04, gear2, i * .085, 1.14, .162); k.b(.05, .04, .026, MAT.dark, i * .085, 1.22, .162); k.b(.072, .014, .044, pad, i * .085, 1.19, .164); }   // magazine pouches, magazines, retention straps
-      k.b(.13, .07, .03, gear2, -.04, 1.345, .158); k.b(.062, .04, .008, teamM, .085, 1.35, .152);                                                                           // admin pouch, chest team patch
-      k.b(.05, .13, .045, MAT.poly2, .15, 1.3, -.15); k.cy(.006, .3, MAT.dark, .165, 1.5, -.16, 5);                                                                           // radio and antenna
-      k.b(.22, .3, .075, gear2, -.02, 1.27, -.185); k.b(.2, .05, .08, gear, -.02, 1.3, -.19); k.b(.12, .06, .008, teamM, -.02, 1.36, -.226);                                  // pack, strap, back team patch
-      k.cy(.052, .08, hood, 0, 1.47, 0, 10); k.s(.098, hood, 0, 1.585, 0, .96, 1.14, 1.04);                                                                                    // neck, balaclava
-      k.s(.06, skin, 0, 1.6, .058, 1.15, .42, .6); k.b(.13, .03, .02, MAT.poly2, 0, 1.605, .094); k.b(.052, .024, .008, MAT.glass, -.032, 1.605, .105); k.b(.052, .024, .008, MAT.glass, .032, 1.605, .105);   // eyes, glasses
-      var helm = k.add(new T.SphereGeometry(.128, 16, 8, 0, PI * 2, 0, PI * .5), cloth2, 0, 1.615, -.008); helm.scale.set(1.02, 1.02, 1.16);
-      var hb = k.add(new T.CylinderGeometry(.131, .131, .02, 16), teamM, 0, 1.628, -.008); hb.scale.z = 1.16;                                                                 // helmet band in the team colour
-      k.b(.016, .055, .05, cloth2, -.118, 1.6, -.07); k.b(.016, .055, .05, cloth2, .118, 1.6, -.07); k.b(.012, .018, .11, MAT.dark, -.132, 1.625, 0); k.b(.012, .018, .11, MAT.dark, .132, 1.625, 0);   // back of the shell, side rails
-      [-1, 1].forEach(function (sx) { k.cx(.042, .04, gear2, sx * .11, 1.575, .005, 10); }); k.b(.24, .012, .02, gear2, 0, 1.69, .0);                                           // headset
-      k.b(.046, .04, .03, MAT.dark, 0, 1.69, .128); k.b(.012, .1, .008, pad, -.085, 1.53, .06); k.b(.012, .1, .008, pad, .085, 1.53, .06); k.b(.05, .02, .03, pad, 0, 1.49, .085);   // NVG shroud, chin strap
-      // shouldered: the stock sits in the right shoulder (-X), right hand on the grip, left hand under the fore-end
-      var d = GUN[gunId](), gx = -.13, gy = 1.385, gz = .3, gg = new T.Group(); d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);   // the weapon keeps its own (metal) material
-      k.b(.2, .012, .008, gear2, .02, 1.26, .15, 0, 0, .5); k.b(.03, .5, .012, gear2, -.12, 1.3, -.02, .5, 0, .2);                                                              // sling
-      arm(body, V(-.215, 1.4, .01), V(gx - .01, gy + d.grip[1] + .02, gz + d.grip[0]), V(-.5, -1, -.35), cloth, gear2, teamM);
-      if (d.fore) arm(body, V(.215, 1.4, .02), V(gx + .01, gy + d.fore[1] - .005, gz + d.fore[0]), V(.25, -1, .1), cloth, gear2, teamM);
-      else arm(body, V(.215, 1.4, .02), V(.2, 1.0, .12), V(.3, 0, -1), cloth, gear2, teamM);
+      // pelvis, belt and what hangs on it
+      var hip = k.add(new T.LatheGeometry([[0, .86], [.1, .87], [.165, .92], [.175, .98], [.17, 1.03]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 16), cloth2, 0, 0, 0); hip.scale.z = .72;
+      var belt = k.add(new T.LatheGeometry([[.182, .985], [.19, .99], [.19, 1.04], [.182, 1.045]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 18), gear2, 0, 0, 0); belt.scale.z = .73;
+      slab(k, rect(.05, .045), .012, .004, MAT.steel, 0, 1.015, .14); slab(k, rect(.085, .11), .05, .014, gear, .15, .985, .075, 0, .9, 0); slab(k, rect(.07, .12), .05, .014, gear, -.02, .98, -.14); slab(k, rect(.1, .1), .055, .016, gear, .1, .98, -.125, 0, -.5, 0); slab(k, rect(.06, .07), .04, .01, MAT.red, -.15, .99, -.07, 0, -1, 0);
+      // torso
+      var torso = k.add(new T.LatheGeometry([[.168, 1.0], [.172, 1.08], [.168, 1.16], [.185, 1.28], [.2, 1.38], [.19, 1.44], [.12, 1.49], [.06, 1.5]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 18), cloth, 0, 0, 0); torso.scale.z = .66;
+      // plate carrier: plates with clipped corners, cummerbund with webbing rows, shoulder straps
+      var plate = [[-.135, -.17], [.135, -.17], [.14, .1], [.09, .18], [-.09, .18], [-.14, .1]];
+      slab(k, plate, .042, .014, gear, 0, 1.26, .128, -.06, 0, 0); slab(k, plate, .042, .014, gear, 0, 1.26, -.128, .05, 0, 0);
+      var cb = k.add(new T.LatheGeometry([[.196, 1.07], [.203, 1.075], [.208, 1.25], [.2, 1.255]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 18), gear, 0, 0, 0); cb.scale.z = .69;
+      for (i = 0; i < 4; i++) { var mo = k.add(new T.LatheGeometry([[.209, 1.09 + i * .042], [.212, 1.093 + i * .042], [.212, 1.112 + i * .042], [.209, 1.115 + i * .042]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 18), strap, 0, 0, 0); mo.scale.z = .69; }
+      for (i = 0; i < 4; i++) { k.b(.24, .018, .008, strap, 0, 1.3 + i * .035, .153, -.06); k.b(.24, .018, .008, strap, 0, 1.24 + i * .04, -.152, .05); }
+      [-1, 1].forEach(function (sx) { slab(k, [[-.14, 0], [-.1, .045], [0, .062], [.1, .045], [.14, 0], [.14, -.02], [-.14, -.02]], .06, .01, gear2, sx * .1, 1.44, 0, 0, PI / 2, 0); k.b(.05, .02, .03, strap, sx * .1, 1.41, .12); });
+      // three magazine pouches with flaps and the magazines showing, an admin pouch, radio
+      for (i = -1; i <= 1; i++) { slab(k, rect(.074, .13), .04, .012, gear2, i * .086, 1.135, .168, -.06, 0, 0); slab(k, [[-.03, 0], [.03, 0], [.026, .05], [-.022, .05]], .022, .003, MAT.dark, i * .086 + .004, 1.2, .166, -.06, 0, .08); slab(k, rect(.076, .03), .046, .008, strap, i * .086, 1.185, .17, -.06, 0, 0); k.b(.02, .02, .01, pad, i * .086, 1.175, .196); }
+      slab(k, rect(.15, .075), .03, .01, gear2, -.03, 1.35, .16, -.06, 0, 0); slab(k, rect(.065, .042), .006, .001, teamM, .09, 1.355, .156, -.06, 0, 0); k.b(.04, .03, .012, MAT.poly2, -.09, 1.4, .165);
+      slab(k, rect(.06, .14), .05, .012, MAT.poly2, .168, 1.27, -.1, 0, .6, 0); k.cy(.006, .34, MAT.dark, .185, 1.5, -.115, 6); k.cy(.01, .03, MAT.dark, .185, 1.34, -.115, 6);
+      limb(body, V(.17, 1.3, -.06), V(.11, 1.43, .1), [[0, .006], [1, .006]], MAT.dark, 5); k.b(.03, .04, .02, MAT.dark, .1, 1.42, .12);                                               // radio cable and push-to-talk
+      // assault pack with straps and a carry handle
+      slab(k, [[-.13, -.17], [.13, -.17], [.145, .1], [.1, .17], [-.1, .17], [-.145, .1]], .1, .024, gear2, 0, 1.26, -.215); slab(k, rect(.2, .1), .05, .016, gear, 0, 1.16, -.275); slab(k, rect(.12, .062), .006, .001, teamM, 0, 1.33, -.269);
+      [-.07, .07].forEach(function (x) { k.b(.02, .3, .008, strap, x, 1.26, -.268); k.b(.03, .02, .014, pad, x, 1.3, -.27); }); limb(body, V(-.04, 1.44, -.2), V(.04, 1.44, -.2), [[0, .008], [.5, .012], [1, .008]], strap, 6);
+      // neck, head, face
+      limb(body, V(0, 1.44, 0), V(0, 1.53, .005), [[0, .058], [1, .052]], hood); k.s(.1, hood, 0, 1.59, 0, .95, 1.14, 1.04);
+      k.s(.075, skin, 0, 1.6, .042, 1.05, .5, .8); [-1, 1].forEach(function (sx) { k.s(.011, MAT.dark, sx * .034, 1.607, .097, 1.3, .8, .6); k.b(.03, .006, .01, hood, sx * .034, 1.622, .098); });   // eyes area, nose, eyes, brows
+      slab(k, [[-.07, -.018], [.07, -.018], [.074, .01], [.05, .02], [.012, .014], [0, .006], [-.012, .014], [-.05, .02], [-.074, .01]], .012, .003, MAT.glass, 0, 1.606, .108); [-1, 1].forEach(function (sx) { k.b(.008, .008, .1, MAT.poly2, sx * .076, 1.61, .06); });   // ballistic glasses
+      // helmet: lathed shell, band in the team colour, shroud, rails, counterweight, chin strap
+      var helm = k.add(new T.LatheGeometry([[0, .138], [.045, .134], [.09, .112], [.12, .07], [.131, .02], [.131, -.02], [.127, -.03]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 20), cloth2, 0, 1.612, -.008); helm.scale.set(1.03, 1, 1.17);
+      var hb = k.add(new T.LatheGeometry([[.1325, .002], [.1345, .004], [.1345, .022], [.1325, .024]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 20), teamM, 0, 1.612, -.008); hb.scale.set(1.03, 1, 1.17);
+      slab(k, [[-.03, -.03], [.03, -.03], [.03, .02], [.018, .03], [-.018, .03], [-.03, .02]], .02, .005, MAT.dark, 0, 1.672, .146, -.25, 0, 0); k.b(.024, .016, .02, MAT.steel, 0, 1.66, .158);
+      [-1, 1].forEach(function (sx) { slab(k, [[-.06, -.01], [.06, -.01], [.065, 0], [.06, .01], [-.06, .01]], .012, .003, MAT.dark, sx * .137, 1.625, -.005, 0, PI / 2, 0); for (var q = 0; q < 4; q++) k.b(.014, .012, .008, MAT.steel, sx * .143, 1.625, -.04 + q * .024);
+        var cup = k.add(new T.LatheGeometry([[0, .03], [.03, .028], [.046, .012], [.048, -.012], [.04, -.02]].map(function (p) { return new T.Vector2(p[0], p[1]); }), 12), gear2, sx * .112, 1.572, .002, 0, 0, -sx * PI / 2); cup.scale.y = .9;
+        limb(body, V(sx * .11, 1.6, .0), V(sx * .105, 1.67, -.01), [[0, .008], [1, .008]], gear2, 5); limb(body, V(sx * .1, 1.56, .03), V(sx * .06, 1.492, .07), [[0, .006], [1, .006]], pad, 5); });
+      limb(body, V(-.06, 1.492, .07), V(.06, 1.492, .07), [[0, .006], [1, .006]], pad, 5); slab(k, rect(.05, .028), .03, .008, pad, 0, 1.488, .085);                                     // chin strap and cup
+      limb(body, V(-.115, 1.565, .03), V(-.06, 1.535, .105), [[0, .005], [1, .005]], MAT.dark, 5); k.s(.012, MAT.dark, -.055, 1.533, .108);                                             // microphone boom
+      slab(k, rect(.07, .05), .03, .008, gear2, 0, 1.63, -.165, .3, 0, 0); slab(k, rect(.06, .06), .004, .001, MAT.dark, 0, 1.752, -.01, PI / 2, 0, 0);                                   // counterweight, top patch
+      // shouldered weapon; the sling crosses the chest
+      var d = GUN[gunId](), gx = -.13, gy = 1.385, gz = .3, gg = new T.Group(); d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);
+      limb(body, V(.12, 1.44, -.1), V(-.14, 1.3, .14), [[0, .011], [1, .011]], strap, 5); limb(body, V(-.14, 1.3, .14), V(gx, gy - .03, gz - .2), [[0, .009], [1, .009]], strap, 5);
+      arm(body, V(-.215, 1.4, .01), V(gx - .01, gy + d.grip[1] + .02, gz + d.grip[0]), V(-.5, -1, -.35), cloth, gear2, teamM, pad);
+      if (d.fore) arm(body, V(.215, 1.4, .02), V(gx + .01, gy + d.fore[1] - .005, gz + d.fore[0]), V(.25, -1, .1), cloth, gear2, teamM, pad);
+      else arm(body, V(.215, 1.4, .02), V(.2, 1.0, .12), V(.3, 0, -1), cloth, gear2, teamM, pad);
       var lg = legs.map(function (l) { var gm = merge(l); gm.translate(0, -HIP, 0); return gm; }), sg = shins.map(function (l) { var gm = merge(l); gm.translate(0, -KNEE, -.012); return gm; });
       c = cache[key] = { body: merge(body), gun: merge(gg), legL: lg[0], legR: lg[1], shinL: sg[0], shinR: sg[1], muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
     }

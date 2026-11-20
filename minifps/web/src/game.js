@@ -473,7 +473,7 @@
     // choose where to walk
     var want = null, pref = { rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
     var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
-    if (ob && (!best || ob.force)) { if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
+    if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; want = { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; } ai.goal = null; }
@@ -520,7 +520,17 @@
   function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: c >= nav.N ? nav.H : 0 }; }
   function near(a, s, r) { return Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < r && Math.abs(a.pos.y - (s.y || 0)) < 1.2; }
   function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
-  function siteAt(pos) { var s = G.map.sites, i; for (i = 0; i < s.length; i++) if (Math.abs(pos.x - s[i].x) < 2.6 && Math.abs(pos.z - s[i].z) < 2.6 && Math.abs(pos.y - (s[i].y || 0)) < 1) return s[i]; return null; }
+  // a site is either a 5 m square round its centre or, when the map gives zones, any of several rectangles in the site's own turned frame
+  function siteAt(pos) {
+    var ss = G.map.sites, i, j, s, z;
+    for (i = 0; i < ss.length; i++) {
+      s = ss[i]; if (Math.abs(pos.y - (s.y || 0)) > 1.2) continue;
+      if (!s.zones) { if (Math.abs(pos.x - s.x) < 2.6 && Math.abs(pos.z - s.z) < 2.6) return s; continue; }
+      var dx = pos.x - s.f[0], dz = pos.z - s.f[1], c = Math.cos(s.f[2]), sn = Math.sin(s.f[2]), lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+      for (j = 0; j < s.zones.length; j++) { z = s.zones[j]; if (lx > z[0] && lx < z[2] && lz > z[1] && lz < z[3]) return s; }
+    }
+    return null;
+  }
   // where a bot should be, and whether it should be holding "use" there
   function objective(a) {
     var B = G.bomb, atk = a.team === B.atk, off = POSTS[a.idx % POSTS.length], s, o, far = { x: G.map.spawns.B[2].x, z: 0 };
@@ -535,7 +545,7 @@
     if (B.drop) return { x: B.drop.x, z: B.drop.z, l: B.drop.l, force: true };
     s = G.map.sites[B.plan];
     if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4 && (a.ai.via[2] || 0) === lvl(a)) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1], a.ai.via[2]); }   // this round's route
-    if (B.carrier === a) return { x: s.x, z: s.z, l: s.l, use: near(a, s, 1.4), force: a.useP > 1.5 };
+    if (B.carrier === a) { var sp = B.spot || s; return { x: sp.x, z: sp.z, l: sp.l, use: near(a, sp, 1.4) && !!siteAt(a.pos), force: a.useP > 1.5 }; }
     if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9, lvl(B.carrier));   // escort the player
     o = snap(s.x + off[0], s.z + off[1], s.l); o.look = far; return o;
   }
@@ -550,7 +560,8 @@
   }
   function newRound() {
     var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
-    B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; bombMesh.visible = false; G.killer = null;
+    B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; var sps = G.map.sites[B.plan].spots; B.spot = sps ? sps[(Math.random() * sps.length) | 0] : null;   // this round's place to plant
+    bombMesh.visible = false; G.killer = null;
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
     G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
     at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
