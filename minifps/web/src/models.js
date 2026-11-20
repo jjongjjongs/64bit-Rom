@@ -320,6 +320,48 @@ var SV = window.SV = window.SV || {};
     var sh = new T.Mesh(blob, blobMat); sh.position.y = .025; sh.scale.setScalar(1.25); sh.renderOrder = 1; root.add(sh);
     return { root: root, up: up, skinned: true, mixer: mixer, acts: acts, bones: bones, gun: gun, grip: hg.grip, fore: hg.fore, shadow: sh, muzzle: hg.muzzle };
   }
+  // A soldier generated from a single picture has no skeleton, so it is fitted onto the animated one: scaled to the same
+  // height, legs sheared onto the leg bones and weighted to thigh / shin / foot, everything above the hips carried rigidly by
+  // the chest (it already holds its rifle), the head by the head bone. Bind space is centimetres, Z up, +Y forward, left = -X.
+  var scanGeo = null;
+  function sstep(a, b, x) { var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+  function fitScan(sk) {
+    if (scanGeo) return scanGeo; var src = null; SV.assets.scan.scene.traverse(function (o) { if (o.isMesh && !src) src = o; });
+    var g = src.geometry.clone(), P = g.attributes.position, n = P.count, i, bi = {}, bp = {};
+    sk.bones.forEach(function (b, k) { var nm = b.name.replace('mixamorig', ''); bi[nm] = k; bp[nm] = new T.Vector3().setFromMatrixPosition(sk.boneInverses[k].clone().invert()); });
+    g.computeBoundingBox(); var bb = g.boundingBox, K = 181 / (bb.max.y - bb.min.y), y0 = bb.min.y, sx = 0, sz = 0, c = 0, ax = [0, 0], ac = [0, 0];
+    for (i = 0; i < n; i++) { var h = (P.getY(i) - y0) * K; if (h > 20 && h < 50) { sx += P.getX(i); sz += P.getZ(i); c++; } } sx /= c; sz /= c;   // the shins mark the body's centre line
+    for (i = 0; i < n; i++) { var hh = (P.getY(i) - y0) * K, xx = -(P.getX(i) - sx) * K; if (hh > 12 && hh < 24) { var s = xx < 0 ? 0 : 1; ax[s] += xx; ac[s]++; } }
+    var ankle = [ax[0] / ac[0], ax[1] / ac[1]], hipZ = bp.LeftUpLeg.z, kneeZ = bp.LeftLeg.z, ankZ = bp.LeftFoot.z, legX = Math.abs(bp.LeftUpLeg.x);
+    var SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
+    for (i = 0; i < n; i++) {
+      var x = -(P.getX(i) - sx) * K, y = (P.getZ(i) - sz) * K + 1, z = (P.getY(i) - y0) * K, side = x < 0 ? 0 : 1, L = side ? 'Right' : 'Left', w = [];
+      var down = Math.max(0, Math.min(1, (hipZ - z) / (hipZ - ankZ))), lx = ankle[side] + (side ? legX : -legX - 0) * 0, cxLeg = (side ? 1 : -1) * legX + (ankle[side] - (side ? 1 : -1) * legX) * down;   // where this leg's axis is at this height
+      var low = z < kneeZ - 10, isLeg = z < hipZ + 4 && Math.abs(x - cxLeg) < (low ? 22 : 15) && y < (low ? 40 : 15) && y > (low ? -28 : -17);   // boots reach further forward than thighs do
+      if (isLeg) {
+        x -= (ankle[side] - (side ? 1 : -1) * legX) * down;   // bring the leg under its bone
+        var up = sstep(hipZ - 12, hipZ + 4, z), kn = sstep(kneeZ - 7, kneeZ + 7, z), an = sstep(ankZ - 4, ankZ + 5, z);
+        w.push(['Hips', up], [L + 'UpLeg', (1 - up) * kn], [L + 'Leg', (1 - kn) * an], [L + 'Foot', 1 - an]);
+      } else if (z < hipZ + 8) w.push(['Hips', 1 - sstep(hipZ - 4, hipZ + 8, z)], ['Spine1', sstep(hipZ - 4, hipZ + 8, z)]);
+      else { var hd = sstep(bp.Neck.z - 3, bp.Neck.z + 5, z); w.push(['Spine1', 1 - hd], ['Head', hd]); }
+      P.setXYZ(i, x, y, z); w.sort(function (a, b) { return b[1] - a[1]; });
+      for (var j = 0; j < 4; j++) { SI[i * 4 + j] = w[j] ? bi[w[j][0]] : 0; SW[i * 4 + j] = w[j] ? w[j][1] : 0; }
+    }
+    g.setAttribute('skinIndex', new T.BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new T.BufferAttribute(SW, 4)); g.computeVertexNormals(); g.computeBoundingSphere();
+    var mat = src.material, tex = mat.map; scanGeo = { geo: g, tex: tex }; return scanGeo;
+  }
+  var scanMats = {};
+  function scanned(team, gunId) {
+    var srcS = SV.assets.soldier, model = T.SkeletonUtils.clone(srcS.scene), root = new T.Group(), up = new T.Group(), bones = {}, old = null;
+    model.rotation.y = PI; up.add(model); root.add(up);
+    model.traverse(function (o) { if (o.isBone) bones[o.name.replace('mixamorig', '')] = o; if (o.isSkinnedMesh) { if (!old) old = o; o.visible = false; } });
+    var f = fitScan(old.skeleton), mat = scanMats[team] || (scanMats[team] = new T.MeshStandardMaterial({ map: f.tex, roughness: .85, metalness: 0, skinning: true, envMapIntensity: .5, color: team === 'A' ? 0xfff0d6 : 0xb4c6e2, emissive: 0xffffff, emissiveMap: f.tex, emissiveIntensity: .12 }));   // team tint: warm for A, cool for B; a little self-light so the dark kit never goes black
+    var mesh = new T.SkinnedMesh(f.geo, mat); mesh.frustumCulled = false; old.parent.add(mesh); mesh.bind(old.skeleton, old.bindMatrix);
+    var mixer = new T.AnimationMixer(model), acts = {}; ['Idle', 'Run', 'Walk'].forEach(function (nm) { var cl = T.AnimationClip.findByName(srcS.animations, nm); acts[nm] = mixer.clipAction(cl); acts[nm].play(); acts[nm].setEffectiveWeight(nm === 'Idle' ? 1 : 0); }); mixer.update(Math.random());
+    var sh = new T.Mesh(blob, blobMat); sh.position.y = .025; sh.scale.setScalar(1.25); sh.renderOrder = 1; root.add(sh);
+    var gun = new T.Group(); up.add(gun);
+    return { root: root, up: up, skinned: true, rigid: true, mixer: mixer, acts: acts, bones: bones, gun: gun, grip: null, fore: null, shadow: sh, muzzle: new T.Vector3(-.14, 1.3, .7) };
+  }
   // put one arm's hand on a point given in the soldier's own space, elbow pushed toward `hint`
   var vS = new T.Vector3(), vT = new T.Vector3(), vE = new T.Vector3(), vHd = new T.Vector3(), vDir = new T.Vector3(), vHint = new T.Vector3(), qP = new T.Quaternion(), q1 = new T.Quaternion(), q2 = new T.Quaternion(), YY = new T.Vector3(0, 1, 0), vSc = new T.Vector3();
   function reach(m, side, target, hx, hy, hz) {
@@ -332,8 +374,9 @@ var SV = window.SV = window.SV || {};
     A.parent.getWorldQuaternion(qP); q1.setFromUnitVectors(YY, vDir.subVectors(vE, vS).normalize()); A.quaternion.copy(qP.invert()).multiply(q1);
     q2.setFromUnitVectors(YY, vDir.subVectors(vHd, vE).normalize()); F.quaternion.copy(q1.invert()).multiply(q2); Hn.quaternion.set(0, 0, 0, 1);
   }
-  SV.poseArms = function (m) { m.root.updateMatrixWorld(true); reach(m, 'Right', m.grip, -.5, -1, -.2); reach(m, 'Left', m.fore || m.grip, .6, -1, .1); };
+  SV.poseArms = function (m) { if (m.rigid) return; m.root.updateMatrixWorld(true); reach(m, 'Right', m.grip, -.5, -1, -.2); reach(m, 'Left', m.fore || m.grip, .6, -1, .1); };
   SV.soldier = function (team, gunId) {
+    if (SV.assets && SV.assets.soldier && SV.assets.scan && T.SkeletonUtils) return scanned(team, gunId);
     if (SV.assets && SV.assets.soldier && T.SkeletonUtils) return skinned(team, gunId);
     var key = team + gunId, c = cache[key];
     if (!c) {

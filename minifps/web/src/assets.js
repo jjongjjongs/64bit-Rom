@@ -2,7 +2,7 @@
 // The files live next to the page under a/ (see web/fetch_assets.py). If they are missing (a browser preview, a broken
 // download) everything falls back to the painted textures and built shapes, so the game still runs.
 (function () {
-  var T = THREE, A = SV.assets = { tex: {}, model: {}, box: {}, hdr: {}, art: {}, soldier: null, ready: false, base: 'a/' };
+  var T = THREE, A = SV.assets = { tex: {}, model: {}, box: {}, hdr: {}, art: {}, soldier: null, scan: null, ready: false, base: 'a/' };
   SV.preload = function (onProg, done) {
     if (!T.GLTFLoader) { A.ready = true; done(); return; }
     var fl = new T.FileLoader(), tl = new T.TextureLoader(), gl = new T.GLTFLoader(), total = 1, got = 0, fin = false;
@@ -17,6 +17,7 @@
       if (T.RGBELoader) for (k in (m.hdr || {})) (function (k) { total++; new T.RGBELoader().setDataType(T.HalfFloatType).load(A.base + m.hdr[k], function (tx) { tx.minFilter = tx.magFilter = T.LinearFilter; tx.wrapS = T.RepeatWrapping; tx.generateMipmaps = false; A.hdr[k] = tx; step(); }, undefined, step); })(k);
       // hand-supplied pictures: a first-person weapon drawn as one image (see SV.viewModel)
       ['fp_rifle'].forEach(function (n) { total++; var t = tl.load(A.base + 'art/' + n + '.png', function () { A.art[n] = t; step(); }, undefined, step); t.encoding = T.sRGBEncoding; t.anisotropy = 4; });
+      total++; gl.load(A.base + 'art/soldier_scan.glb', function (g) { A.scan = g; step(); }, undefined, step);   // a soldier made from a picture; it borrows soldier.glb's skeleton and animations
       total++; gl.load(A.base + 'soldier.glb', function (g) { A.soldier = g; step(); }, undefined, step);
       step();
     }, undefined, function () { A.ready = true; done(); });
