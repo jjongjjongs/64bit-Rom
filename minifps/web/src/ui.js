@@ -34,7 +34,7 @@
       $('md-0').setAttribute('aria-pressed', match.mode ? 'false' : 'true'); $('md-1').setAttribute('aria-pressed', match.mode ? 'true' : 'false'); $('tk-box').hidden = !!match.mode;
       $('mt-foot').textContent = match.mode ? '5라운드 선승 · 라운드 2분 30초 · 부활 없음 · 4라운드 뒤 공수 교대' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
     }
-    if (id === 's-team') { $('tm-A-s').textContent = match.mode ? '주황 · 먼저 공격 (폭탄 설치)' : '주황 · 서쪽에서 시작'; $('tm-B-s').textContent = match.mode ? '하늘 · 먼저 수비 (설치 저지)' : '하늘 · 동쪽에서 시작'; }
+    if (id === 's-team') { $('tm-A-s').textContent = match.mode ? '주황 · 먼저 공격 (폭탄 설치)' : '주황 팀'; $('tm-B-s').textContent = match.mode ? '하늘 · 먼저 수비 (설치 저지)' : '하늘 팀'; }
     if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
     if (id === 's-load') {
       seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, '', g[0], SV.thumb(g[0])]; }), function () { return match.primary; }, function (v) { match.primary = v; });
@@ -203,5 +203,6 @@
   SV.back = function () { if (cur === 'edit') { editOff(); return true; } if (cur === 's-upd') { if (upd.phase !== 'installing') $('u-later').click(); return true; } if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
   SV.ui = { begin: begin, match: match, pause: pause, resume: resume, edit: editOn };
   applyCfg(); show('s-title');
+  $('t-tag').textContent = '팀 데스매치 · 폭파 미션 · 맵 ' + SV.MAPS.length + '개 · 무기 7종';
   SV.preload(function (p) { $('go-start').textContent = '불러오는 중… ' + Math.round(p * 100) + '%'; }, function () { $('go-start').disabled = false; $('go-start').textContent = '시작'; });
 })();

@@ -21,10 +21,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 /* ---- menus ---- */
 .scr { position: absolute; inset: 0; background: var(--ink); padding: calc(14px + var(--st)) var(--sr) calc(14px + var(--sb)) var(--sl); display: flex; flex-direction: column; gap: 12px; overflow-y: auto; touch-action: pan-y; }
-.scr.veil { background: rgba(11, 13, 15, .9); }
+.scr.veil { background: rgba(11, 13, 15, .985); }   /* opaque enough that the HUD behind does not read through the text */
 .top { display: flex; align-items: center; gap: 12px; }
 .top h2 { margin: 0; font-weight: 900; font-size: 22px; }
-.top .step { margin-left: auto; font-family: var(--f-mono); font-size: 11px; color: var(--bone-dim); }
+.top .step { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--bone-dim); }
 .back { width: 44px; height: 44px; border: 1px solid var(--line); background: none; font-size: 20px; }
 .grow { flex: 1 1 auto; min-height: 0; }
 .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -35,7 +35,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .opt { min-height: 46px; border: 1px solid var(--line); background: none; font-weight: 700; font-size: 14px; padding: 4px 8px; }
 .opt[aria-pressed="true"] { background: var(--bone); border-color: var(--bone); color: var(--ink); font-weight: 900; }
-.opt small { display: block; font-weight: 500; font-size: 11px; opacity: .75; }
+.opt small { display: block; font-weight: 500; font-size: 12px; opacity: .75; }
 /* the map picker: one row of equal cards that scrolls sideways, names never wrap, a tag marks maps that have the bomb mode */
 .seg.strip { grid-auto-columns: 150px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; scroll-snap-type: x proximity; padding-bottom: 2px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); padding-right: 36px; }
 .seg.strip::-webkit-scrollbar { display: none; }
@@ -50,7 +50,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 #s-title { justify-content: center; gap: 6px; }
 #s-title h1 { margin: 0; font-family: var(--f-display); font-weight: 900; font-size: clamp(72px, 22vh, 132px); line-height: .86; letter-spacing: -2px; }
-.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 2px; color: var(--signal); }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 2px; color: var(--signal); }
 .tag { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; margin: 8px 0 18px; }
 .tag i { width: 44px; height: 3px; background: var(--signal); }
 .lobby { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 20px; }
@@ -82,7 +82,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .set label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; } .set output { font-family: var(--f-mono); color: var(--signal); }
 input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; margin: 0; }
 .tog { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; border-top: 1px solid var(--line); }
-.tog b { font-size: 14px; display: block; } .tog small { font-size: 11px; color: var(--bone-dim); }
+.tog b { font-size: 14px; display: block; } .tog small { font-size: 12px; color: var(--bone-dim); }
 .sw { width: 52px; height: 30px; border-radius: 15px; border: 1px solid var(--line); background: none; padding: 2px; display: flex; flex: 0 0 auto; }
 .sw i { width: 24px; height: 24px; border-radius: 12px; background: var(--bone); }
 .sw[aria-checked="true"] { background: var(--signal); border-color: var(--signal); justify-content: flex-end; } .sw[aria-checked="true"] i { background: var(--ink); }
@@ -92,7 +92,9 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tiles div { border: 1px solid var(--line); padding: 8px 12px; } .tiles span { font-size: 12px; color: var(--bone-dim); display: block; } .tiles b { font-family: var(--f-display); font-weight: 900; font-size: 34px; line-height: 1; }
 .facts { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; } .facts li { display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(232, 228, 218, .07); margin-bottom: 3px; }
-.keys { font-family: var(--f-mono); font-size: 11px; color: var(--bone-dim); }
+.keys { font-family: var(--f-mono); font-size: 12px; color: var(--bone-dim); }
+@media (pointer: coarse) { .keys { display: none; } }   /* keyboard hints are for desktop only */
+#s-title { justify-content: center; }
 
 /* ---- HUD ---- */
 #hud { position: absolute; inset: 0; --bs: 1; --ba: .6; }
@@ -193,7 +195,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   <section class="scr" id="s-title">
     <div class="eyebrow">v0.22 · 오프라인 봇전</div>
     <h1>Mini-FPS</h1>
-    <div class="tag"><i></i>팀 데스매치 · 맵 2개 · 무기 7종</div>
+    <div class="tag"><i></i><span id="t-tag">팀 데스매치 · 폭파 미션</span></div>
     <div><button class="cta" data-go="s-lobby" id="go-start" disabled>불러오는 중…</button></div>
     <div class="keys" id="keys">PC: WASD 이동 · 마우스 조준 · 좌클릭 사격 · 우클릭 정조준 · R 장전 · G 투척 · C 앉기 · 1 2 3 무기 · P 정지</div>
   </section>
