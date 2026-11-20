@@ -320,7 +320,9 @@ var SV = window.SV = window.SV || {};
     model.rotation.y = PI; up.add(model); root.add(up);   // the file faces -Z, the game's rig faces +Z
     model.traverse(function (o) {
       if (o.isBone) bones[o.name.replace('mixamorig', '')] = o;
-      if (o.isMesh) { var k = o.material.name; if (!tm[k]) { tm[k] = o.material.clone(); if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } o.material = tm[k]; o.frustumCulled = false; }
+      if (o.isMesh) { var k = o.material.name; if (!tm[k]) { tm[k] = o.material.clone(); var skin = SV.assets.art['soldier_' + team], nm = SV.assets.art.soldier_nrm;
+        if (skin) { tm[k].map = skin; tm[k].color.set(k.indexOf('Visor') < 0 ? 0xffffff : 0x8a8f94); if (nm) { tm[k].normalMap = nm; tm[k].normalScale.set(1, 1); } tm[k].roughness = .82; tm[k].envMapIntensity = .6; }
+        else { if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } } o.material = tm[k]; o.frustumCulled = false; }
     });
     var mixer = new T.AnimationMixer(model), acts = {}; ['Idle', 'Run', 'Walk'].forEach(function (n) { var cl = T.AnimationClip.findByName(src.animations, n); acts[n] = mixer.clipAction(cl); acts[n].play(); acts[n].setEffectiveWeight(n === 'Idle' ? 1 : 0); }); mixer.update(Math.random());
     var hg = heldGun(gunId, -.14, 1.38, .46), gun = new T.Mesh(hg.geo, SV.litMat); up.add(gun); if (hg.scan) gun.add(hg.scan.clone(true));
