@@ -807,5 +807,6 @@
   }
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
+  SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

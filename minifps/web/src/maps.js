@@ -717,7 +717,142 @@
       fwd: [A.p(-9, 3, 1), M.p(6, 0, 1), [8, 3, 0], Bf.p(-6, -2, 1), [14, -27, 0], [8, 25, 0]] };
   }
 
-  var MAKERS = [dock, warehouse, depot, oldtown];
-  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true }];
+  // 05 전술 기지 — 사용자가 준 시안과 설명문(맵 1, 대칭형 군사기지)을 그대로 옮겼다. 북쪽이 -z.
+  //  · 부지 106 x 81 m 를 높이 4.8 m 콘크리트 방벽이 두른다. 좌우 대칭, 세 갈래(왼쪽 길 / 가운데 광장 / 오른쪽 길).
+  //  · 남쪽 가운데 철제 정문(공격 출발) → 가운데 광장(화단과 큰 나무) → 광장 북쪽의 24 x 14 x 5 m 중앙 건물이 시야를 가른다.
+  //  · 중앙 건물 좌우의 문 통로로 돌아 들어가고, 건물 뒤 가로 통로(수비 출발, 본부 건물 앞)로 A·B 를 오간다.
+  //  · A(북서)·B(북동) 지점은 광장보다 1.4 m 높은 19 x 21 m 작업장. 남쪽 넓은 계단, 동쪽 계단, 본부 쪽 좁은 계단으로 오른다.
+  //  · 감시탑과 옥상은 장식이다(올라갈 수 없다).
+  function compound() {
+    var b = Builder(), H = 1.4, links = [], CW = 0x9a9b98, CW2 = 0x838583, FLR = 0x83847e, DK = 0x33383c, OLV = 0x5a6142, TAN = 0xb39a6a, i;
+    b.day = true;
+    b.box(0, 0, 150, 120, .3, 0x5b5a3e, -.45, false, 'plain');                    // earth outside the walls
+    b.box(0, 0, 108, 83, .4, FLR, -.4, false, 'conc');                            // paved compound
+    function tree(x, z, k, solid) {
+      b.cyl(x, z, .28 * k, 3.2 * k, 0x4a3a28, 0, !!solid, 'plain', .2 * k, 8);
+      [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6], [-.4, 5.6, .5, 1.5], [.2, 3.7, 1.4, 1.6]].forEach(function (q, n) { var g = new T.IcosahedronGeometry(q[3] * k, 1); g.translate(x + q[0] * k, q[1] * k, z + q[2] * k); b.geo(g, n % 2 ? 0x3f5a2c : 0x4c6a33, 'plain', {}); });
+    }
+    function acu(x, z, y) { b.box(x, z, 1.7, 1.7, 1, 0xb4b8b6, y, false, 'metal'); b.cyl(x, z, .62, .06, 0x2a2e31, y + 1, false, 'plain', .62, 14); b.cyl(x, z, .12, .1, 0x8a8f92, y + 1.03, false, 'metal', .12, 8); }
+    function lampW(x, z, y, nx, nz) { b.box(x + nx * .1, z + nz * .1, nx ? .2 : .5, nz ? .2 : .5, .16, DK, y, false, 'metal'); b.glow(x + nx * .14, y - .05, z + nz * .14, nx ? .12 : .4, .07, nz ? .12 : .4, 0xffd9a0); }
+    function win(x, z, w, h, y, nx, nz) { b.box(x + nx * .03, z + nz * .03, nx ? .1 : w + .2, nz ? .1 : w + .2, h + .2, 0x55595a, y - .1, false, 'metal'); b.box(x + nx * .07, z + nz * .07, nx ? .08 : w, nz ? .08 : w, h, 0x1b262c, y, false, 'plain'); }
+    function door(x, z, w, h, nx, nz) { b.box(x + nx * .04, z + nz * .04, nx ? .12 : w + .24, nz ? .12 : w + .24, h + .12, 0x4a4e50, 0, false, 'metal'); b.box(x + nx * .09, z + nz * .09, nx ? .1 : w, nz ? .1 : w, h, 0x3d4a44, 0, false, 'paint'); }
+    function rim(x0, z0, x1, z1, y, c) { var w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; b.box(cx, z0 + .15, w, .3, .35, c, y, false, 'conc'); b.box(cx, z1 - .15, w, .3, .35, c, y, false, 'conc'); b.box(x0 + .15, cz, .3, d, .35, c, y, false, 'conc'); b.box(x1 - .15, cz, .3, d, .35, c, y, false, 'conc'); }
+    function cr(x, z, sz, h, c, y0) { b.crate(x, z, sz, c, y0 || 0, h); if (y0 > .5) b.solid(x, z, sz, sz, h, y0); }
+    function ctn(x, z, alongZ, c, y0) {                                            // cargo container, 6.06 x 2.44 x 2.6
+      var w = alongZ ? 2.44 : 6.06, d = alongZ ? 6.06 : 2.44, sx, sz; b.box(x, z, w, d, 2.6, c, y0, true, 'corr');
+      for (sx = -1; sx <= 1; sx += 2) for (sz = -1; sz <= 1; sz += 2) b.box(x + sx * (w / 2 - .06), z + sz * (d / 2 - .06), .16, .16, 2.62, DK, y0 - .01, false, 'metal');
+      if (alongZ) b.quad('door', x, y0 + 1.3, z + d / 2 + .015, 2.3, 2.45, 0, { color: c }); else b.quad('door', x + w / 2 + .015, y0 + 1.3, z, 2.3, 2.45, PI / 2, { color: c });
+    }
+    function siteMark() { var a = cv(256, 256), x = a[1]; x.strokeStyle = '#b8402e'; x.lineWidth = 16; x.beginPath(); x.arc(128, 128, 104, 0, 6.2832); x.stroke(); x.lineWidth = 20; x.beginPath(); x.moveTo(60, 60); x.lineTo(196, 196); x.moveTo(196, 60); x.lineTo(60, 196); x.stroke(); return a[0]; }
+    function hazard(x, z, w, d) { b.quad('hazard', x, .025, z, w, d, 0, { flat: true, rep: [w, d] }); }
+
+    // ---------- perimeter: 4.8 m wall with a coping, steel main gate in the middle of the south side
+    [[0, -40.8, 107.2, .6], [-53.3, 0, .6, 82.2], [53.3, 0, .6, 82.2]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], 4.8, CW, 0, true, 'conc'); b.box(q[0], q[1], q[2] + .2, q[3] + .2, .2, CW2, 4.8, false, 'conc'); });
+    [-1, 1].forEach(function (sd) { b.box(sd * 29.8, 40.8, 47.6, .6, 4.8, CW, 0, true, 'conc'); b.box(sd * 29.8, 40.8, 47.8, .8, .2, CW2, 4.8, false, 'conc'); b.box(sd * 6.5, 40.8, 1.2, 1.2, 5.4, CW2, 0, true, 'conc'); });   // gate piers
+    b.box(0, 40.9, 11.8, .25, 4.4, 0x3c4347, 0, true, 'metal');                                                                     // the gate: plate, frame, cross-bracing
+    [[-5.9, 0], [5.9, 0], [0, 0]].forEach(function (q) { b.box(q[0], 40.7, .3, .3, 4.5, 0x2c3134, 0, false, 'metal'); }); [.3, 2.2, 4.2].forEach(function (y) { b.box(0, 40.7, 11.8, .2, .25, 0x2c3134, y, false, 'metal'); });
+    [-1, 1].forEach(function (sd) { b.seg(sd * .2, .4, 40.68, sd * 5.8, 4.2, 40.68, .14, 0x2c3134, 'metal'); b.seg(sd * .2, 4.2, 40.68, sd * 5.8, .4, 40.68, .14, 0x2c3134, 'metal'); });
+    b.quad('hazard', 0, .3, 40.55, 11.8, .5, PI, { rep: [11.8, .5] }); hazard(0, 39.4, 11.8, .6);
+    for (i = -48; i <= 48; i += 8) { lampW(i, -40.5, 3.6, 0, 1); if (Math.abs(i) > 8) lampW(i, 40.5, 3.6, 0, -1); } for (i = -32; i <= 32; i += 8) { lampW(-53, i, 3.6, 1, 0); lampW(53, i, 3.6, -1, 0); }
+
+    // ---------- middle (not mirrored)
+    // central building, 24 x 14 x 5: it splits the map's sight lines; roof is dressing only
+    b.box(0, -11, 24, 14, 5, CW, 0, true, 'conc'); rim(-12, -18, 12, -4, 5, CW2); b.box(0, -3.95, 24.4, .3, .25, CW2, 3.3, false, 'conc');
+    door(0, -4, 2.2, 2.5, 0, 1); [-9, -6, -3, 3, 6, 9].forEach(function (x) { win(x, -4, 1.6, 1.1, 3.55, 0, 1); win(x, -18, 1.6, 1.1, 3.55, 0, -1); }); door(-8, -18, 1.2, 2.2, 0, -1); door(8, -18, 1.2, 2.2, 0, -1);
+    [-10.5, 10.5].forEach(function (x) { lampW(x, -4, 2.9, 0, 1); lampW(x, -18, 2.9, 0, -1); }); lampW(-12, -11, 2.9, -1, 0); lampW(12, -11, 2.9, 1, 0);
+    acu(7.5, -8, 5); acu(-7, -13.5, 5.3); b.box(-7, -13.5, 3.2, 4, .3, 0x9aa0a2, 5, false, 'metal');                                  // rooftop plant: units, duct run, pipes
+    b.box(-6.5, -8.5, 4.2, 1.1, .9, 0xa7adaf, 5, false, 'metal'); b.box(-3.9, -10.5, 1.1, 5, .9, 0xa7adaf, 5, false, 'metal'); b.box(-8.4, -9.4, .5, .5, 1.6, 0x8d9396, 5, false, 'metal');
+    [-.4, 0, .4].forEach(function (o) { b.seg(2 + o, 5.25, -16.5, 2 + o, 5.25, -6, .16, 0x7f6b55, 'metal'); }); b.box(2, -16.6, 1.6, .5, .5, 0x6a7073, 5, false, 'metal'); b.box(4.6, -15, 2.4, 2.2, 1.2, 0x8d9396, 5, false, 'metal');
+    // HQ building along the north wall: two tiers, front steps, plant on the roof
+    b.box(0, -33.9, 30, 13.8, 5, CW, 0, true, 'conc'); rim(-15, -40.8, 15, -27, 5, CW2); b.box(0, -35.5, 18, 9.5, 2.6, CW2, 5, false, 'conc'); rim(-9, -40.25, 9, -30.75, 7.6, CW);
+    b.box(0, -26.65, 6, .7, .2, CW2, 0, true, 'conc'); b.box(0, -26.3, 6, .7, .2, CW2, 0, false, 'conc'); b.box(0, -26.65, 6, .7, .2, CW2, .2, true, 'conc');                 // steps to the door
+    door(0, -27, 2.6, 2.7, 0, 1); [-12, -9, -6, 6, 9, 12].forEach(function (x) { win(x, -27, 1.7, 1.2, 1.3, 0, 1); win(x, -27, 1.7, 1, 3.5, 0, 1); }); [-3.5, 3.5].forEach(function (x) { win(x, -30.75, 2.2, 1, 5.9, 0, 1); lampW(x * 1.2, -27, 3.1, 0, 1); });
+    [[-12.5, -30], [-12.5, -32.5], [12.5, -30], [12.5, -32.5]].forEach(function (q) { acu(q[0], q[1], 5); }); b.box(-11.5, -37, 2.5, 2, .8, 0x8d9396, 5, false, 'metal'); b.box(11.5, -37, 1.2, 1.2, 1.4, 0x8d9396, 5, false, 'metal');
+    // plaza planter with the big tree: a 1.1 m rim makes waist-high cover; crate rows on its two long sides, steps on the south
+    b.box(0, 9, 9.2, 7.2, .95, 0x4d5a34, 0, true, 'plain'); [[0, 5.15, 10, .5], [0, 12.85, 10, .5], [-4.75, 9, .5, 7.2], [4.75, 9, .5, 7.2]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], 1.1, CW, 0, true, 'conc'); });
+    tree(0, 9, 1.5, true); b.box(0, 13.5, 3, .8, .25, CW2, 0, false, 'conc'); b.box(0, 13.3, 3, .4, .5, CW2, 0, false, 'conc');
+    [-1, 1].forEach(function (sd) { for (i = 0; i < 4; i++) cr(sd * 5.6, 6.6 + i * 1.6, .9, .8, OLV); });
+    // gate corridor: attackers' start
+    hazard(0, 31.2, 12, .5); [-2, 2].forEach(function (x) { b.box(x, 24.2, .25, .25, 1, 0xd0b03a, 0, true, 'metal'); });                                                       // bollards at the plaza mouth
+
+    // ---------- one half, mirrored. u = distance from the centre line
+    function half(sd) {
+      function B(u0, z0, u1, z1, h, c, t, y0, solid) { b.box(sd * (u0 + u1) / 2, (z0 + z1) / 2, Math.abs(u1 - u0), Math.abs(z1 - z0), h, c, y0 || 0, solid, t || 'conc'); }
+      function stair(u, z, du, dz, wd) {                                            // four steps up to the site floor
+        for (var k = 0; k < 4; k++) b.box(sd * (u + du * (k * .5 + .25)), z + dz * (k * .5 + .25), du ? .5 : wd, du ? wd : .5, .35 * (k + 1), 0x9d998e, 0, true, 'conc');
+        links.push({ a: [sd * (u - du * .8), z - dz * .8, 0], b: [sd * (u + du * 2.7), z + dz * 2.7, 1] });
+        [-1, 1].forEach(function (e) { var ou = du ? 0 : e * (wd / 2 + .12), oz = du ? e * (wd / 2 + .12) : 0; b.seg(sd * (u + ou), 1, z + oz, sd * (u + du * 2 + ou), 2.4, z + dz * 2 + oz, .07, DK, 'metal'); b.box(sd * (u + ou), z + oz, .08, .08, 1, DK, 0, false, 'metal'); });   // handrails
+      }
+      var A = sd < 0;
+      // thick fortified corners behind the site, with the watch tower on top (dressing: nobody gets in)
+      B(15, -40.8, 53.3, -34, 4.8, CW, 'conc'); B(50, -34, 53.3, -13, 4.8, CW, 'conc'); B(15, -34.2, 50, -34, 5, CW2, 'conc', 0, false);
+      b.cyl(sd * 49.5, -37.5, 3.1, 6.2, CW, 0, false, 'conc', 3.1, 8); b.cyl(sd * 49.5, -37.5, 3.45, .3, CW2, 6.2, false, 'conc', 3.45, 8); b.cyl(sd * 49.5, -37.5, 3, 1.25, 0x23292d, 6.5, false, 'plain', 3, 8);
+      b.cyl(sd * 49.5, -37.5, 3.7, .3, CW2, 7.75, false, 'conc', 3.5, 8); for (i = 0; i < 8; i++) b.box(sd * 49.5 + Math.cos(i * PI / 4 + PI / 8) * 3.05, -37.5 + Math.sin(i * PI / 4 + PI / 8) * 3.05, .3, .3, 1.25, CW, 6.5, false, 'conc');
+      b.seg(sd * 49.5, 8.05, -37.5, sd * 49.5, 9.6, -37.5, .08, DK, 'metal'); b.box(sd * 48.2, -36.4, .5, .4, .4, 0xd8d2bc, 8.05, false, 'metal');
+      // the site: a yard 1.4 m above the plaza, walled on its open sides, three ways up
+      B(31, -34, 50, -13, H, 0x96928a, 'conc'); b.quad('siteX', sd * 39.5, H + .03, -22.5, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark });
+      [[-34, -29.4], [-27, -18.6], [-15.4, -13]].forEach(function (q) { B(31, q[0], 31.5, q[1], 3.8, CW, 'conc'); });                        // east wall, gaps for the two stairs
+      [[31, 38], [42, 50]].forEach(function (q) { B(q[0], -13.5, q[1], -13, 3.8, CW, 'conc'); });                                            // south wall, gap for the wide stairs
+      stair(29, -17, 1, 0, 3); stair(29, -28.2, 1, 0, 2.2); stair(40, -11, 0, -1, 4);
+      [[-18.6, -15.4], [-29.4, -27]].forEach(function (q) { B(31, q[0], 31.5, q[1], .4, CW2, 'conc', 3.4, false); }); B(38, -13.5, 42, -13, .4, CW2, 'conc', 3.4, false);       // lintels over the stair openings
+      lampW(sd * 31.5, -22, H + 2.1, sd, 0); lampW(sd * 40, -34, H + 2.6, 0, 1); lampW(sd * 50, -23, H + 2.6, -sd, 0); lampW(sd * 35, -13.5, H + 2.1, 0, -1); lampW(sd * 45, -13.5, H + 2.1, 0, -1);
+      mk(A ? 'A' : 'B', sd * 31.02, 2.9, -21.5, sd > 0 ? -PI / 2 : PI / 2); mk(A ? 'A' : 'B', sd * 36, 2.9, -13.52, 0);
+      if (A) {   // A: red cargo container and green military storage
+        ctn(sd * 35.6, -31.2, false, 0xa5432f, H); ctn(sd * 47.6, -21.6, true, 0x56633f, H);
+        cr(sd * 43.2, -30.6, 1.3, 1.2, OLV, H); cr(sd * 44.6, -30.5, 1.3, 1.2, OLV, H); cr(sd * 43.9, -29.1, 1, .8, OLV, H); cr(sd * 43.9, -30.5, 1, .8, 0x4e5637, H + 1.2);
+        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1, .8, TAN, H); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1, .8, OLV, H); cr(sd * 37, -19.4, 1, .8, OLV, H);
+      } else {   // B: blue cargo container and stacks of boxes
+        ctn(sd * 47.6, -21.6, true, 0x4d6f8f, H);
+        cr(sd * 34, -31.5, 1.3, 1.2, TAN, H); cr(sd * 35.4, -31.5, 1.3, 1.2, TAN, H); cr(sd * 36.8, -31.5, 1.3, 1.2, TAN, H); cr(sd * 34.7, -31.5, 1.1, .9, TAN, H + 1.2); cr(sd * 35.1, -30, 1, .8, 0x9c8a62, H);
+        cr(sd * 43.2, -30.6, 1.3, 1.2, OLV, H); cr(sd * 44.6, -30.5, 1.3, 1.2, OLV, H); cr(sd * 43.9, -29.1, 1, .8, OLV, H);
+        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1.3, 1.2, TAN, H); cr(sd * 33, -23.9, 1, .8, TAN, H + 1.2); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1.3, 1.2, TAN, H); cr(sd * 37, -19.4, 1, .8, TAN, H);
+      }
+      // HQ side yard (the narrow stairs start here) and the court beside the central building
+      cr(sd * 17.2, -32.6, 1.3, 1.2, OLV); cr(sd * 18.6, -32.7, 1.3, 1.2, OLV); cr(sd * 17.9, -32.6, 1, .8, OLV, 1.2); cr(sd * 26.5, -32.8, 1, .8, TAN);
+      cr(sd * 13, -19.2, 1.3, 1.2, OLV); cr(sd * 14.4, -19.2, 1.3, 1.2, OLV); cr(sd * 24, -24.5, 1.3, 1.2, TAN); b.jersey(sd * 22, -11.5, 3, true);
+      // wall from the central building to the plaza wall, with the gateway that lets you round the building
+      B(12, -5.25, 17.5, -4.75, 3.8, CW, 'conc'); B(21.5, -5.25, 27.25, -4.75, 3.8, CW, 'conc'); B(17.2, -5.4, 21.8, -4.6, .7, CW2, 'conc', 3.1, false); B(17.3, -5.4, 17.7, -4.6, 3.1, CW2, 'conc', 0, false); B(21.3, -5.4, 21.7, -4.6, 3.1, CW2, 'conc', 0, false);
+      lampW(sd * 19.5, -4.75, 3.3, 0, 1); lampW(sd * 19.5, -5.25, 3.3, 0, -1); hazard(sd * 19.5, -5, 3.6, .5);
+      // plaza side wall with one gap toward the outer lane; short return wall north of it
+      B(26.75, -5.25, 27.25, 8, 3.8, CW, 'conc'); B(26.75, 12, 27.25, 22, 3.8, CW, 'conc'); B(27.75, -13, 28.25, -8.5, 3.8, CW, 'conc'); lampW(sd * 26.75, 2, 2.9, -sd, 0); lampW(sd * 26.75, 17, 2.9, -sd, 0); lampW(sd * 27.25, 2, 2.9, sd, 0); hazard(sd * 27, 10, .5, 3.6);
+      // plaza cover
+      cr(sd * 17.3, 8.3, 1.3, 1.2, TAN); cr(sd * 18.7, 8.3, 1.3, 1.2, TAN); cr(sd * 18, 9.7, 1, .8, TAN); cr(sd * 19.6, .6, 1.3, 1.2, OLV); cr(sd * 19.6, 2, 1, .8, OLV); cr(sd * 11, 18.5, 1.3, 1.2, OLV); b.jersey(sd * 12, -1, 3, false);
+      // south side of the plaza: wall, shed with a pitched iron roof, striped opening to the cross alley
+      B(5.5, 26.2, 13, 26.8, 3.8, CW, 'conc'); B(13, 22, 20, 27, 3, 0x8a8f8c, 'block'); var rf = new T.BoxGeometry(7.6, .14, 5.8); rf.rotateZ(sd * .2); rf.translate(sd * 16.5, 3.75, 24.5); b.geo(rf, 0x7a6a58, 'corr', {});
+      door(sd * 16.5, 22, 2, 2.3, 0, -1); hazard(sd * 23.6, 24.5, 6.6, .6); lampW(sd * 9, 26.2, 2.9, 0, -1);
+      // guard building beside the gate
+      B(6, 31, 18, 40.8, 3.6, CW, 'conc'); rim(sd > 0 ? 6 : -18, 31, sd > 0 ? 18 : -6, 40.5, 3.6, CW2); win(sd * 6, 34, 1.6, 1.1, 1.3, -sd, 0); win(sd * 6, 37.5, 1.6, 1.1, 1.3, -sd, 0); win(sd * 10, 31, 1.6, 1.1, 1.3, 0, -1); win(sd * 14.5, 31, 1.6, 1.1, 1.3, 0, -1); door(sd * 18, 34, 1.1, 2.2, sd, 0);
+      acu(sd * 14, 36, 3.6); lampW(sd * 6, 32, 2.9, -sd, 0); lampW(sd * 12, 31, 2.9, 0, -1);
+      // corner yard: tent store, stacked boxes, a barred side gate in the wall (closed)
+      B(42.5, 34, 49.5, 39, 2.3, 0x5f6a45, 'canvas'); B(42.3, 33.8, 49.7, 39.2, .15, 0x55603f, 'canvas', 2.3, false); cr(sd * 41.2, 35.2, 1.3, 1.2, OLV); cr(sd * 41.2, 36.6, 1, .8, OLV);
+      cr(sd * 22.5, 34.4, 1.3, 1.2, OLV); cr(sd * 23.9, 34.4, 1.3, 1.2, OLV); cr(sd * 23.2, 35.8, 1.3, 1.2, OLV); cr(sd * 23.2, 34.4, 1, .8, OLV, 1.2);
+      B(29, 40.35, 35, 40.5, 3.2, 0x2c3134, 'metal', 0, false); for (i = 0; i < 7; i++) b.box(sd * (29.4 + i * .9), 40.3, .08, .08, 3.2, 0x1f2326, 0, false, 'metal'); b.jersey(sd * 33, 30.5, 3, false);
+      // outer lane: store sheds to weave round, an office against the wall
+      B(35, 5, 45, 12, 3.6, CW, 'conc'); rim(sd > 0 ? 35 : -45, 5, sd > 0 ? 45 : -35, 12, 3.6, CW2); door(sd * 35, 8.5, 1.2, 2.2, -sd, 0); win(sd * 40, 5, 1.6, 1.1, 1.3, 0, -1);
+      B(37, 12, 47, 20, 3, 0x8a8f8c, 'block'); var r2 = new T.BoxGeometry(10.6, .14, 8.6); r2.rotateZ(-sd * .16); r2.translate(sd * 42, 3.85, 16); b.geo(r2, 0x74655a, 'corr', {}); door(sd * 42, 20, 2.4, 2.4, 0, 1);
+      B(46, -9, 53.3, -1, 3.6, CW, 'conc'); win(sd * 46, -5, 1.6, 1.1, 1.3, -sd, 0); door(sd * 46, -2.5, 1.1, 2.2, -sd, 0); acu(sd * 50, -5, 3.6);
+      cr(sd * 31.5, 1, 1.3, 1.2, TAN); cr(sd * 31.5, 2.4, 1, .8, TAN); cr(sd * 50.5, 12.5, 1.3, 1.2, OLV); cr(sd * 50.5, 13.9, 1, .8, OLV); cr(sd * 33.5, -4, 1.3, 1.2, OLV); b.jersey(sd * 38, -5.5, 3, false); b.jersey(sd * 31, 23, 3, true);
+      lampW(sd * 45, 9, 2.9, sd, 0); lampW(sd * 37, 16, 2.6, -sd, 0); lampW(sd * 46, -5, 2.9, -sd, 0);
+      // cables from the guard building to the plaza wall
+      b.seg(sd * 18, 3.5, 31, sd * 27, 3.7, 22, .03, 0x1c1c1c, 'plain'); b.seg(sd * 27, 3.7, 12, sd * 35, 3.5, 12, .03, 0x1c1c1c, 'plain');
+    }
+    function mk(t, x, y, z, ry) { b.mark(t, x, y, z, 1.5, 1.5, ry, '#e2562f'); }
+    half(-1); half(1);
+    // trees beyond the wall, seen over it
+    [[-60, -30], [-61, -8], [-59, 14], [-62, 33], [60, -32], [62, -10], [59, 12], [61, 34], [-40, -47], [-12, -48], [22, -47], [44, -48], [-45, 47], [-22, 48], [24, 48], [46, 47]].forEach(function (q, n) { tree(q[0], q[1], 1.2 + (n % 3) * .25); });
+    [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 36 }); b.spawns.B.push({ x: x, z: -22.5 }); });
+    function site(id, sd) {
+      return { id: id, x: sd * 39.5, z: -22.5, l: 1, y: H, f: [sd * 40.5, -23.5, 0], zones: [[-8.6, -10, 8.6, 9.6]],
+        spots: [[39.5, -22.5], [38.5, -27.5], [45, -26], [40, -16.5], [34.5, -20.5]].map(function (q) { return { x: sd * q[0], z: q[1], y: H, l: 1 }; }),
+        via: [[sd * 40, 29, 0], [sd * 31, 3, 0], [sd * 19.5, 0, 0], [sd * 40, -8, 0], [sd * 22, -15, 0]] };
+    }
+    return { name: '전술 기지', b: b, bounds: { minx: -54, maxx: 54, minz: -41.5, maxz: 41.5 }, bg: 0x93a7b8, fog: [50, 220], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xffe6c0, 1.6, [-30, 34, 22]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1,
+      H: H, links: links, ladders: [], sites: [site('A', -1), site('B', 1)],
+      fwd: [[-19.5, -9, 0], [19.5, -9, 0], [-40, -8, 0], [40, -8, 0], [0, -22, 0], [-36, -18, 1], [36, -18, 1], [-24, -30, 0], [24, -30, 0]] };
+  }
+
+  var MAKERS = [dock, warehouse, depot, oldtown, compound];
+  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true },
+    { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 좌우 대칭 세 갈래', bomb: true }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) { var sd = skyDome(m.sky[0], m.sky[1]); sd.userData.sky = 1; m.group.add(sd); } m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();
