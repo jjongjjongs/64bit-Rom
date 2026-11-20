@@ -68,7 +68,7 @@ var SV = window.SV = window.SV || {};
     k.cx(.0145, .2, m.steel, -.235, .03, 0, 12); k.cx(.0185, .012, m.steel, -.142, .03, 0, 12);                                                                 // buffer tube, castle nut
     ex(k, [[-.21, .052], [-.37, .052], [-.385, .04], [-.385, -.07], [-.365, -.078], [-.3, -.028], [-.21, .004]], -.019, .019, m.poly2, .004, [[[-.33, 0], [-.365, 0], [-.365, -.05], [-.33, -.02]]]);   // skeleton stock
     k.b(.02, .13, .044, m.rubber, -.397, -.012, 0); k.b(.012, .03, .006, m.steel, -.2, -.012, .021);
-    return { g: g, grip: [-.105, -.1], fore: [.265, -.035], muzzle: [.67, .03], sight: .1075 };
+    return { g: g, grip: [-.105, -.1], fore: [.265, -.035], cup: [.25, .03, .034], muzzle: [.67, .03], sight: .1075 };
   };
   GUN.smg = function () {
     var g = new T.Group(), k = kit(g), m = MAT, i;
@@ -95,7 +95,7 @@ var SV = window.SV = window.SV || {};
     teeth(k, -.1, 27, .0705, .02, m.steel); k.b(.27, .006, .022, m.steel, .03, .066, 0);
     [-.04, .09].forEach(function (x) { k.b(.022, .03, .03, m.dark, x, .088, 0); k.cx(.0245, .022, m.dark, x, .125, 0, 14); });                                  // scope rings
     lx(k, [[-.2, 0], [-.2, .019], [-.17, .0215], [-.13, .0215], [-.11, .015], [.12, .015], [.16, .026], [.25, .026], [.25, 0]], m.dark, .125, 0, 16);            // scope
-    k.cx(.0235, .003, m.glass, .2515, .125, 0, 16); k.cx(.0185, .003, m.glass, -.2015, .125, 0, 16); k.cy(.014, .028, m.steel, .03, .152, 0, 12); k.cz(.014, .028, m.steel, .03, .125, .028, 12);
+    k.cx(.0235, .003, m.rubber, .2515, .125, 0, 16); k.cx(.0185, .003, m.rubber, -.2015, .125, 0, 16); k.cy(.014, .028, m.steel, .03, .152, 0, 12); k.cz(.014, .028, m.steel, .03, .125, .028, 12);
     ex(k, [[.02, -.03], [.1, -.03], [.095, -.092], [.025, -.092]], -.014, .014, m.poly2, .002);                                                                // magazine
     ex(k, [[-.16, -.03], [-.1, -.03], [-.115, -.08], [-.14, -.15], [-.185, -.145], [-.165, -.08]], -.015, .015, m.rubber, .005); trig(k, -.055, -.03, m.bright, m.poly);
     ex(k, [[-.2, .03], [-.47, .03], [-.48, .02], [-.48, -.1], [-.46, -.105], [-.36, -.03], [-.2, -.03]], -.021, .021, m.olive2, .004, [[[-.4, 0], [-.45, 0], [-.45, -.07], [-.4, -.03]]]);   // skeleton stock
@@ -245,15 +245,13 @@ var SV = window.SV = window.SV || {};
     var mid = top - (n - 1) * .0215 / 2, span = (n - 1) * .0215 / 2 + .014;
     blob(P(22, r + .017, mid), P(22, 1, 0).sub(O).addScaledVector(ax, 0), .04, span, .02, glove);                                  // back of the hand
     blob(P(-12, r + .02, mid - .004), P(-12, 1, 0).sub(O), .03, span * .95, .024, glove);                                           // heel of the palm
-    var t0 = P(o.thumbAt || -30, r + (o.thumbAt ? .008 : .02), top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : P(-122, r + .012, top + .048);
+    var t0 = P(o.thumbAt || -30, r + (o.thumbAt ? .008 : .02), top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : o.thumbWrap ? P(-88, r + .013, top + .008) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : o.thumbWrap ? P(-145, r + .012, top + .01) : P(-122, r + .012, top + .048);
     limb(g, t0, t1, [[0, .0145], [1, .0125]], glove, 8); limb(g, t1, t2, [[0, .0122], [1, .0105]], glove, 8); ball(g, t0, .0165, glove); ball(g, t1, .0128, glove); ball(g, t2, .0105, glove);
     // wrist, cuff and sleeve
     var Hh = P(-5, r + .026, mid - .012), d = new T.Vector3().subVectors(E, Hh).normalize(), Wp = Hh.clone().addScaledVector(d, .05);
     limb(g, Hh.clone().addScaledVector(d, -.01), Wp, [[0, .027], [.5, .029], [1, .03]], glove, 12); limb(g, Wp, Wp.clone().addScaledVector(d, .04), [[0, .033], [.2, .037], [1, .038]], glove, 12);
     limb(g, Wp.clone().addScaledVector(d, .035), E, [[0, .043], [.04, .05], [.1, .052], [.5, .058], [1, .068]], sleeve, 18);
     limb(g, Wp.clone().addScaledVector(d, .028), Wp.clone().addScaledVector(d, .062), [[0, .0445], [.15, .047], [.85, .047], [1, .0445]], o.pad || glove, 16);   // wrist strap over the cuff
-    if (o.pad) { var kk = kit(g); kk.add(new T.BoxGeometry(.052, .012, .034), o.pad || glove, 0, 0, 0).position.copy(P(40, r + .034, mid));   // knuckle guard
-    g.children[g.children.length - 1].lookAt(P(40, r + .2, mid)); }
   }
 
   // First-person weapon: the gun plus two gloved hands and sleeves.
@@ -274,14 +272,17 @@ var SV = window.SV = window.SV || {};
   }
   SV.viewModel = function (id, team) {
     if (ART[id] && SV.assets && SV.assets.art[ART[id].key]) return pictureVM(ART[id], SV.assets.art[ART[id].key]);
-    var d = GUN[id](), g = d.g, sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
+    var d = GUN[id](), g = d.g, bx = new T.Box3(), cut = [];
+    // the stock sits against the shoulder, beside and behind the eye: in first person it only shows up as a stray block, so leave it out
+    if (id !== 'pistol' && id !== 'knife' && id !== 'shotgun') { g.updateMatrixWorld(true); g.children.forEach(function (c) { bx.setFromObject(c); if ((bx.min.x + bx.max.x) / 2 < -.2) cut.push(c); }); cut.forEach(function (c) { g.remove(c); }); }
+    var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
     if (id === 'knife') {
       // Held as in the reference picture: blade up and to the left with its flat toward the eye, the back of the hand and
       // the knuckles facing the viewer, fingers wrapped round the far side, forearm coming up from the lower right.
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
       var ax = V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
-      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.94, 0, .35), 1, .016, kc.clone().add(V(-.25, -.3, .25)), sl, gl, { pad: MAT.poly2 });
+      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.94, 0, .35), 1, .016, kc.clone().add(V(-.25, -.3, .25)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196] });
     }
     else if (id === 'pistol') {
       var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
@@ -289,7 +290,9 @@ var SV = window.SV = window.SV || {};
       hand(g, c.clone().add(V(.004, -.012, 0)), up, V(-.5, 0, -.87), -1, .03, V(c.x - .36, c.y - .24, -.26), sl, gl, { top: .026, pad: MAT.poly2, thumbDir: V(.97, .2, .12) });
     } else {
       hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2 });
-      if (d.fore) hand(g, V(d.fore[0], d.fore[1] + .028, 0), V(1, 0, 0), V(0, -1, -.3), -1, .027, V(d.fore[0] - .3, d.fore[1] - .24, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .05, .03), thumbAt: -62, wrap: [45, 95, 145, 190] });
+      var cup = d.cup || (d.fore ? [d.fore[0], d.fore[1] + .028, .027] : null);   // [x, y of the part's axis, its radius]
+      if (id === 'smg') hand(g, V(d.fore[0], d.fore[1] + .015, 0), V(.05, 1, 0), V(-.5, 0, -.87), -1, .017, V(d.fore[0] - .3, d.fore[1] - .22, -.3), sl, gl, { top: .028, pad: MAT.poly2, thumbWrap: true });   // a vertical foregrip is held like a second pistol grip
+      else if (cup) hand(g, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -1, -.35), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160] });
     }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
@@ -303,7 +306,7 @@ var SV = window.SV = window.SV || {};
   // sx, sy: where the sight line sits right of and below the eye; d: how far ahead the rear sight is
   function hip(sight, rear, sx, sy, d, yaw) { return [sx, sy - sight, -(d - rear), 0, yaw == null ? .03 : yaw, 0]; }
   // placed after the reference pictures: gun up out of the corner and turned in, so the support arm's sleeve and glove show
-  var POSE = { rifle: hip(.1075, -.12, .15, -.045, .3, .13), smg: hip(.085, -.1, .15, -.05, .3, .13), sniper: hip(.085, -.1, .15, -.07, .36, .12), shotgun: hip(.054, -.1, .15, -.045, .32, .13),
+  var POSE = { rifle: hip(.1075, -.12, .15, -.05, .26, .09), smg: hip(.085, -.1, .15, -.05, .27, .09), sniper: hip(.085, -.1, .15, -.07, .34, .09), shotgun: hip(.054, -.1, .15, -.045, .3, .09),
     pistol: hip(.05, -.08, .1, -.05, .44, .06), knife: [.12, -.055, -.34, 0, 0, 0] };
   SV.vmPose = function (id) { return POSE[id] || POSE.rifle; };
 
