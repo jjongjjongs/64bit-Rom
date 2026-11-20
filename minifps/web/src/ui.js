@@ -40,7 +40,7 @@
       seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, '', g[0], SV.thumb(g[0])]; }), function () { return match.primary; }, function (v) { match.primary = v; });
       var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1]; $('ga').textContent = W[g[0]].mag + ' / ' + W[g[0]].res + '발';
       var gb = $('gb'); gb.textContent = ''; ['위력', '연사', '정확도', '사거리', '기동성'].forEach(function (l, n) { var a = document.createElement('div'); a.textContent = l; var b = document.createElement('div'); b.className = 'bar'; var f = document.createElement('i'); f.style.width = g[2][n] + '%'; b.appendChild(f); gb.appendChild(a); gb.appendChild(b); });
-      var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? '다음 투입부터 적용' : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
+      var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? (lastPractice ? '바로 적용' : '다음 투입부터 적용') : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
     }
     if (id === 's-pause') board();
     if (id === 's-set') {
@@ -68,9 +68,9 @@
   var practice = false;
   $('go-practice').addEventListener('click', function () { practice = true; begin(); });
   $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
-  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 2; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 0; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
   var lastPractice = false;
-  $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') show('s-pause'); else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
+  $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') { SV.setPrimary(match.primary); show('s-pause'); } else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
   $('r-again').addEventListener('click', function () { practice = lastPractice; begin(); });
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }

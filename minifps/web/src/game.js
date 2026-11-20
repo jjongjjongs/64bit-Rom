@@ -739,7 +739,7 @@
     function gun(n) { var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
-    for (i = 0; i < (match.enemies || match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
+    for (i = 0; i < (match.enemies != null ? match.enemies : match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
     var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
     G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
     G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
@@ -844,6 +844,8 @@
   }
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
+  // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
+  SV.setPrimary = function (id) { if (!G.match || G.state === 'menu') return; G.match.primary = id; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();
