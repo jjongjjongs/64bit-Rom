@@ -16,7 +16,7 @@
   var DIFF = [{ err: .05, react: .62, turn: 5 }, { err: .032, react: .42, turn: 7 }, { err: .02, react: .28, turn: 9.5 }, { err: .011, react: .17, turn: 13 }];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니', '삵'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비', '수리'] };
   var BOTGUN = ['rifle', 'smg', 'sniper', 'shotgun', 'rifle', 'smg', 'rifle'];
-  var EYE = 1.63, EYEC = 1.12, RAD = .35;
+  var EYE = 1.64, EYEC = 1.12, RAD = .35, TALL = 1.78;   // the map pack's player reference: 1.78 m tall, eye at 1.64 m, capsule radius 0.35 m
 
   var G = SV.G = { state: 'menu', actors: [], nades: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
   var inp = SV.inp = { use: false, gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
@@ -210,14 +210,14 @@
   }
   var tb = { minx: 0, maxx: 0, miny: 0, maxy: 0, minz: 0, maxz: 0 };
   function rayActor(o, d, a) {
-    var h = a.crouch ? 1.25 : 1.75, hx = a.pos.x - o.x, hy = a.pos.y + h - .15 - o.y, hz = a.pos.z - o.z, b = hx * d.x + hy * d.y + hz * d.z, th = -1;
+    var h = a.crouch ? 1.25 : TALL, hx = a.pos.x - o.x, hy = a.pos.y + h - .15 - o.y, hz = a.pos.z - o.z, b = hx * d.x + hy * d.y + hz * d.z, th = -1;
     if (b > 0) { var c = hx * hx + hy * hy + hz * hz - b * b; if (c < .0324) th = b - Math.sqrt(.0324 - c); }
     tb.minx = a.pos.x - .3; tb.maxx = a.pos.x + .3; tb.minz = a.pos.z - .3; tb.maxz = a.pos.z + .3; tb.miny = a.pos.y; tb.maxy = a.pos.y + h - .3;
     var t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, tb);
     if (th >= 0 && (t < 0 || th < t + .35)) return { t: th, head: true };
     return t >= 0 ? { t: t, head: false } : null;
   }
-  function height(a) { return a.crouch ? 1.25 : 1.75; }
+  function height(a) { return a.crouch ? 1.25 : TALL; }
   function collide(a) {
     var h = height(a), f = a.pos.y, it, i, b, cx, cz, dx, dz, d2, d, px, pz;
     for (it = 0; it < 2; it++) for (i = 0; i < boxes.length; i++) {
@@ -752,7 +752,7 @@
     for (i = 0; i < G.actors.length; i++) { var a = G.actors[i]; if (!a.alive || a === p) continue; if (a.team !== p.team && a.spot <= 0) continue; ctx.fillStyle = a.team === 'A' ? '#ffb347' : '#6cc4e0'; var x = ox + (a.pos.x - b.minx) * s, z = oz + (a.pos.z - b.minz) * s; if (a.team === p.team) { ctx.beginPath(); ctx.arc(x, z, 3.2, 0, 7); ctx.fill(); } else ctx.fillRect(x - 3, z - 3, 6, 6); }
     var px = ox + (p.pos.x - b.minx) * s, pz = oz + (p.pos.z - b.minz) * s; ctx.save(); ctx.translate(px, pz); ctx.rotate(-p.yaw); ctx.fillStyle = '#e8e4da'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
   }
-  var miniT = 0;
+  var miniT = 0, lodT = 0;
   function updHud(dt) {
     var p = G.player, g = p.guns[p.slot], w = W[g.id], other = p.team === 'A' ? 'B' : 'A';
     set('sc-a', G.score.A); set('sc-b', G.score.B); var t = Math.max(0, Math.ceil(G.time)); set('sc-t', ('0' + ((t / 60) | 0)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2));
@@ -775,6 +775,9 @@
     if (last.up !== up) { last.up = up; $('usef').style.width = up + '%'; }
     if (last.red !== red) { last.red = red; $('sc-t').style.color = red ? '#ff5a40' : ''; }
     miniT -= dt; if (miniT <= 0) { miniT = .12; drawMini(); }
+    // distance LOD: clutter and decals (tier 1) and medium props (tier 2) are built in 24 m cells; a few times a second each
+    // cell is shown or hidden by its distance from the camera. The distances are per map (map.lod), 40 / 80 m by default.
+    lodT -= dt; if (lodT <= 0 && G.map) { lodT = .25; var ld = G.map.lod || [40, 80], ch = G.map.group.children, li; for (li = 0; li < ch.length; li++) { var lo = ch[li].userData; if (lo.lod) ch[li].visible = Math.hypot(lo.at.x - cam.position.x, lo.at.z - cam.position.z) < ld[lo.lod - 1] + 17; } }
   }
   SV.botGun = function (n, map) { var id = BOTGUN[n % BOTGUN.length]; return map === 1 && id === 'sniper' ? 'smg' : id; };
   // Side-on picture of a gun for the menus, drawn with the game renderer into a small off-screen target.

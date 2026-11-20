@@ -44,3 +44,9 @@ else:
             shutil.copytree(here / 'art', assets / 'a' / 'art')
         print('assets', sum(p.stat().st_size for p in (assets / 'a').rglob('*') if p.is_file()) // 1024, 'KB')
     print('wrote', assets / 'index.html', (assets / 'index.html').stat().st_size, 'bytes')
+    # 문법 검사: 줄 중간의 // 주석이 뒤 코드를 삼키는 실수를 여기서 잡는다 (node 가 있을 때만)
+    import shutil as _sh, subprocess
+    if _sh.which('node'):
+        chk = "const fs=require('fs');const h=fs.readFileSync(process.argv[1],'utf8');const re=/<script>\\n([\\s\\S]*?)<\\/script>/g;let m,i=0,bad=0;while((m=re.exec(h))){try{new Function(m[1])}catch(e){console.log('SYNTAX ERROR in script',i,e.message);bad=1}i++}process.exit(bad)"
+        if subprocess.run(['node', '-e', chk, str(assets / 'index.html')]).returncode:
+            sys.exit('build stopped: syntax error')

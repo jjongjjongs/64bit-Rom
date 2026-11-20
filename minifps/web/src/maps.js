@@ -77,6 +77,22 @@
     rubber: function () { var a = cv(128, 128), c = a[0], x = a[1], i; x.fillStyle = '#e6e6e6'; x.fillRect(0, 0, 128, 128); x.fillStyle = 'rgba(0,0,0,.55)'; for (i = 0; i < 128; i += 16) { x.fillRect(i, 0, 5, 128); x.fillRect(0, i + 6, 128, 3); } speck(x, 128, 128, 700, .2); return c; },
     // painted sheet metal: mostly clean, chipped at random, a little dust
     paint: function () { var a = cv(512, 512), c = a[0], x = a[1], i; x.fillStyle = '#dcdcd6'; x.fillRect(0, 0, 512, 512); blot(x, 512, 512, 30, 'rgba(60,50,40,.12)', 30, 120); speck(x, 512, 512, 2600, .2); x.fillStyle = 'rgba(70,45,30,.5)'; for (i = 0; i < 70; i++) x.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 5, 1 + Math.random() * 3); x.strokeStyle = 'rgba(20,20,20,.3)'; for (i = 0; i < 16; i++) { var px = Math.random() * 512, py = Math.random() * 512; x.beginPath(); x.moveTo(px, py); x.lineTo(px + rnd(-50, 50), py + rnd(-12, 12)); x.stroke(); } return c; },
+    // surfaces named in the map pack's material list (Snow, Ice, Sand, Rock, Water, RustMetal): painted base colour, the normal
+    // map is derived from it, roughness and metalness come from SURF. Swap in photographed PBR sets later by adding them to the manifest.
+    snow: function () { var a = cv(256, 256), x = a[1]; x.fillStyle = '#eef2f6'; x.fillRect(0, 0, 256, 256); blot(x, 256, 256, 40, 'rgba(170,190,212,.22)', 14, 46); blot(x, 256, 256, 30, 'rgba(255,255,255,.5)', 8, 30); speck(x, 256, 256, 500, .12); return a[0]; },
+    ice: function () { var a = cv(256, 256), x = a[1], i; x.fillStyle = '#b6cfde'; x.fillRect(0, 0, 256, 256); blot(x, 256, 256, 26, 'rgba(235,246,252,.5)', 16, 60); x.strokeStyle = 'rgba(255,255,255,.55)'; for (i = 0; i < 26; i++) { x.lineWidth = .6 + Math.random(); x.beginPath(); var px = Math.random() * 256, py = Math.random() * 256; x.moveTo(px, py); x.lineTo(px + rnd(-70, 70), py + rnd(-70, 70)); x.stroke(); } return a[0]; },
+    sand: function () { var a = cv(256, 256), x = a[1], i, j; x.fillStyle = '#c8a878'; x.fillRect(0, 0, 256, 256); x.strokeStyle = 'rgba(120,92,58,.11)'; x.lineWidth = 1.4; for (i = -8; i < 264; i += 9) { x.beginPath(); for (j = 0; j <= 256; j += 8) x.lineTo(j, i + Math.sin(j * .07 + i * .3) * 3.2); x.stroke(); } blot(x, 256, 256, 30, 'rgba(226,200,150,.3)', 12, 40); speck(x, 256, 256, 1400, .2); return a[0]; },
+    rock: function () { var a = cv(256, 256), x = a[1], i; x.fillStyle = '#8b7052'; x.fillRect(0, 0, 256, 256); blot(x, 256, 256, 46, 'rgba(60,44,30,.36)', 10, 44); blot(x, 256, 256, 36, 'rgba(190,160,120,.3)', 8, 36); x.strokeStyle = 'rgba(40,28,18,.5)'; for (i = 0; i < 16; i++) { x.lineWidth = .8 + Math.random() * 1.6; x.beginPath(); var py = Math.random() * 256; x.moveTo(0, py); x.bezierCurveTo(80, py + rnd(-18, 18), 170, py + rnd(-18, 18), 256, py + rnd(-10, 10)); x.stroke(); } speck(x, 256, 256, 1600, .25); return a[0]; },
+    water: function () { var a = cv(256, 256), x = a[1], i; x.fillStyle = '#28575c'; x.fillRect(0, 0, 256, 256); x.strokeStyle = 'rgba(190,230,232,.22)'; for (i = 0; i < 60; i++) { x.lineWidth = .8 + Math.random() * 1.4; x.beginPath(); var px = Math.random() * 256, py = Math.random() * 256; x.moveTo(px, py); x.quadraticCurveTo(px + 20, py + rnd(-5, 5), px + rnd(30, 70), py + rnd(-3, 3)); x.stroke(); } return a[0]; },
+    rust: function () { var a = cv(256, 256), x = a[1]; x.fillStyle = '#74452c'; x.fillRect(0, 0, 256, 256); blot(x, 256, 256, 50, 'rgba(180,96,40,.4)', 6, 30); blot(x, 256, 256, 40, 'rgba(40,24,16,.45)', 6, 26); speck(x, 256, 256, 2200, .3); return a[0]; },
+    // decals: transparent pictures laid a few centimetres off a wall or floor
+    d_stain: function () { var a = cv(128, 128), x = a[1]; blot(x, 128, 128, 7, 'rgba(22,20,18,.6)', 14, 42); blot(x, 128, 128, 5, 'rgba(10,10,10,.7)', 6, 18); return a[0]; },
+    d_rust: function () { var a = cv(64, 256), x = a[1], i; for (i = 0; i < 9; i++) { var px = 8 + Math.random() * 48, g = x.createLinearGradient(0, 0, 0, 120 + Math.random() * 130); g.addColorStop(0, 'rgba(120,62,26,.85)'); g.addColorStop(1, 'rgba(120,62,26,0)'); x.fillStyle = g; x.fillRect(px, 0, 2 + Math.random() * 7, 256); } return a[0]; },
+    d_crack: function () { var a = cv(256, 256), x = a[1], i, k; x.strokeStyle = 'rgba(20,18,16,.85)'; for (k = 0; k < 3; k++) { var px = 128, py = 128; x.lineWidth = 2.2; x.beginPath(); x.moveTo(px, py); for (i = 0; i < 14; i++) { px += rnd(-22, 22) + (k - 1) * 9; py += rnd(-20, 20) + (k % 2 ? 7 : -7); x.lineTo(px, py); if (i === 7) x.lineWidth = 1.2; } x.stroke(); } return a[0]; },
+    d_holes: function () { var a = cv(128, 128), x = a[1], i; for (i = 0; i < 7; i++) { var px = 16 + Math.random() * 96, py = 16 + Math.random() * 96, r = 2.5 + Math.random() * 3; x.fillStyle = 'rgba(210,205,195,.75)'; x.beginPath(); x.arc(px, py, r * 2.1, 0, 6.2832); x.fill(); x.fillStyle = 'rgba(12,12,12,.95)'; x.beginPath(); x.arc(px, py, r, 0, 6.2832); x.fill(); } return a[0]; },
+    d_tracks: function () { var a = cv(128, 256), x = a[1], i; [22, 106].forEach(function (cx) { x.fillStyle = 'rgba(30,30,32,.42)'; x.fillRect(cx - 13, 0, 26, 256); x.fillStyle = 'rgba(15,15,16,.5)'; for (i = 0; i < 256; i += 10) { x.fillRect(cx - 13, i, 11, 5); x.fillRect(cx + 2, i + 5, 11, 5); } }); return a[0]; },
+    d_drift: function () { var a = cv(128, 128), x = a[1], g = x.createRadialGradient(64, 64, 4, 64, 64, 62); g.addColorStop(0, 'rgba(206,178,128,.95)'); g.addColorStop(.6, 'rgba(206,178,128,.6)'); g.addColorStop(1, 'rgba(206,178,128,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return a[0]; },
+    d_foot: function () { var a = cv(128, 256), x = a[1], i; x.fillStyle = 'rgba(120,140,165,.55)'; for (i = 0; i < 6; i++) { x.beginPath(); x.ellipse(i % 2 ? 84 : 44, 22 + i * 40, 11, 19, 0, 0, 6.2832); x.fill(); } return a[0]; },
     hazard: function () { var a = cv(128, 128), c = a[0], x = a[1], i; x.fillStyle = '#d6a233'; x.fillRect(0, 0, 128, 128); x.fillStyle = '#1b1b1b'; for (i = -4; i < 8; i++) { x.beginPath(); x.moveTo(i * 32, 128); x.lineTo(i * 32 + 16, 128); x.lineTo(i * 32 + 144, 0); x.lineTo(i * 32 + 128, 0); x.fill(); } speck(x, 128, 128, 500, .2); return c; },
     chain: function () { var a = cv(64, 64), c = a[0], x = a[1]; x.strokeStyle = '#aab3b8'; x.lineWidth = 3; x.beginPath(); x.moveTo(0, 32); x.lineTo(32, 0); x.lineTo(64, 32); x.lineTo(32, 64); x.closePath(); x.stroke(); return c; },
     pool: function () { var a = cv(128, 128), c = a[0], x = a[1], g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,214,150,.55)'); g.addColorStop(.5, 'rgba(255,200,130,.2)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = '#000'; x.fillRect(0, 0, 128, 128); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return c; },
@@ -110,18 +126,18 @@
     x.putImageData(out, 0, 0); var t = new T.CanvasTexture(a[0]); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; return nrmCache[key] = t;
   }
   // how each surface answers light: [roughness, metalness, normal strength]
-  var SURF = { canvas: [.95, 0, 4], glass: [.07, .9, 0], rubber: [.9, 0, 3], paint: [.5, .35, 2], conc: [.86, 0, 3], floor: [.42, 0, 2], corr: [.5, .55, 5], panel: [.48, .5, 4], block: [.92, 0, 5], metal: [.42, .7, 3], crate: [.8, 0, 4], plain: [.78, .05, 0] };
+  var SURF = { snow: [.9, 0, 2], ice: [.15, 0, 1], sand: [.95, 0, 3], rock: [.9, 0, 6], water: [.08, .1, 1], rust: [.85, .15, 4], canvas: [.95, 0, 4], glass: [.07, .9, 0], rubber: [.9, 0, 3], paint: [.5, .35, 2], conc: [.86, 0, 3], floor: [.42, 0, 2], corr: [.5, .55, 5], panel: [.48, .5, 4], block: [.92, 0, 5], metal: [.42, .7, 3], crate: [.8, 0, 4], plain: [.78, .05, 0] };
   function label(text, fg, bg, w, h) {
     return function () { var a = cv(w || 256, h || 128), c = a[0], x = a[1]; if (bg) { x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); } x.fillStyle = fg; x.font = '900 ' + Math.round(c.height * .62) + 'px "Big Shoulders Display","Arial Narrow",sans-serif-condensed,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, c.width / 2, c.height / 2 + 4, c.width - 16); if (bg) speck(x, c.width, c.height, 500, .15); return c; };
   }
-  var TS = { canvas: [1.4, 1.4], glass: [2, 2], rubber: [.5, .5], paint: [2.5, 2.5], conc: [4, 4], floor: [5, 5], corr: [1.2, 2.5], panel: [3, 3], block: [1.6, 1.6], metal: [2, 2], plain: [1, 1], hazard: [1, 1] };
+  var TS = { canvas: [1.4, 1.4], glass: [2, 2], snow: [7, 7], ice: [4, 4], sand: [3, 3], rock: [6, 6], water: [9, 9], rust: [2, 2], rubber: [.5, .5], paint: [2.5, 2.5], conc: [4, 4], floor: [5, 5], corr: [1.2, 2.5], panel: [3, 3], block: [1.6, 1.6], metal: [2, 2], plain: [1, 1], hazard: [1, 1] };
 
   function Builder() {
     var L = {}, Q = {}, col = new T.Color();
     function lay(store, k) { return store[k] || (store[k] = { P: [], N: [], C: [], U: [] }); }
     // append a transformed geometry to a layer. World-space UVs by default, the geometry's own UVs when opt.fit.
     function push(geo, c, t, opt, store) {
-      opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, t), ph = !store && photo(t), ts = (ph && PHT[t]) || TS[t] || TS.plain;
+      opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, !store && b.tier ? t + '@' + b.tier + '@' + Math.floor(p[0] / 24) + '_' + Math.floor(p[2] / 24) : t), ph = !store && photo(t), ts = (ph && PHT[t]) || TS[t] || TS.plain;
       var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear(); if (ph) col.lerp(WHITE, 1 - (KEEP[t] || .6)).multiplyScalar(GAIN[t] || 1.15);
       for (i = 0; i < p.length / 3; i++) {
         var px = p[i * 3], py = p[i * 3 + 1], pz = p[i * 3 + 2], nx = n[i * 3], ny = n[i * 3 + 1], q = k;
@@ -135,7 +151,7 @@
     }
     function coll(x, z, w, d, h, y0) { b.boxes.push({ minx: x - w / 2, maxx: x + w / 2, miny: y0, maxy: y0 + h, minz: z - d / 2, maxz: z + d / 2 }); }
     var b = {
-      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {},
+      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {}, tier: 0,   // tier 1: small clutter and decals, tier 2: medium props; both are hidden with distance (see map.lod)
       has: function (id) { return !!(SV.assets && SV.assets.model[id]); },
       // one copy of a scanned model: position, turn about the vertical, scale (number or [x, y, z]), and an optional tilt to lay it down
       model: function (id, x, y, z, ry, s, rx) {
@@ -167,8 +183,9 @@
       // a textured rectangle: upright (ry = facing angle) or lying on the ground (flat)
       quad: function (key, x, y, z, w, h, ry, o) {
         o = o || {}; var g = new T.PlaneGeometry(w, h); if (o.flat) g.rotateX(-PI / 2); g.rotateY(ry || 0); g.translate(x, y, z);
-        if (!Q[key]) Q[key] = { P: [], N: [], C: [], U: [], mode: o.mode || 'opaque', tex: tex(key, o.make) };
-        push(g, o.color == null ? 0xffffff : o.color, key, { fit: true, flat: true, rep: o.rep }, Q);
+        var qk = b.tier ? key + '@' + b.tier + '@' + Math.floor(x / 24) + '_' + Math.floor(z / 24) : key;
+        if (!Q[qk]) Q[qk] = { P: [], N: [], C: [], U: [], mode: o.mode || 'opaque', tex: tex(key, o.make) };
+        push(g, o.color == null ? 0xffffff : o.color, qk, { fit: true, flat: true, rep: o.rep }, Q);
       },
       cont: function (x, z, rot, c, level, len, deco) {
         len = len || 6.1; var y = (level || 0) * 2.5, w = rot ? 2.5 : len, d = rot ? len : 2.5, sx, sz;
@@ -211,12 +228,13 @@
       finish: function () {
         var grp = new T.Group(), k;
         function geo(l) { var g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(l.P, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(l.N, 3)); g.setAttribute('color', new T.Float32BufferAttribute(l.C, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(l.U, 2)); return g; }
-        for (k in L) {
-          var sf = SURF[k] || SURF.plain, mat = k === 'glow' ? new T.MeshBasicMaterial({ vertexColors: true, fog: false, color: new T.Color(3, 3, 3) })   // brighter than white: this is what blooms
+        function lodTag(m, key) { var q = key.split('@'); if (q.length > 1) { m.geometry.computeBoundingSphere(); m.userData.lod = +q[1]; m.userData.at = m.geometry.boundingSphere.center.clone(); } }
+        for (var kk in L) {
+          k = kk.split('@')[0]; var sf = SURF[k] || SURF.plain, mat = k === 'glow' ? new T.MeshBasicMaterial({ vertexColors: true, fog: false, color: new T.Color(3, 3, 3) })   // brighter than white: this is what blooms
             : photo(k) ? new T.MeshStandardMaterial({ vertexColors: true, map: tex(k), normalMap: photo(k).nor || null, roughnessMap: photo(k).arm || null, metalnessMap: photo(k).arm || null, roughness: photo(k).arm ? 1 : sf[0], metalness: photo(k).arm ? 1 : sf[1], side: T.DoubleSide })
             : new T.MeshStandardMaterial({ vertexColors: true, map: k === 'plain' ? null : tex(k), normalMap: sf[2] ? nrm(k, sf[2]) : null, roughness: sf[0], metalness: sf[1], side: T.DoubleSide });
           mat.userData.surf = k;
-          var m = new T.Mesh(geo(L[k]), mat); if (k !== 'glow') { m.castShadow = true; m.receiveShadow = true; } grp.add(m);
+          var m = new T.Mesh(geo(L[kk]), mat); if (k !== 'glow') { m.castShadow = kk === k; m.receiveShadow = true; } lodTag(m, kk); grp.add(m);
         }
         for (k in b.inst) (function (list, src, k) {
           src.traverse(function (o) { if (!o.isMesh) return; var mt = o.material; if (TINT[k]) { mt = o.userData.tinted || (o.userData.tinted = o.material.clone()); mt.color.setHex(TINT[k]); } var im = new T.InstancedMesh(o.geometry, mt, list.length), m = new T.Matrix4(); list.forEach(function (w, i) { im.setMatrixAt(i, m.multiplyMatrices(w, o.matrixWorld)); }); im.castShadow = im.receiveShadow = true; im.frustumCulled = false; im.userData.shared = true; grp.add(im); });
@@ -225,7 +243,7 @@
           var q = Q[k], qm = q.mode === 'add' ? new T.MeshBasicMaterial({ map: q.tex, blending: T.AdditiveBlending, transparent: true, depthWrite: false, vertexColors: true })
             : q.mode === 'alpha' ? new T.MeshStandardMaterial({ map: q.tex, vertexColors: true, transparent: true, alphaTest: .25, side: T.DoubleSide, roughness: .7, metalness: .1 })
             : q.mode === 'lit' ? new T.MeshBasicMaterial({ map: q.tex, vertexColors: true, fog: false }) : new T.MeshStandardMaterial({ map: q.tex, vertexColors: true, roughness: .6, metalness: .2 });
-          var qq = new T.Mesh(geo(q), qm); qq.receiveShadow = q.mode !== 'add' && q.mode !== 'lit'; qq.renderOrder = q.mode === 'add' ? 2 : 1; grp.add(qq);
+          var qq = new T.Mesh(geo(q), qm); qq.receiveShadow = q.mode !== 'add' && q.mode !== 'lit'; qq.renderOrder = q.mode === 'add' ? 2 : 1; lodTag(qq, k); grp.add(qq);
         }
         return grp;
       }
@@ -717,6 +735,13 @@
       fwd: [A.p(-9, 3, 1), M.p(6, 0, 1), [8, 3, 0], Bf.p(-6, -2, 1), [14, -27, 0], [8, 25, 0]] };
   }
 
+  // helpers shared by the three maps built to the map pack's rules
+  function tiered(b, tier, fn) { return function () { var o = b.tier; b.tier = tier; var r = fn.apply(null, arguments); b.tier = o; return r; }; }
+  function decal(b, key, x, y, z, w, h, ry, flat, col) { var o = b.tier; b.tier = 1; b.quad('d_' + key, x, y, z, w, h, ry || 0, { flat: !!flat, mode: 'alpha', make: PAINT['d_' + key], color: col }); b.tier = o; }
+  // the plant zone: a 6 x 6 m square, as the pack's TRIGGER_*_SITE boxes define it, outlined on the ground
+  function plantZone(b, x, z, y) { [[0, -3, 6, .25], [0, 3, 6, .25], [-3, 0, .25, 6], [3, 0, .25, 6]].forEach(function (q) { b.quad('hazard', x + q[0], y + .035, z + q[1], q[2], q[3], 0, { flat: true, rep: [q[2] > 1 ? 6 : .25, q[3] > 1 ? 6 : .25] }); }); }
+  function siteDef(id, x, z, y, l, via) { return { id: id, x: x, z: z, l: l, y: y, f: [x, z, 0], zones: [[-3, -3, 3, 3]], spots: [[0, 0], [1.8, -1.6], [-1.7, 1.5], [2, 1.9], [-2, -2]].map(function (q) { return { x: x + q[0], z: z + q[1], y: y, l: l }; }), via: via }; }
+
   // 05 전술 기지 — 사용자가 준 시안과 설명문(맵 1, 대칭형 군사기지)을 그대로 옮겼다. 북쪽이 -z.
   //  · 부지 106 x 81 m 를 높이 4.8 m 콘크리트 방벽이 두른다. 좌우 대칭, 세 갈래(왼쪽 길 / 가운데 광장 / 오른쪽 길).
   //  · 남쪽 가운데 철제 정문(공격 출발) → 가운데 광장(화단과 큰 나무) → 광장 북쪽의 24 x 14 x 5 m 중앙 건물이 시야를 가른다.
@@ -734,7 +759,7 @@
     }
     function acu(x, z, y) { b.box(x, z, 1.7, 1.7, 1, 0xb4b8b6, y, false, 'metal'); b.cyl(x, z, .62, .06, 0x2a2e31, y + 1, false, 'plain', .62, 14); b.cyl(x, z, .12, .1, 0x8a8f92, y + 1.03, false, 'metal', .12, 8); }
     function lampW(x, z, y, nx, nz) { b.box(x + nx * .1, z + nz * .1, nx ? .2 : .5, nz ? .2 : .5, .16, DK, y, false, 'metal'); b.glow(x + nx * .14, y - .05, z + nz * .14, nx ? .12 : .4, .07, nz ? .12 : .4, 0xffd9a0); }
-    function win(x, z, w, h, y, nx, nz) { b.box(x + nx * .03, z + nz * .03, nx ? .1 : w + .2, nz ? .1 : w + .2, h + .2, 0x55595a, y - .1, false, 'metal'); b.box(x + nx * .07, z + nz * .07, nx ? .08 : w, nz ? .08 : w, h, 0x1b262c, y, false, 'plain'); }
+    function win(x, z, w, h, y, nx, nz) { b.box(x + nx * .03, z + nz * .03, nx ? .1 : w + .2, nz ? .1 : w + .2, h + .2, 0x55595a, y - .1, false, 'metal'); b.box(x + nx * .07, z + nz * .07, nx ? .08 : w, nz ? .08 : w, h, 0x5a6a72, y, false, 'glass'); }
     function door(x, z, w, h, nx, nz) { b.box(x + nx * .04, z + nz * .04, nx ? .12 : w + .24, nz ? .12 : w + .24, h + .12, 0x4a4e50, 0, false, 'metal'); b.box(x + nx * .09, z + nz * .09, nx ? .1 : w, nz ? .1 : w, h, 0x3d4a44, 0, false, 'paint'); }
     function rim(x0, z0, x1, z1, y, c) { var w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; b.box(cx, z0 + .15, w, .3, .35, c, y, false, 'conc'); b.box(cx, z1 - .15, w, .3, .35, c, y, false, 'conc'); b.box(x0 + .15, cz, .3, d, .35, c, y, false, 'conc'); b.box(x1 - .15, cz, .3, d, .35, c, y, false, 'conc'); }
     function cr(x, z, sz, h, c, y0) { b.crate(x, z, sz, c, y0 || 0, h); if (y0 > .5) b.solid(x, z, sz, sz, h, y0); }
@@ -743,6 +768,7 @@
       for (sx = -1; sx <= 1; sx += 2) for (sz = -1; sz <= 1; sz += 2) b.box(x + sx * (w / 2 - .06), z + sz * (d / 2 - .06), .16, .16, 2.62, DK, y0 - .01, false, 'metal');
       if (alongZ) b.quad('door', x, y0 + 1.3, z + d / 2 + .015, 2.3, 2.45, 0, { color: c }); else b.quad('door', x + w / 2 + .015, y0 + 1.3, z, 2.3, 2.45, PI / 2, { color: c });
     }
+    lampW = tiered(b, 1, lampW); acu = tiered(b, 2, acu); win = tiered(b, 2, win); door = tiered(b, 2, door);
     function siteMark() { var a = cv(256, 256), x = a[1]; x.strokeStyle = '#b8402e'; x.lineWidth = 16; x.beginPath(); x.arc(128, 128, 104, 0, 6.2832); x.stroke(); x.lineWidth = 20; x.beginPath(); x.moveTo(60, 60); x.lineTo(196, 196); x.moveTo(196, 60); x.lineTo(60, 196); x.stroke(); return a[0]; }
     function hazard(x, z, w, d) { b.quad('hazard', x, .025, z, w, d, 0, { flat: true, rep: [w, d] }); }
 
@@ -790,7 +816,12 @@
       b.cyl(sd * 49.5, -37.5, 3.7, .3, CW2, 7.75, false, 'conc', 3.5, 8); for (i = 0; i < 8; i++) b.box(sd * 49.5 + Math.cos(i * PI / 4 + PI / 8) * 3.05, -37.5 + Math.sin(i * PI / 4 + PI / 8) * 3.05, .3, .3, 1.25, CW, 6.5, false, 'conc');
       b.seg(sd * 49.5, 8.05, -37.5, sd * 49.5, 9.6, -37.5, .08, DK, 'metal'); b.box(sd * 48.2, -36.4, .5, .4, .4, 0xd8d2bc, 8.05, false, 'metal');
       // the site: a yard 1.4 m above the plaza, walled on its open sides, three ways up
-      B(31, -34, 50, -13, H, 0x96928a, 'conc'); b.quad('siteX', sd * 39.5, H + .03, -22.5, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark });
+      B(31, -34, 50, -13, H, 0x96928a, 'conc'); b.quad('siteX', sd * 39.5, H + .03, -22.5, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark }); plantZone(b, sd * 39.5, -22.5, H);
+      // wear and dirt: rust under the wall lamps, bullet marks, cracks and stains, tyre tracks in the lane
+      decal(b, 'rust', sd * 52.95, 2.6, -8, .9, 2.6, -sd * PI / 2); decal(b, 'rust', sd * 52.95, 2.6, 16, .9, 2.6, -sd * PI / 2); decal(b, 'rust', sd * 40, 2.4, 40.45, .9, 2.4, PI); decal(b, 'rust', sd * 30.94, 2.6, -24, .8, 2.2, sd * PI / 2);
+      decal(b, 'holes', sd * 12.06, 1.5, -9, 1.4, 1.4, sd * PI / 2); decal(b, 'holes', sd * 26.7, 1.4, 4, 1.4, 1.4, -sd * PI / 2); decal(b, 'holes', sd * 34.94, 1.6, 9, 1.2, 1.2, -sd * PI / 2); decal(b, 'holes', sd * 36, H + 1.3, -13.56, 1.3, 1.3, PI);
+      decal(b, 'crack', sd * 20, .03, 14, 5, 5, .4, true); decal(b, 'crack', sd * 41, .03, -3, 4, 4, 1.2, true); decal(b, 'crack', sd * 41, H + .03, -27, 4, 4, .7, true);
+      decal(b, 'stain', sd * 33, .03, 20, 3, 3, 0, true); decal(b, 'stain', sd * 15, .03, 3, 2.6, 2.6, 1, true); decal(b, 'stain', sd * 44, .03, 30, 3.4, 3.4, 2, true); decal(b, 'stain', sd * 47, H + .03, -17, 2.6, 2.6, 0, true); decal(b, 'tracks', sd * 49, .03, 8, 2.4, 12, 0, true); decal(b, 'tracks', sd * 30, .03, 29, 2.4, 12, PI / 2, true);
       [[-34, -29.4], [-27, -18.6], [-15.4, -13]].forEach(function (q) { B(31, q[0], 31.5, q[1], 3.8, CW, 'conc'); });                        // east wall, gaps for the two stairs
       [[31, 38], [42, 50]].forEach(function (q) { B(q[0], -13.5, q[1], -13, 3.8, CW, 'conc'); });                                            // south wall, gap for the wide stairs
       stair(29, -17, 1, 0, 3); stair(29, -28.2, 1, 0, 2.2); stair(40, -11, 0, -1, 4);
@@ -800,12 +831,12 @@
       if (A) {   // A: red cargo container and green military storage
         ctn(sd * 35.6, -31.2, false, 0xa5432f, H); ctn(sd * 47.6, -21.6, true, 0x56633f, H);
         cr(sd * 43.2, -30.6, 1.3, 1.2, OLV, H); cr(sd * 44.6, -30.5, 1.3, 1.2, OLV, H); cr(sd * 43.9, -29.1, 1, .8, OLV, H); cr(sd * 43.9, -30.5, 1, .8, 0x4e5637, H + 1.2);
-        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1, .8, TAN, H); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1, .8, OLV, H); cr(sd * 37, -19.4, 1, .8, OLV, H);
+        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1, .8, TAN, H); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1, .8, OLV, H); cr(sd * 35.4, -18.6, 1, .8, OLV, H);
       } else {   // B: blue cargo container and stacks of boxes
         ctn(sd * 47.6, -21.6, true, 0x4d6f8f, H);
         cr(sd * 34, -31.5, 1.3, 1.2, TAN, H); cr(sd * 35.4, -31.5, 1.3, 1.2, TAN, H); cr(sd * 36.8, -31.5, 1.3, 1.2, TAN, H); cr(sd * 34.7, -31.5, 1.1, .9, TAN, H + 1.2); cr(sd * 35.1, -30, 1, .8, 0x9c8a62, H);
         cr(sd * 43.2, -30.6, 1.3, 1.2, OLV, H); cr(sd * 44.6, -30.5, 1.3, 1.2, OLV, H); cr(sd * 43.9, -29.1, 1, .8, OLV, H);
-        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1.3, 1.2, TAN, H); cr(sd * 33, -23.9, 1, .8, TAN, H + 1.2); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1.3, 1.2, TAN, H); cr(sd * 37, -19.4, 1, .8, TAN, H);
+        cr(sd * 33, -24.6, 1.3, 1.2, TAN, H); cr(sd * 33, -23.2, 1.3, 1.2, TAN, H); cr(sd * 33, -23.9, 1, .8, TAN, H + 1.2); cr(sd * 42.6, -15.2, 1.3, 1.2, TAN, H); cr(sd * 44, -15.3, 1.3, 1.2, TAN, H); cr(sd * 35.4, -18.6, 1, .8, TAN, H);
       }
       // HQ side yard (the narrow stairs start here) and the court beside the central building
       cr(sd * 17.2, -32.6, 1.3, 1.2, OLV); cr(sd * 18.6, -32.7, 1.3, 1.2, OLV); cr(sd * 17.9, -32.6, 1, .8, OLV, 1.2); cr(sd * 26.5, -32.8, 1, .8, TAN);
@@ -841,7 +872,7 @@
       B(31.5, -9.2, 36, -8.8, 2.6, CW, 'conc'); B(41, 22.8, 46, 23.2, 2.6, CW, 'conc'); B(20.8, 12, 21.2, 17, 2.2, CW, 'conc'); B(8, -24, 12, -23.6, 1.1, CW, 'conc');
       b.barrel(sd * 34.2, 20.6, 0x7a3f30); b.barrel(sd * 34.9, 21.2, OLV); b.barrel(sd * 47.5, 3.2, 0x3f5f7a); b.barrel(sd * 20.5, 28.2, OLV); b.tires(sd * 44.5, 26.5, 3);
       [[36, 26.5], [47.5, -11.5], [22.8, 19.5]].forEach(function (q) { b.box(sd * q[0], q[1], .8, .5, 1.3, 0x5a6168, 0, true, 'metal'); b.glow(sd * q[0], 1, q[1] + .26, .12, .08, .02, 0x8fe0a8); });                       // electrical cabinets
-      for (i = 0; i < 5; i++) b.box(sd * 52.95, -30 + i * 14, .12, .12, 4, 0x7a6048, .4, false, 'metal');                                                                                       // rusty downpipes on the wall
+      for (i = 0; i < 5; i++) b.box(sd * 52.95, -30 + i * 14, .12, .12, 4, 0x9a7a60, .4, false, 'rust');                                                                                       // rusty downpipes on the wall
       b.seg(sd * 18, 3.5, 31, sd * 27, 3.7, 22, .03, 0x1c1c1c, 'plain'); b.seg(sd * 27, 3.7, 12, sd * 35, 3.5, 12, .03, 0x1c1c1c, 'plain');
     }
     function mk(t, x, y, z, ry) { b.mark(t, x, y, z, 1.5, 1.5, ry, '#e2562f'); }
@@ -849,13 +880,12 @@
     // trees beyond the wall, seen over it
     [[-60, -30], [-61, -8], [-59, 14], [-62, 33], [60, -32], [62, -10], [59, 12], [61, 34], [-40, -47], [-12, -48], [22, -47], [44, -48], [-45, 47], [-22, 48], [24, 48], [46, 47]].forEach(function (q, n) { tree(q[0], q[1], 1.2 + (n % 3) * .25); });
     [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 36 }); b.spawns.B.push({ x: x, z: -22.5 }); });
+    decal(b, 'tracks', 0, .03, 30, 2.6, 14, 0, true); decal(b, 'tracks', 0, .03, 18, 2.6, 10, .05, true); decal(b, 'holes', -4, 1.6, -3.94, 1.4, 1.4, 0); decal(b, 'holes', 6, 1.3, -3.94, 1.2, 1.2, 0); decal(b, 'crack', -8, .03, 20, 5, 5, 2, true); decal(b, 'stain', 6, .03, -1, 3, 3, 0, true); decal(b, 'rust', -5.9, 2.4, 40.6, .8, 2.6, PI); decal(b, 'rust', 5.9, 2.4, 40.6, .8, 2.6, PI);
     function site(id, sd) {
-      return { id: id, x: sd * 39.5, z: -22.5, l: 1, y: H, f: [sd * 40.5, -23.5, 0], zones: [[-8.6, -10, 8.6, 9.6]],
-        spots: [[39.5, -22.5], [38.5, -27.5], [45, -26], [40, -16.5], [34.5, -20.5]].map(function (q) { return { x: sd * q[0], z: q[1], y: H, l: 1 }; }),
-        via: [[sd * 40, 29, 0], [sd * 31, 3, 0], [sd * 19.5, 0, 0], [sd * 40, -8, 0], [sd * 22, -15, 0]] };
+      return siteDef(id, sd * 39.5, -22.5, H, 1, [[sd * 40, 29, 0], [sd * 31, 3, 0], [sd * 19.5, 0, 0], [sd * 40, -8, 0], [sd * 22, -15, 0]]);
     }
     return { name: '전술 기지', b: b, bounds: { minx: -54, maxx: 54, minz: -41.5, maxz: 41.5 }, bg: 0x93a7b8, fog: [50, 220], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xffd2a0, 1.5, [-38, 22, 24]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .7, 1.3, 8, .95], dim: 1,   // low, warm late-afternoon sun as in the picture
-      H: H, links: links, ladders: [], sites: [site('A', -1), site('B', 1)],
+      H: H, lod: [40, 80], links: links, ladders: [], sites: [site('A', -1), site('B', 1)],
       fwd: [[-19.5, -9, 0], [19.5, -9, 0], [-40, -8, 0], [40, -8, 0], [0, -22, 0], [-36, -18, 1], [36, -18, 1], [-24, -30, 0], [24, -30, 0]] };
   }
 
@@ -878,8 +908,9 @@
     function shelf(x, z, ry, n, alongX) { for (var k = 0; k < n; k++) { var px = x + (alongX ? k * 1.12 : 0), pz = z + (alongX ? 0 : k * 1.12); if (!b.prop('steel_frame_shelves_01', px, pz, ry, .1)) { b.box(px, pz, alongX ? 1.1 : .5, alongX ? .5 : 1.1, 2.1, 0x59636b, 0, true, 'metal'); } else if (k % 2 === 0) b.box(px, pz, .5, .4, .35, k % 4 ? TAN : OLV, .62, false, 'crate'); } }
     function desk(x, z, ry) { if (!b.prop('metal_office_desk', x, z, ry, 1)) b.box(x, z, 1.9, .9, .78, 0x7c858c, 0, true, 'metal'); }
     function console(x, z, alongX, c) { b.box(x, z, alongX ? 2.2 : .8, alongX ? .8 : 2.2, .95, 0x4a545c, 0, true, 'metal'); b.box(x, z, alongX ? 2.2 : .5, alongX ? .5 : 2.2, .55, 0x39424a, .95, false, 'metal'); b.glow(x, 1.25, z, alongX ? 1.9 : .52, .32, alongX ? .52 : 1.9, c || 0x6fd0ff); }
-    function mound(x, z, r, h, solid) { var g = new T.IcosahedronGeometry(1, 1); g.scale(r, h, r * (.7 + Math.random() * .5)); g.rotateY(Math.random() * 3); g.translate(x, 0, z); b.geo(g, SNOW, 'plain', {}); if (solid) b.solid(x, z, r * 1.3, r * 1.1, h * .8, 0); }
-    function ctn(x, z, alongZ, c) { b.cont(x, z, alongZ, c, 0, 6.1); T2(x - (alongZ ? 1.3 : 3.1), z - (alongZ ? 3.1 : 1.3), x + (alongZ ? 1.3 : 3.1), z + (alongZ ? 3.1 : 1.3), .12, SNOW, 'plain', 2.5, false); }
+    function mound(x, z, r, h, solid) { var g = new T.IcosahedronGeometry(1, 1); g.scale(r, h, r * (.7 + Math.random() * .5)); g.rotateY(Math.random() * 3); g.translate(x, 0, z); b.geo(g, SNOW, 'snow', {}); if (solid) b.solid(x, z, r * 1.3, r * 1.1, h * .8, 0); }
+    function ctn(x, z, alongZ, c) { b.cont(x, z, alongZ, c, 0, 6.1); T2(x - (alongZ ? 1.3 : 3.1), z - (alongZ ? 3.1 : 1.3), x + (alongZ ? 1.3 : 3.1), z + (alongZ ? 3.1 : 1.3), .12, SNOW, 'snow', 2.5, false); }
+    lamp = (function () { return function (x, z, h, c, k, d) { b.light(x, h - .6, z, c || 0xffe6bf, k || 1.7, d || 16); var o = b.tier; b.tier = 1; b.box(x, z, 1.2, .3, .08, 0x3a3f44, h - .1, false, 'metal'); b.glow(x, h - .14, z, 1.1, .05, .22, c || 0xffe6bf); b.tier = o; }; })();
     function siteMark() { var a = cv(256, 256), x = a[1]; x.strokeStyle = '#c24a32'; x.lineWidth = 12; [104, 70].forEach(function (r) { x.beginPath(); x.arc(128, 128, r, 0, 6.2832); x.stroke(); }); x.lineWidth = 16; x.beginPath(); x.moveTo(72, 72); x.lineTo(184, 184); x.moveTo(184, 72); x.lineTo(72, 184); x.stroke(); return a[0]; }
 
     // ---------- ground: snow everywhere, concrete inside and on the loading yard, tyre tracks on the outer road
@@ -888,8 +919,8 @@
     [[-50.5, 14, 2.2, 56], [50, 6, 2.2, 70], [0, 37.5, 96, 2.2], [0, 33, 3, 8]].forEach(function (q) { T2(q[0] - q[2] / 2, q[1] - q[3] / 2, q[0] + q[2] / 2, q[1] + q[3] / 2, .02, 0xb7c1cc, 'plain', 0, false); });
 
     // ---------- cliffs and plateaus that close the map (snow on top, rock faces), with the landmarks standing on them
-    T2(-60, -50, 60, -36, 5, SNOW, 'plain'); T2(-60, -36, -25, -14, 5, SNOW, 'plain'); T2(-25, -36, -23, -16, 6, PN2, 'conc'); T2(42, -36, 60, -30, 5, SNOW, 'plain'); T2(20.2, -36, 42, -32.2, 5, SNOW, 'plain');
-    T2(-60, -14, -56, 48, 5, SNOW, 'plain'); T2(56, -30, 60, 48, 5, SNOW, 'plain'); T2(-56, 44, 56, 48, 5, SNOW, 'plain');
+    T2(-60, -50, 60, -36, 5, SNOW, 'snow'); T2(-60, -36, -25, -14, 5, SNOW, 'snow'); T2(-25, -36, -23, -16, 6, PN2, 'conc'); T2(42, -36, 60, -30, 5, SNOW, 'snow'); T2(20.2, -36, 42, -32.2, 5, SNOW, 'snow');
+    T2(-60, -14, -56, 48, 5, SNOW, 'snow'); T2(56, -30, 60, 48, 5, SNOW, 'snow'); T2(-56, 44, 56, 48, 5, SNOW, 'snow');
     [[-56, 0, .4], [-55.6, 22, -.3], [-55.5, 38, .2], [-40, 43.6, 1.4], [-12, 43.8, 1.7], [20, 43.6, 1.5], [44, 43.7, 1.6], [55.6, 30, .3], [55.7, 8, -.2], [55.6, -14, .4], [50, -29.6, 1.5], [-50, -14.3, 1.6], [-36, -14.2, 1.4]].forEach(function (q, n) { b.rbox(q[0], q[1], 2.2 + (n % 3), 5 + (n % 4) * 1.5, 3.2 + (n % 3) * .8, ROCK, 0, q[2], false, 'plain'); });
     // satellite dish and radome (north-west), two storage tanks (north-east)
     b.cyl(-46, -27, .9, 1.2, 0x7d868e, 5, false, 'conc', 1.2, 10); b.cyl(-46, -27, .4, 4.2, 0x8e979e, 6.2, false, 'plain', .4, 10);
@@ -903,7 +934,7 @@
     WZ(-45, -12, 2, 3.4, [[-6, -3]]); WX(-12, -45, -25, 3.4); WZ(-25, -12, 2, 3.4, [[-9, -6.5]]); roof(-45, -12, -25, 2, 3.4);
     WZ(-25, -16, -12, 3.4); WX(-16, -25, -23, 3.4); WZ(-21, -10, 8, 3.4, [[-6, -3.5], [3.5, 6.5]]); WX(8, -25, -21, 3.4); roof(-25, -16, -21, 8, 3.4);
     WX(2, -21, -15, 3.4); roof(-21, -12, -15, 8, 3.4);
-    T2(-25, 8, -15, 22, 4.2, PN2, 'conc'); b.quad('shutter', -14.97, 1.8, 15, 4, 3.4, PI / 2); T2(-25.3, 8, -14.7, 22.3, .3, SNOW, 'plain', 4.2, false);           // closed store between A and the yard
+    T2(-25, 8, -15, 22, 4.2, PN2, 'conc'); b.quad('shutter', -14.97, 1.8, 15, 4, 3.4, PI / 2); T2(-25.3, 8, -14.7, 22.3, .3, SNOW, 'snow', 4.2, false);           // closed store between A and the yard
     b.quad('shutter', -38, 2.2, 22.23, 3.8, 1, 0); b.mark('A', -33, 3.6, 22.25, 2, 2, 0, '#e2562f'); b.mark('A', -24.75, 2.9, 0, 1.4, 1.4, PI / 2, '#e2562f');
     // ---------- yard walls (thick), north cross corridor
     T2(-21, -12, -2, -10, 4, PN2, 'conc'); T2(2, -12, 24, -10, 4, PN2, 'conc'); T2(-2, -12, 2, -10, 1.3, PN2, 'conc', 2.7, false);
@@ -920,7 +951,7 @@
     WX(2, 15, 24, 3.4); WX(8, 15, 24, 3.4); WZ(24, -12, 2, 3.4, [[-6, -3.5]]); WZ(24, 8, 22, 3.4, [[14, 16.5]]); WX(22, 15, 24, 3.4);
     WZ(27, -12, 22, 3.4, [[-4, -1.5], [12, 14.5]]); WX(5, 27, 42, 3.4); WZ(42, -12, 22, 3.4, [[15, 18]]); WX(22, 27, 42, 3.4); T2(24, 21.8, 27, 22.2, .9, PN, 'conc', 2.5, false); roof(15, -12, 42, 22, 3.4);
     // ---------- gate: guard posts either side of the forecourt, barrier arms up, floodlights
-    T2(-9, 22, -4, 27, 3, PN, 'conc'); T2(4, 22, 9, 27, 3, PN, 'conc'); T2(-9.3, 21.9, -3.7, 27.3, .3, SNOW, 'plain', 3, false); T2(3.7, 21.9, 9.3, 27.3, .3, SNOW, 'plain', 3, false);
+    T2(-9, 22, -4, 27, 3, PN, 'conc'); T2(4, 22, 9, 27, 3, PN, 'conc'); T2(-9.3, 21.9, -3.7, 27.3, .3, SNOW, 'snow', 3, false); T2(3.7, 21.9, 9.3, 27.3, .3, SNOW, 'snow', 3, false);
     [-1, 1].forEach(function (sd) { b.box(sd * 4.02, 24.5, .06, 1.6, 1, 0x1b262c, 1.3, false, 'plain'); b.box(sd * 3.6, 27.6, .3, .3, 1.1, 0xd0b03a, 0, true, 'metal'); b.seg(sd * 3.6, 1.1, 27.6, sd * 3.2, 3.6, 27.6, .1, 0xd8d2bc, 'metal'); b.lamp(sd * 10, 32, 6.5, -sd, 0); });
     b.quad('hazard', 0, .025, 27.8, 7.4, .6, 0, { flat: true, rep: [7.4, .6] });
 
@@ -936,10 +967,16 @@
     [[-13, -8.5], [13, -8.5], [-13, 18.5], [13, 18.5]].forEach(function (q) { b.lamp(q[0], q[1], 5.5, q[0] < 0 ? 1 : -1, 0); });
 
     // ---------- inside: site A (shelving and stacked goods; marked circle in the middle)
-    b.quad('siteS', -35, .035, 12, 6, 6, 0, { flat: true, mode: 'alpha', make: siteMark });
+    b.quad('siteS', -35, .035, 12, 5, 5, 0, { flat: true, mode: 'alpha', make: siteMark }); plantZone(b, -35, 12, 0);
     shelf(-44.3, 5, PI / 2, 5, false); shelf(-44.3, 14, PI / 2, 5, false); shelf(-33, 21.3, 0, 5, true); shelf(-25.7, 11, -PI / 2, 5, false);
     cr(-40, 6.5, 1.3, 1.2, TAN); cr(-38.6, 6.5, 1.3, 1.2, TAN); cr(-39.3, 6.5, 1, .8, TAN, 1.2); cr(-31, 8.5, 1.3, 1.2, OLV); cr(-31, 9.9, 1, .8, OLV); cr(-39, 16.5, 1.3, 1.2, OLV); cr(-37.6, 16.6, 1.3, 1.2, OLV); cr(-38.3, 18, 1, .8, TAN);
-    cr(-30, 16, 1.3, 1.2, TAN); cr(-30, 17.4, 1.3, 1.2, TAN); cr(-30, 16.7, 1, .8, TAN, 1.2); cr(-34.5, 4, 1, .8, OLV); b.pallet(-42, 19.5, 0); cr(-42, 19.5, 1.2, 1, TAN, .14); b.solid(-42, 19.5, 1.2, 1.2, .2);
+    cr(-30, 16, 1.3, 1.2, TAN); cr(-30, 17.4, 1.3, 1.2, TAN); cr(-30, 16.7, 1, .8, TAN, 1.2); cr(-34.5, 4, 1, .8, OLV);
+    // frost and ice by the doors, tyre tracks and boot prints in the snow, oil on the yard, bullet marks, rust streaks
+    [[-41.5, 24, 5, 3], [0, 25, 6, 3.4], [47, -22, 3, 6], [25.5, 24.5, 3.4, 3], [-49, -4.5, 3, 4]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], .025, 0xcfe2ee, 0, false, 'ice'); });
+    decal(b, 'tracks', -50.5, .04, 30, 2.6, 16, 0, true); decal(b, 'tracks', -50.5, .04, 6, 2.6, 16, 0, true); decal(b, 'tracks', 50, .04, 0, 2.6, 16, 0, true); decal(b, 'tracks', 50, .04, 28, 2.6, 16, 0, true); decal(b, 'tracks', -20, .04, 37.5, 2.6, 16, PI / 2, true); decal(b, 'tracks', 22, .04, 37.5, 2.6, 16, PI / 2, true); decal(b, 'tracks', 0, .04, 33, 2.6, 12, 0, true);
+    [[-44, 26, .4], [-36, 30, 1.8], [8, 30, .3], [40, 24, 2.6], [46, 10, .1], [46, -12, 3], [-48, 18, .2], [-10, 26, 1.2]].forEach(function (q) { decal(b, 'foot', q[0], .045, q[1], .9, 3.2, q[2], true); });
+    decal(b, 'stain', 3, .04, 9, 4, 4, 0, true); decal(b, 'stain', -8, .04, -2, 3, 3, 1, true); decal(b, 'stain', 9, .04, 16, 3, 3, 2, true); decal(b, 'stain', -35, .04, 8, 2.6, 2.6, 0, true); decal(b, 'stain', 30, .04, -18, 2.6, 2.6, 1, true); decal(b, 'crack', -5, .04, 12, 5, 5, .6, true); decal(b, 'crack', 6, .04, -6, 4, 4, 2, true);
+    decal(b, 'holes', -14.76, 1.5, 0, 1.4, 1.4, PI / 2); decal(b, 'holes', 14.76, 1.4, 12, 1.4, 1.4, -PI / 2); decal(b, 'holes', -8, 1.6, -9.94, 1.3, 1.3, 0); decal(b, 'holes', 9, 1.5, 19.94, 1.3, 1.3, PI); decal(b, 'rust', -14.74, 3, 15, 1, 2.4, PI / 2); decal(b, 'rust', 6.5, 2.4, 22.24, .9, 2.2, 0); decal(b, 'rust', -6.5, 2.4, 22.24, .9, 2.2, 0); b.pallet(-42, 19.5, 0); cr(-42, 19.5, 1.2, 1, TAN, .14); b.solid(-42, 19.5, 1.2, 1.2, .2);
     [[-40, 7], [-30, 7], [-40, 17], [-30, 17]].forEach(function (q) { lamp(q[0], q[1], 5.5, 0xffe2b4, 1.6, 18); });
     // service store north of A (its narrow door is A's choke point), corridor, yard-side rooms
     shelf(-44.3, -11, PI / 2, 4, false); shelf(-40, -11.3, 0, 6, true); cr(-31, -2, 1.3, 1.2, TAN); cr(-29.6, -2, 1, .8, TAN); cr(-36, -6, 1.3, 1.2, OLV); cr(-42, -1, 1, .8, OLV); lamp(-35, -5, 3.4, 0xfff0d8, 1.4, 14);
@@ -960,7 +997,7 @@
     desk(11, -33, 0); desk(15, -33, 0); desk(13, -27, 0); shelf(8, -35.3, 0, 3, true); T2(16.5, -22.5, 19, -20.5, .9, 0x7c858c, 'metal'); b.glow(17.7, 1.1, -21.5, .9, .3, .5, 0x8fe0a8); cr(8.2, -18, 1.3, 1.2, TAN); lamp(13, -30, 4, 0xe8f0ff, 1.4, 14); lamp(13, -21, 4, 0xe8f0ff, 1.3, 12);
     [-18, -6, 8, 16].forEach(function (x) { lamp(x, -14, 3.4, 0xfff0d8, 1.3, 12); });
     // site B: goods against the walls, a clearer middle
-    b.quad('siteS', 31, .035, -22, 6, 6, 0, { flat: true, mode: 'alpha', make: siteMark });
+    b.quad('siteS', 31, .035, -22, 5, 5, 0, { flat: true, mode: 'alpha', make: siteMark }); plantZone(b, 31, -22, 0);
     shelf(24, -31.3, 0, 6, true); shelf(34, -31.3, 0, 6, true); cr(22, -19, 1.3, 1.2, TAN); cr(22, -17.6, 1.3, 1.2, TAN); cr(22, -18.3, 1, .8, TAN, 1.2); cr(29, -13.5, 1.3, 1.2, OLV); cr(30.4, -13.5, 1.3, 1.2, OLV); cr(37, -14, 1.3, 1.2, TAN); cr(38.4, -14, 1, .8, TAN);
     cr(40.5, -28, 1.3, 1.2, OLV); cr(40.5, -29.4, 1.3, 1.2, OLV); cr(40.5, -28.7, 1, .8, OLV, 1.2); cr(27, -24, 1.3, 1.2, 0xc86a3a); cr(35, -19.5, 1.3, 1.2, TAN); cr(36.4, -19.5, 1, .8, TAN); b.pallet(33, -27, 0); cr(33, -27, 1.2, 1, OLV, .14); b.solid(33, -27, 1.2, 1.2, .2);
     [[26, -26], [36, -26], [26, -17], [36, -17]].forEach(function (q) { lamp(q[0], q[1], 5.5, 0xffe2b4, 1.6, 18); });
@@ -973,13 +1010,13 @@
     [-9, 0, 9, 18].forEach(function (z) { lamp(25.5, z, 3.4, 0xfff0d8, 1.1, 10); });
 
     // ---------- outside: outer road with containers, sheds and snow banks for cover
-    ctn(-50.5, 12, true, 0x7f8a93); ctn(-48, -4, false, 0x93826a); T2(-55, 30, -43, 40, 3.6, PN2, 'conc'); T2(-55.3, 29.7, -42.7, 40.3, .3, SNOW, 'plain', 3.6, false); [[-52, 33], [-49, 33], [-46, 33], [-52, 37], [-49, 37], [-46, 37]].forEach(function (q) { b.cyl(q[0], q[1], .9, .25, 0x2a2e31, 3.9, false, 'plain', .9, 12); });
+    ctn(-50.5, 12, true, 0x7f8a93); ctn(-48, -4, false, 0x93826a); T2(-55, 30, -43, 40, 3.6, PN2, 'conc'); T2(-55.3, 29.7, -42.7, 40.3, .3, SNOW, 'snow', 3.6, false); [[-52, 33], [-49, 33], [-46, 33], [-52, 37], [-49, 37], [-46, 37]].forEach(function (q) { b.cyl(q[0], q[1], .9, .25, 0x2a2e31, 3.9, false, 'plain', .9, 12); });
     ctn(-30, 31.5, false, 0x7f8a93); ctn(-19, 37, false, 0x6d7c88); cr(-33, 26.5, 1.3, 1.2, OLV); cr(-12, 30, 1.3, 1.2, TAN); cr(-12, 31.4, 1, .8, TAN); b.jersey(-24, 26.5, 3, false);
-    ctn(49, -10, true, 0x6d7c88); ctn(51.5, 8, true, 0x93826a); ctn(47.5, 27, false, 0x7f8a93); T2(44, 34, 50, 40, 3, PN2, 'conc'); T2(43.7, 33.7, 50.3, 40.3, .3, SNOW, 'plain', 3, false); ctn(30, 33, false, 0x7f8a93); ctn(17, 38, false, 0x93826a); cr(13, 30, 1.3, 1.2, OLV); cr(46, 19, 1.3, 1.2, TAN); cr(46, -22, 1.3, 1.2, OLV); cr(47.4, -22, 1, .8, OLV); b.jersey(36, 26, 3, false);
+    ctn(49, -10, true, 0x6d7c88); ctn(51.5, 8, true, 0x93826a); ctn(47.5, 27, false, 0x7f8a93); T2(44, 34, 50, 40, 3, PN2, 'conc'); T2(43.7, 33.7, 50.3, 40.3, .3, SNOW, 'snow', 3, false); ctn(30, 33, false, 0x7f8a93); ctn(17, 38, false, 0x93826a); cr(13, 30, 1.3, 1.2, OLV); cr(46, 19, 1.3, 1.2, TAN); cr(46, -22, 1.3, 1.2, OLV); cr(47.4, -22, 1, .8, OLV); b.jersey(36, 26, 3, false);
     [[-54, 22, 2.4, 1.3, 1], [-46.5, 24.5, 1.8, 1, 1], [-27, 42.5, 3, 1.4, 0], [8, 42.8, 2.6, 1.2, 0], [38, 42.6, 3, 1.5, 0], [54.5, 16, 2.2, 1.3, 1], [44.5, -1.5, 1.6, 1, 1], [54.3, -24, 2.4, 1.4, 0], [-54.2, -9, 2.2, 1.3, 0], [-46.5, 1.2, 1.5, .9, 1], [-13, 24, 1.6, .9, 1], [12, 24.2, 1.5, .9, 1], [-22, 23.6, 1.8, .8, 0], [35, 23.5, 2, .8, 0]].forEach(function (q) { mound(q[0], q[1], q[2], q[3], q[4]); });
     [[-50.5, 26, 1, 0], [-50.5, -2, 1, 0], [-30, 40, 0, -1], [30, 40, 0, -1], [50, 20, -1, 0], [50, -16, -1, 0]].forEach(function (q) { b.lamp(q[0], q[1], 6, q[2], q[3]); });
     // pipes and cable trays under the ceilings (corridors, warehouses, labs), as the brief asks
-    function pipe(x0, z0, x1, z1, y, c, w) { b.seg(x0, y, z0, x1, y, z1, w || .14, c || 0x8e979e, 'plain'); }
+    var pipe = tiered(b, 1, function (x0, z0, x1, z1, y, c, w) { b.seg(x0, y, z0, x1, y, z1, w || .14, c || 0x8e979e, 'plain'); });
     pipe(-24.3, -14.6, 19.6, -14.6, 3.05, 0x9b7a4e); pipe(-24.3, -15.1, 19.6, -15.1, 3.05); T2(-24, -13.2, 19.6, -12.7, .06, 0x3a4046, 'plain', 3.05, false);
     pipe(-24.4, -15.6, -24.4, 7.6, 3.05); T2(-21.9, -11.6, -21.4, 7.6, .06, 0x3a4046, 'plain', 3.05, false); pipe(26.6, -11.6, 26.6, 21.6, 3.05, 0x9b7a4e); T2(24.4, -11.6, 24.9, 21.6, .06, 0x3a4046, 'plain', 3.05, false);
     [[-44.4, 2.6, -44.4, 21.6], [-25.6, 2.6, -25.6, 21.6]].forEach(function (q) { pipe(q[0], q[1], q[2], q[3], 5, 0x8e979e, .22); }); [7, 12, 17].forEach(function (z) { T2(-44.6, z - .12, -25.4, z + .12, .25, 0x4a545c, 'plain', 5.2, false); });
@@ -989,9 +1026,8 @@
     b.fence(-55.4, -12, -55.4, 28, 2.6); b.fence(55.4, -28, 55.4, 30, 2.6); b.fence(-40, 43.4, -12, 43.4, 2.6); b.fence(12, 43.4, 42, 43.4, 2.6);
     [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 38 }); b.spawns.B.push({ x: x * 2, z: -14 }); });
     function spots(l) { return l.map(function (q) { return { x: q[0], z: q[1], y: 0, l: 0 }; }); }
-    return { name: '설산 연구기지', b: b, bounds: { minx: -57, maxx: 57, minz: -37, maxz: 45 }, bg: 0x2b3b55, fog: [30, 170], hemi: [0xb9cde8, 0x5b6676, .95], sun: [0xa9c4ec, .55, [30, 40, 26]], rain: false, sky: [0x0c1626, 0x3a5070], hdri: ['night', .14, .22, 2, .9], dim: .8,
-      sites: [{ id: 'A', x: -35, z: 12, l: 0, y: 0, f: [-35, 12, 0], zones: [[-9.4, -9.4, 9.4, 9.4]], spots: spots([[-35, 12], [-41, 9], [-32, 18.5], [-37, 5.5], [-28.5, 13]]), via: [[-50, 30, 0], [-38, 26, 0], [-18, 5, 0], [-23, -9, 0], [-35, -5, 0]] },
-        { id: 'B', x: 31, z: -22, l: 0, y: 0, f: [31, -22, 0], zones: [[-10.4, -9.4, 10.4, 9.4]], spots: spots([[31, -22], [24.5, -28], [38.5, -17.5], [34, -29], [27, -15.5]]), via: [[25.5, 10, 0], [49, -6, 0], [10, -14, 0], [14, -24, 0], [25.5, -6, 0]] }],
+    return { name: '설산 연구기지', b: b, bounds: { minx: -57, maxx: 57, minz: -37, maxz: 45 }, bg: 0x2b3b55, fog: [30, 170], hemi: [0xb9cde8, 0x5b6676, .95], sun: [0xa9c4ec, .55, [30, 40, 26]], rain: false, sky: [0x0c1626, 0x3a5070], hdri: ['night', .14, .22, 2, .9], dim: .8, lod: [40, 80],
+      sites: [siteDef('A', -35, 12, 0, 0, [[-50, 30, 0], [-38, 26, 0], [-18, 5, 0], [-23, -9, 0], [-35, -5, 0]]), siteDef('B', 31, -22, 0, 0, [[25.5, 10, 0], [49, -6, 0], [10, -14, 0], [14, -24, 0], [25.5, -6, 0]])],
       fwd: [[0, -7, 0], [-23, 0, 0], [25.5, 0, 0], [-35, -6, 0], [30, -15, 0], [-14, -19, 0], [0, -14, 0], [-18, -4, 0], [19, 5, 0]] };
   }
 
@@ -1003,16 +1039,16 @@
   //    A = 남쪽 안뜰(터널 계단이 올라오는 곳). 설명문은 왼쪽 마당도 지점 후보로 들지만, 공격 출발지 바로 옆이라 지점으로 쓰지 않았다.
   //  · 감시탑, 물탱크, 안테나는 장식이다.
   function canyon() {
-    var b = Builder(), H = 3.2, links = [], ladders = [], SAND = 0xb4946a, SAND2 = 0x9c7c54, ROCKC = 0x8f6f4b, CW = 0xa39a88, DK = 0x33383c, OLV = 0x5a6142, TAN = 0xb39a6a, BAG = 0xb09a6c, i;
+    var b = Builder(), H = 3.2, links = [], ladders = [], SAND = 0xe9dfcc, SAND2 = 0xd2c8b8, ROCKC = 0xbcae9c, /* light tints: the painted sand and rock textures carry the colour */ CW = 0xa39a88, DK = 0x33383c, OLV = 0x5a6142, TAN = 0xb39a6a, BAG = 0xb09a6c, i;
     var f = Frames(b, H, links, ladders, CW, DK)(0, 0, 0);
     b.day = false;
     function Bg(x0, z0, x1, z1, h, c, t, y0, solid) { b.box((x0 + x1) / 2, (z0 + z1) / 2, Math.abs(x1 - x0), Math.abs(z1 - z0), h, c, H + (y0 || 0), solid, t || 'conc'); }
     function cr(x, z, sz, h, c, y0) { b.crate(x, z, sz, c, H + (y0 || 0), h); b.solid(x, z, sz, sz, h, H + (y0 || 0)); }
     function crT(x, z, sz, h, c) { b.crate(x, z, sz, c, 0, h); }                         // crate on the tunnel floor
     function bags(x, z, len, ang) { b.rbox(x, z, len, .7, .75, BAG, H, ang, true, 'canvas'); b.rbox(x, z, len - .5, .55, .35, 0xa38d60, H + .75, ang, false, 'canvas'); b.rsolid(x, z, len - .5, .55, .35, H + .75, ang); }
-    function rock(x, z, r, h, solid, y) { var g = new T.IcosahedronGeometry(1, 0); g.scale(r, h, r * (.75 + Math.random() * .5)); g.rotateY(Math.random() * 3); g.translate(x, (y == null ? H : y) + h * .3, z); b.geo(g, (x * 7 + z * 3) % 2 ? ROCKC : SAND2, 'conc', {}); if (solid) b.solid(x, z, r * 1.3, r * 1.2, h, y == null ? H : y); }
+    function rock(x, z, r, h, solid, y) { var g = new T.IcosahedronGeometry(1, 0); g.scale(r, h, r * (.75 + Math.random() * .5)); g.rotateY(Math.random() * 3); g.translate(x, (y == null ? H : y) + h * .3, z); b.geo(g, (x * 7 + z * 3) % 2 ? ROCKC : SAND2, 'rock', {}); if (solid) b.solid(x, z, r * 1.3, r * 1.2, h, y == null ? H : y); }
     function acu(x, z, y) { b.box(x, z, 1.6, 1.6, .9, 0xb4b8b6, H + y, false, 'plain'); b.cyl(x, z, .58, .06, 0x2a2e31, H + y + .9, false, 'plain', .58, 12); }
-    function win(x, z, w, h, y, nx, nz) { b.box(x + nx * .05, z + nz * .05, nx ? .1 : w, nz ? .1 : w, h, 0x1b262c, H + y, false, 'plain'); }
+    function win(x, z, w, h, y, nx, nz) { b.box(x + nx * .05, z + nz * .05, nx ? .1 : w, nz ? .1 : w, h, 0x5a6a72, H + y, false, 'glass'); }
     function door(x, z, w, h, nx, nz) { b.box(x + nx * .06, z + nz * .06, nx ? .12 : w, nz ? .12 : w, h, 0x4a4438, H, false, 'paint'); }
     function rail(x0, z0, x1, z1) { var mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, w = Math.max(Math.abs(x1 - x0), .1), d = Math.max(Math.abs(z1 - z0), .1); b.box(mx, mz, w, d, .08, DK, H + 1, false, 'plain'); b.box(mx, mz, w, d, .06, DK, H + .5, false, 'plain'); b.box(x0, z0, .09, .09, 1, DK, H, false, 'plain'); b.box(x1, z1, .09, .09, 1, DK, H, false, 'plain'); b.solid(mx, mz, Math.max(w, .2), Math.max(d, .2), 1.05, H, true); }
     function tower(x, z) {                                                                   // watch tower on legs (dressing; the foot blocks the way)
@@ -1021,6 +1057,7 @@
       Bg(x - 1.9, z - 1.9, x + 1.9, z + 1.9, .2, 0x5a5044, 'plain', 5, false); Bg(x - 1.7, z - 1.7, x + 1.7, z + 1.7, 1, 0x6a5e4c, 'plain', 5.2, false); Bg(x - 1.6, z - 1.6, x + 1.6, z + 1.6, .9, 0x23292d, 'plain', 6.2, false); Bg(x - 2.2, z - 2.2, x + 2.2, z + 2.2, .25, 0x5a5044, 'plain', 7.1, false);
       b.solid(x, z, 3.4, 3.4, 5, H);
     }
+    acu = tiered(b, 2, acu); win = tiered(b, 2, win); door = tiered(b, 2, door);
     function siteMark() { var a = cv(256, 256), x = a[1]; x.strokeStyle = '#b8402e'; x.lineWidth = 16; x.beginPath(); x.arc(128, 128, 104, 0, 6.2832); x.stroke(); x.lineWidth = 20; x.beginPath(); x.moveTo(60, 60); x.lineTo(196, 196); x.moveTo(196, 60); x.lineTo(60, 196); x.stroke(); return a[0]; }
 
     // ---------- the rock the map is cut from: everything outside these holes is solid up to the ground level
@@ -1031,11 +1068,11 @@
       holes.forEach(function (h) { xs.push(h[0], h[2]); zs.push(h[1], h[3]); });
       xs = xs.filter(function (v, k) { return xs.indexOf(v) === k; }).sort(function (a, c) { return a - c; }); zs = zs.filter(function (v, k) { return zs.indexOf(v) === k; }).sort(function (a, c) { return a - c; });
       function open(x, z) { return holes.some(function (h) { return x > h[0] && x < h[2] && z > h[1] && z < h[3]; }); }
-      for (iz = 0; iz < zs.length - 1; iz++) { run = null; for (ix = 0; ix < xs.length; ix++) { var solid = ix < xs.length - 1 && !open((xs[ix] + xs[ix + 1]) / 2, (zs[iz] + zs[iz + 1]) / 2); if (solid && run == null) run = xs[ix]; if (!solid && run != null) { b.box((run + xs[ix]) / 2, (zs[iz] + zs[iz + 1]) / 2, xs[ix] - run, zs[iz + 1] - zs[iz], H + 14, SAND, -14, true, 'conc'); run = null; } } }
+      for (iz = 0; iz < zs.length - 1; iz++) { run = null; for (ix = 0; ix < xs.length; ix++) { var solid = ix < xs.length - 1 && !open((xs[ix] + xs[ix + 1]) / 2, (zs[iz] + zs[iz + 1]) / 2); if (solid && run == null) run = xs[ix]; if (!solid && run != null) { b.box((run + xs[ix]) / 2, (zs[iz] + zs[iz + 1]) / 2, xs[ix] - run, zs[iz + 1] - zs[iz], H + 14, SAND, -14, true, 'sand'); run = null; } } }
     })();
     // tunnel floor and roofs (the roofs are the ground above); the stair wells and ladder shafts stay open
     b.box(0, 30, 96, 26, .3, 0x5a4c3c, -.3, false, 'conc');
-    [[-44, 34, -30, 37], [-30, 30, -18, 40], [-18, 30, -4, 33], [-4, 30, -1, 39], [-1, 36, 18, 39], [18, 30, 30, 40], [30, 33, 44, 36], [-24, 22, -21, 30], [21, 22, 24, 30]].forEach(function (q) { b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .5, 0x3a3026, 2.6, true, 'conc'); b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .1, SAND, 3.1, true, 'conc'); });
+    [[-44, 34, -30, 37], [-30, 30, -18, 40], [-18, 30, -4, 33], [-4, 30, -1, 39], [-1, 36, 18, 39], [18, 30, 30, 40], [30, 33, 44, 36], [-24, 22, -21, 30], [21, 22, 24, 30]].forEach(function (q) { b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .5, 0x3a3026, 2.6, true, 'conc'); b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .1, SAND, 3.1, true, 'sand'); });
     // dark timber props and lintels along the tunnels, so they read as dug out and dim
     [[-40, 34, 37, 0], [-34, 34, 37, 0], [-11, 30, 33, 0], [-2.5, 33, 36, 1], [6, 36, 39, 0], [12, 36, 39, 0], [34, 33, 36, 0], [40, 33, 36, 0], [-22.5, 24, 27, 2], [22.5, 24, 27, 2]].forEach(function (q) { var ax = q[3] === 0; if (q[3] === 1) { b.box(-2.5, 34.5, 3, .25, .22, 0x2e2418, 2.38, false, 'plain'); return; } if (q[3] === 2) { b.box(q[0], 25.5, 3, .25, .22, 0x2e2418, 2.38, false, 'plain'); b.box(q[0] - 1.4, 25.5, .2, .25, 2.4, 0x2e2418, 0, false, 'plain'); b.box(q[0] + 1.4, 25.5, .2, .25, 2.4, 0x2e2418, 0, false, 'plain'); return; } b.box(q[0], (q[1] + q[2]) / 2, .25, 3, .22, 0x2e2418, 2.38, false, 'plain'); b.box(q[0], q[1] + .1, .25, .2, 2.4, 0x2e2418, 0, false, 'plain'); b.box(q[0], q[2] - .1, .25, .2, 2.4, 0x2e2418, 0, false, 'plain'); });
     f.stairs(-22.5, 22, 0, -1, 3); f.stairs(22.5, 22, 0, -1, 3); f.ladder(-46, 35.5, -1, 0); f.ladder(46, 34.5, 1, 0);
@@ -1046,17 +1083,17 @@
     crT(-27, 32, 1.3, 1.2, TAN); crT(-25.6, 32, 1, .8, TAN); crT(-21, 38, 1.3, 1.2, OLV); crT(-26.5, 38.5, 1, .8, OLV); crT(21, 32, 1.3, 1.2, OLV); crT(27, 38, 1.3, 1.2, TAN); crT(25.6, 38.2, 1, .8, TAN); crT(27.5, 31.5, 1, .8, OLV); crT(-9, 32.2, 1, .8, TAN); crT(10, 36.8, 1, .8, OLV);
     b.seg(-44, 2.5, 34.3, -30, 2.5, 34.3, .05, 0x1c1c1c, 'plain'); b.seg(-1, 2.5, 38.7, 18, 2.5, 38.7, .05, 0x1c1c1c, 'plain'); b.seg(30, 2.5, 33.3, 44, 2.5, 33.3, .05, 0x1c1c1c, 'plain');
     // river far below, the fall at its south end, the culvert under the north causeway
-    b.box(0, -12, 16, 70, .4, 0x2a5a5e, -13, false, 'plain'); b.box(0, 21.8, 7, .3, 12, 0xbfe0e6, -13, false, 'plain'); b.box(0, 20.5, 9, 2.5, .5, 0xd8eef0, -13, false, 'plain'); b.box(0, -33.95, 5, .2, 6, 0x14181a, -9, false, 'plain'); b.box(0, -38.05, 5, .2, 6, 0x14181a, -9, false, 'plain');
+    b.box(0, -12, 16, 70, .4, 0x6a9a9e, -13, false, 'water'); b.box(0, 21.8, 7, .3, 12, 0xbfe0e6, -13, false, 'plain'); b.box(0, 20.5, 9, 2.5, .5, 0xd8eef0, -13, false, 'plain'); b.box(0, -33.95, 5, .2, 6, 0x14181a, -9, false, 'plain'); b.box(0, -38.05, 5, .2, 6, 0x14181a, -9, false, 'plain');
     for (i = 0; i < 14; i++) rock((i % 2 ? -7.2 : 7.2), -44 + i * 4.7, 1.6 + (i % 3) * .5, 2.4 + (i % 4), false, -11 + (i % 5) * 2);
 
     // ---------- rim: rock walls round the playable ground, and the big outcrop that closes the surface south of the gorge
-    Bg(-66, -50, 66, -42, 7, SAND2); Bg(-66, 44, 66, 50, 7, SAND2); Bg(-66, -42, -60, 44, 7, SAND2); Bg(60, -42, 66, 44, 7, SAND2); Bg(-14, 22.6, 14, 44, 6, SAND2);
+    Bg(-66, -50, 66, -42, 7, SAND2, 'rock'); Bg(-66, 44, 66, 50, 7, SAND2, 'rock'); Bg(-66, -42, -60, 44, 7, SAND2, 'rock'); Bg(60, -42, 66, 44, 7, SAND2, 'rock'); Bg(-14, 22.6, 14, 44, 6, SAND2, 'rock');
     [[-60, -30], [-60, -8], [-60, 14], [-59.5, 34], [60, -34], [60, -12], [60, 12], [59.5, 32], [-44, -42], [-22, -42], [12, -42], [40, -42], [-46, 44], [-28, 44], [26, 44], [48, 44], [-14, 30], [14, 28], [-10, 23], [9, 23.5], [0, 40]].forEach(function (q, n) { rock(q[0], q[1], 2.6 + (n % 3), 4 + (n % 4) * 1.4, false); });
-    [[-38, 24, -28, 31, 4], [-36, 40.5, -16, 44, 3.4], [27, 25, 38, 30.5, 4], [16, 40.5, 36, 44, 3.4], [-58, 22, -52, 30, 3]].forEach(function (q) { Bg(q[0], q[1], q[2], q[3], q[4], ROCKC); rock((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, (q[2] - q[0]) * .55, q[4] * 1.1, false); });
+    [[-38, 24, -28, 31, 4], [-36, 40.5, -16, 44, 3.4], [27, 25, 38, 30.5, 4], [16, 40.5, 36, 44, 3.4], [-58, 22, -52, 30, 3]].forEach(function (q) { Bg(q[0], q[1], q[2], q[3], q[4], ROCKC, 'rock'); rock((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, (q[2] - q[0]) * .55, q[4] * 1.1, false); });
     // the south outcrop and the rims are heaped with boulders so no flat slab shows; ledges step down the gorge walls
     for (i = 0; i < 26; i++) rock(-13 + (i * 7.3) % 26, 24 + (i * 5.1) % 19, 3 + (i % 3) * 1.2, 5.5 + (i % 4) * 1.5, false, H + (i % 3));
     for (i = 0; i < 40; i++) { var t = i / 40 * 6.2832, ex = Math.cos(t), ez = Math.sin(t), kx = Math.abs(ex) > Math.abs(ez) * 1.4; rock(kx ? (ex > 0 ? 61.5 : -61.5) : -58 + (i * 23) % 116, kx ? -40 + (i * 17) % 82 : (ez > 0 ? 45.5 : -43.5), 2.4 + (i % 3) * .9, 6 + (i % 5) * 1.3, false, H + 1); }
-    [-1, 1].forEach(function (sd) { for (i = 0; i < 9; i++) { b.box(sd * (8 - .7 - (i % 3) * .5), -30 + i * 6, 1.4 + (i % 3), 4.5, 1.2, i % 2 ? ROCKC : SAND2, -3 - (i % 4) * 2.3, false, 'conc'); } });
+    [-1, 1].forEach(function (sd) { for (i = 0; i < 9; i++) { b.box(sd * (8 - .7 - (i % 3) * .5), -30 + i * 6, 1.4 + (i % 3), 4.5, 1.2, i % 2 ? ROCKC : SAND2, -3 - (i % 4) * 2.3, false, 'rock'); } });
     // parapets along the gorge so nobody steps off by accident
     [-1, 1].forEach(function (sd) { [[-42, -38.4], [-33.6, -5.9], [-.1, 22.6]].forEach(function (q) { Bg(sd * 8.2, q[0], sd * 8.7, q[1], 1.1, CW); }); });
     Bg(-8.2, -38.5, 8.2, -38.1, 1.1, CW); Bg(-8.2, -33.9, 8.2, -33.5, 1.1, CW);
@@ -1086,12 +1123,12 @@
     for (i = 0; i < 7; i++) Bg(44.8 - 0, -24.8 + i * .7, 46, -24.1 + i * .7, .25, 0x9d998e, 'conc', i * .5, false);
     Bg(40, -5, 46, 1, 2.8, 0x8f8676, 'block'); (function () { var g = new T.BoxGeometry(6.8, .14, 6.8); g.rotateZ(.16); g.translate(43, H + 3.4, -2); b.geo(g, 0x8f9498, 'corr', {}); })(); door(40, -2, 1.4, 2.1, -1, 0);
     // site B: the big north-east yard with green military boxes
-    b.quad('siteX', 33, H + .03, -14, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark });
+    b.quad('siteX', 33, H + .03, -14, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark }); plantZone(b, 33, -14, H);
+    b.quad('siteX', -39, H + .03, -5, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark }); plantZone(b, -39, -5, H); b.mark('A', -30, H + 1.9, -17.78, 1.4, 1.4, 0, '#e2562f'); b.mark('A', -24.22, H + 1.9, -12, 1.4, 1.4, -PI / 2, '#e2562f');
     cr(29.6, -9, 1.3, 1.2, OLV); cr(31, -9, 1.3, 1.2, OLV); cr(30.3, -9, 1.1, .9, 0x4e5637, 1.2); cr(36.5, -17.5, 1.3, 1.2, OLV); cr(36.5, -16.1, 1, .8, OLV); cr(27, -19, 1, .8, TAN); cr(40, -9.5, 1.3, 1.2, TAN); cr(34, -21, 1.3, 1.2, OLV);
     Bg(23.8, -22, 24.2, -10, 2.6, CW); Bg(24, -4.2, 30, -3.8, 2.6, CW); Bg(34, -4.2, 40, -3.8, 2.6, CW); b.mark('B', 24.22, H + 1.9, -16, 1.4, 1.4, PI / 2, '#e2562f'); b.mark('B', 37, H + 1.9, -4.22, 1.4, 1.4, PI, '#e2562f');
-    // site A: the south court where the tunnel stairs come up
-    b.quad('siteX', 15, H + .03, 13, 5.2, 5.2, 0, { flat: true, mode: 'alpha', make: siteMark });
-    Bg(10, 4.8, 19, 5.2, 2.6, CW); Bg(27, 4.8, 36, 5.2, 2.6, CW); Bg(35.8, 5, 36.2, 19, 2.6, CW); Bg(28, 9, 34, 14, 2.6, CW); door(31, 14, 1.3, 2.1, 0, 1); b.mark('A', 14.5, H + 1.9, 5.22, 1.4, 1.4, 0, '#e2562f'); b.mark('A', 35.78, H + 1.9, 12, 1.4, 1.4, -PI / 2, '#e2562f');
+    // the south court where the tunnel stairs come up
+    Bg(10, 4.8, 19, 5.2, 2.6, CW); Bg(27, 4.8, 36, 5.2, 2.6, CW); Bg(35.8, 5, 36.2, 19, 2.6, CW); Bg(28, 9, 34, 14, 2.6, CW); door(31, 14, 1.3, 2.1, 0, 1);
     cr(11.5, 9, 1.3, 1.2, TAN); cr(12.9, 9, 1.3, 1.2, TAN); cr(12.2, 9, 1.1, .9, TAN, 1.2); cr(18.5, 17, 1, .8, OLV); cr(11.5, 19.5, 1.3, 1.2, OLV); cr(17, 8, 1, .8, TAN); cr(26, 20, 1.3, 1.2, OLV); cr(30, 18, 1.3, 1.2, TAN); cr(30, 19.4, 1, .8, TAN);
     bags(13, -8.5, 5, -.5); bags(13, 2.5, 5, .5); bags(12.5, -31.5, 5, 0); bags(18, -14, 5, PI / 2); bags(42, 8, 5, .2); bags(26, 0, 4, 0);
     tower(30, -39.2); cr(46, 22, 1.3, 1.2, TAN); cr(50, 30, 1.3, 1.2, OLV); cr(40, 36, 1.3, 1.2, TAN); cr(-50, 34, 1.3, 1.2, TAN); cr(-44, 26, 1.3, 1.2, OLV);
@@ -1100,14 +1137,19 @@
     b.seg(50, H + 7, -45, 50, H + 15, -45, .14, 0x8e979e, 'plain'); b.seg(49, H + 12.5, -45, 51, H + 12.5, -45, .08, 0x8e979e, 'plain'); b.seg(49.3, H + 14, -45, 50.7, H + 14, -45, .08, 0x8e979e, 'plain');
     // floodlights at the bridge heads
     [[-11.6, -6.6], [-11.6, .6], [11.6, -6.6], [11.6, .6]].forEach(function (q) { b.box(q[0], q[1], .14, .14, 3.4, DK, H, false, 'plain'); b.glow(q[0], H + 3.4, q[1], .3, .16, .3, 0xffd9a0); });
-    [-8, -6, -4, -2, 0].forEach(function (z) { b.spawns.A.push({ x: -55, y: H, z: z }); b.spawns.B.push({ x: 55, y: H, z: z + 4 }); });
+    // sand drifted against walls, tracks in the yards, oil and bullet marks, rust on the bridge
+    [[-43, -14.4, 5, 2.4], [-30, -17.2, 6, 2.2], [-46, 7.4, 6, 2.2], [-15, -21.4, 5, 2], [24.8, -16, 2.2, 6], [46, -10.4, 6, 2.2], [35.4, 12, 2.2, 6], [10, 5.8, 6, 2], [-56, -14.4, 5, 2.4], [56, -10.4, 5, 2.4]].forEach(function (q) { decal(b, 'drift', q[0], H + .03, q[1], q[2], q[3], 0, true); });
+    decal(b, 'tracks', -44, H + .03, -2, 2.6, 14, PI / 2, true); decal(b, 'tracks', -20, H + .03, -3, 2.6, 12, PI / 2, true); decal(b, 'tracks', 30, H + .03, 2, 2.6, 14, PI / 2, true); decal(b, 'tracks', 18, H + .03, -3, 2.6, 10, PI / 2, true);
+    decal(b, 'stain', -34, H + .03, -10, 3, 3, 0, true); decal(b, 'stain', 38, H + .03, -12, 3, 3, 1, true); decal(b, 'stain', 0, H + .02, -3, 3, 3, 0, true); decal(b, 'stain', -24, .03, 35, 3, 3, 0, true); decal(b, 'stain', 24, .03, 36, 3, 3, 2, true); decal(b, 'stain', 6, .03, 37.5, 2.4, 2.4, 1, true);
+    decal(b, 'holes', -42.94, H + 1.5, -24, 1.4, 1.4, PI / 2); decal(b, 'holes', -20, H + 1.4, 3.94, 1.3, 1.3, PI); decal(b, 'holes', 45.94, H + 1.5, -20, 1.4, 1.4, -PI / 2); decal(b, 'holes', 31, H + 1.3, 8.94, 1.3, 1.3, PI); decal(b, 'holes', 23.74, H + 1.4, -18, 1.3, 1.3, -PI / 2); decal(b, 'crack', -36, H + .03, 12, 5, 5, 1, true); decal(b, 'crack', 28, H + .03, -2, 5, 5, 2, true);
+    // both teams start at the south end, one on each side of the gorge, as the pack's SPAWN markers place them
+    [-55, -53.5, -52, -50.5, -49].forEach(function (x) { b.spawns.A.push({ x: x, y: H, z: 40.5 }); b.spawns.B.push({ x: -x, y: H, z: 40.5 }); });
     function spots(l) { return l.map(function (q) { return { x: q[0], z: q[1], y: H, l: 1 }; }); }
     return { name: '사막 협곡', b: b, bounds: { minx: -61, maxx: 61, minz: -43, maxz: 45 }, bg: 0xc9b79a, fog: [55, 240], hemi: [0xf0e6d2, 0x7a6448, 1], sun: [0xffdca8, 1.7, [-30, 32, 20]], rain: false, sky: [0x4a78b0, 0xe0c9a4], hdri: ['day', .8, 1.5, 8, 1], dim: 1,
-      H: H, base: H, links: links, ladders: ladders, voids: GORGE, roamAll: true,
+      H: H, base: H, lod: [45, 90], links: links, ladders: ladders, voids: GORGE, roamAll: true,   // voids are the pack's river / canyon hazard: a fall there kills
       hot: [{ x: 0, z: -3, l: 1 }, { x: -36, z: -4, l: 1 }, { x: 33, z: -14, l: 1 }, { x: 0, z: -36, l: 1 }, { x: -24, z: 35, l: 0 }, { x: 24, z: 35, l: 0 }, { x: 15, z: 13, l: 1 }, { x: -22, z: 12, l: 1 }],
-      sites: [{ id: 'A', x: 15, z: 13, l: 1, y: H, f: [18, 13, 0], zones: [[-7.6, -7.4, 8.6, 9]], spots: spots([[15, 13], [12.2, 11], [20, 9], [13.5, 18.5], [25, 17]]), via: [[-22.5, 26, 0], [22.5, 26, 0], [0, -3, 1], [12, 0, 1], [47.5, 30, 1]] },
-        { id: 'B', x: 33, z: -14, l: 1, y: H, f: [32, -14, 0], zones: [[-7.4, -7.6, 9, 9.6]], spots: spots([[33, -14], [30.3, -11], [38, -16.5], [28.5, -19], [34, -8]]), via: [[0, -36, 1], [14, -36, 1], [0, -3, 1], [20, -6, 1], [44, 4, 1]] }],
-      fwd: [[12, -3, 1], [12, -36, 1], [22.5, 15, 1], [24, 35, 0], [30, -20, 1], [20, 10, 1], [44, 4, 1], [18, -20, 1]] };
+      sites: [siteDef('A', -39, -5, H, 1, [[-50, 20, 1], [-30, 8, 1], [-46, -12, 1]]), siteDef('B', 33, -14, H, 1, [[0, -3, 1], [0, -36, 1], [22.5, 26, 0], [12, -2, 1], [47.5, 30, 1]])],
+      fwd: [[-12, -3, 1], [12, -3, 1], [-22.5, 15, 1], [22.5, 15, 1], [-30, -10, 1], [30, -12, 1], [0, -36, 1], [-24, 35, 0], [24, 35, 0]] };
   }
 
   var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon];
