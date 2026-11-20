@@ -8,16 +8,23 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import java.io.IOException;
+
 /**
- * 게임 한 장을 전체 화면 WebView 로 띄운다. 게임 코드는 assets/index.html 에 통째로 들어 있고
- * (minifps/web/build.py 가 만든다) 게임은 네트워크를 쓰지 않는다. 네트워크는 {@link Updater} 가 새 버전을
- * 확인하고 받을 때만 쓴다.
+ * 게임 한 장을 전체 화면 WebView 로 띄운다. 게임 코드는 assets/index.html 에, 텍스처와 모델은 assets/a/ 에
+ * 들어 있다(minifps/web/build.py 가 만든다). 페이지는 {@link #ORIGIN} 이라는 가짜 https 주소로 열고, 그 주소로
+ * 가는 요청을 전부 APK 안 파일로 답한다. file:// 로 열면 WebGL 이 이미지와 모델을 읽지 못하기 때문이다.
+ * 게임은 실제 네트워크를 쓰지 않는다. 네트워크는 {@link Updater} 가 새 버전을 확인하고 받을 때만 쓴다.
  */
 public final class MainActivity extends Activity {
+    private static final String ORIGIN = "https://minifps.app/";
+
     private WebView web;
     private Updater updater;
 
@@ -48,16 +55,47 @@ public final class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setTextZoom(100);
         s.setAllowFileAccess(true);
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                if (!url.startsWith(ORIGIN)) {
+                    return null;
+                }
+                String path = request.getUrl().getPath();
+                path = path == null || path.length() <= 1 ? "index.html" : path.substring(1);
+                try {
+                    return new WebResourceResponse(mime(path), null, getAssets().open(path));
+                } catch (IOException e) {
+                    return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, null);
+                }
+            }
+        });
         updater = new Updater(this, web);
         web.addJavascriptInterface(updater, "MiniUpdate");
         setContentView(web);
         if (savedInstanceState == null) {
-            web.loadUrl("file:///android_asset/index.html");
+            web.loadUrl(ORIGIN + "index.html");
         } else {
             web.restoreState(savedInstanceState);
         }
         immersive();
+    }
+
+    private static String mime(String path) {
+        String p = path.toLowerCase(java.util.Locale.ROOT);
+        if (p.endsWith(".html")) {
+            return "text/html";
+        } else if (p.endsWith(".js")) {
+            return "text/javascript";
+        } else if (p.endsWith(".json") || p.endsWith(".gltf")) {
+            return "application/json";
+        } else if (p.endsWith(".jpg") || p.endsWith(".jpeg")) {
+            return "image/jpeg";
+        } else if (p.endsWith(".png")) {
+            return "image/png";
+        }
+        return "application/octet-stream";
     }
 
     @Override

@@ -34,6 +34,8 @@ jobs:
 
       - name: Bundle the game into assets
         run: |
+          # 실사 텍스처·스캔 소품(Poly Haven, CC0)과 병사 모델을 받는다. 저장소에는 넣지 않는다.
+          python3 minifps/web/fetch_assets.py
           python3 minifps/web/build.py
           # 문법 오류가 있는 채로 APK 가 되면 폰에서는 빈 화면만 보인다.
           for f in minifps/web/src/*.js; do node --check "$f"; done
@@ -47,6 +49,8 @@ jobs:
           unzip -l "$apk" | grep -E "assets/(index\.html|three\.min\.js)$"
           [ "$(unzip -l "$apk" | grep -cE 'assets/(index\.html|three\.min\.js)$')" = 2 ] \
             || { echo "::error::게임 파일이 APK 에 없다"; exit 1; }
+          unzip -l "$apk" | grep -qE 'assets/a/manifest\.json$' && unzip -l "$apk" | grep -qE 'assets/a/soldier\.glb$' \
+            || { echo "::error::텍스처·모델 자료가 APK 에 없다"; exit 1; }
           cp "$apk" "$RUNNER_TEMP/mini-fps.apk"
           ls -l "$RUNNER_TEMP/mini-fps.apk"
           # 앱 안 업데이트가 읽는 설명. 버전은 build.gradle.kts, 바뀐 점은 release-notes.txt 에서 온다.

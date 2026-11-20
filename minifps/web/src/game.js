@@ -620,8 +620,14 @@
   }
   function updModel(dt, a) {
     var m = a.model; if (!m) return;
-    if (!a.alive) { if (a.dead > 0) { a.dead = Math.min(a.dead + dt * 3.2, 1); m.shadow.visible = false; m.root.rotation.x = -a.dead * PI / 2; m.root.position.set(a.pos.x, a.pos.y + a.dead * .12, a.pos.z); if (a.respawn < 1.2) m.root.visible = false; } return; }
+    if (!a.alive) { if (a.dead > 0) { if (m.skinned && a.dead < .01) { m.acts.Run.setEffectiveWeight(0); m.acts.Idle.setEffectiveWeight(1); } a.dead = Math.min(a.dead + dt * 3.2, 1); m.shadow.visible = false; m.root.rotation.x = -a.dead * PI / 2; m.root.position.set(a.pos.x, a.pos.y + a.dead * .12, a.pos.z); if (a.respawn < 1.2) m.root.visible = false; } return; }
     m.root.position.copy(a.pos); m.root.rotation.set(0, a.yaw + PI, 0); m.shadow.visible = true;
+    if (m.skinned) {   // the downloaded model: blend idle and run by how fast it is going, sink to a knee, then lay the arms on the weapon
+      a.kneel = (a.kneel || 0) + ((a.crouch ? 1 : 0) - (a.kneel || 0)) * Math.min(1, dt * 9); a.gait = (a.gait || 0) + ((a.moving ? 1 : 0) - (a.gait || 0)) * Math.min(1, dt * 7);
+      var gt = a.gait * (1 - a.kneel * .6); m.acts.Idle.setEffectiveWeight(1 - gt); m.acts.Run.setEffectiveWeight(gt); m.acts.Run.setEffectiveTimeScale(1.05); m.mixer.update(dt);
+      var bn = m.bones, kn = a.kneel; if (kn > .01) { bn.Hips.position.y -= 42 * kn; bn.LeftUpLeg.rotateX(-1.25 * kn); bn.LeftLeg.rotateX(1.5 * kn); bn.RightUpLeg.rotateX(-.25 * kn); bn.RightLeg.rotateX(1.9 * kn); bn.Spine.rotateX(.15 * kn); }
+      m.gun.position.y = (bn.Spine2.getWorldPosition(vP).y - a.pos.y - 1.3) * .8 - kn * .02; m.gun.position.z = 0; SV.poseArms(m); return;
+    }
     // legs: thighs swing from the hip, the trailing knee bends; kneeling folds both and lowers the body
     a.kneel = (a.kneel || 0) + ((a.crouch ? 1 : 0) - (a.kneel || 0)) * Math.min(1, dt * 9); a.gait = (a.gait || 0) + ((a.moving ? 1 : 0) - (a.gait || 0)) * Math.min(1, dt * 8);
     if (a.moving) a.walk += dt * 9.5; var w = a.walk, k = a.kneel, g = a.gait * (1 - k * .5), drop = k * .34;
@@ -657,7 +663,7 @@
     G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '연습장 · 봇은 쏘지 않습니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
   };
   SV.end = function () {
-    if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); G.map = null; }
+    if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); G.map = null; }
     G.actors.forEach(function (a) { if (a.model) scene.remove(a.model.root); }); G.actors = [];
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
     if (rain) { scene.remove(rain); rain.geometry.dispose(); rain = null; }

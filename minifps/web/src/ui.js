@@ -199,4 +199,5 @@
   SV.back = function () { if (cur === 'edit') { editOff(); return true; } if (cur === 's-upd') { if (upd.phase !== 'installing') $('u-later').click(); return true; } if (G.state === 'play') { pause(); return true; } if (cur === 's-pause') return true; if (cur === 's-res') { show('s-lobby'); return true; } if (cur && cur !== 's-title' && cur !== 's-lobby') { show(G.state === 'pause' ? 's-pause' : 's-lobby'); return true; } return false; };
   SV.ui = { begin: begin, match: match, pause: pause, resume: resume, edit: editOn };
   applyCfg(); show('s-title');
+  SV.preload(function (p) { $('go-start').textContent = '불러오는 중… ' + Math.round(p * 100) + '%'; }, function () { $('go-start').disabled = false; $('go-start').textContent = '시작'; });
 })();

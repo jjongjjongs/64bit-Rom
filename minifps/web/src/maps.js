@@ -85,9 +85,15 @@
       x.fillStyle = 'rgba(190,210,225,.2)'; x.beginPath(); x.ellipse(52, 56, 26, 6, -.3, 0, 7); x.fill(); return c;
     }
   };
-  var texCache = {};
+  var texCache = {}, WHITE = new T.Color(1, 1, 1);
+  // real-world size of one repeat of each photographed texture, and how much of the painted-in tint to keep on it
+  var PHT = { conc: [3, 3], floor: [3, 3], block: [2.4, 2.4], corr: [2, 2], panel: [2, 2], metal: [2, 2], paint: [2, 2], canvas: [1, 1], crate: [1, 1] }, KEEP = { conc: .5, floor: .5, block: .3, corr: .9, panel: .75, metal: .7, paint: .92, crate: .8 }, GAIN = { block: 1.9, conc: 1.2, floor: 1.15, crate: .95, corr: 1.3, panel: 1.3, metal: 1.2, paint: 1.3 };
+  // scans whose own colours are wrong for where they are used are tinted: the cement sacks become plain burlap
+  var TINT = { cement_bag: 0x9a8a68 };
+  function photo(key) { var a = key !== 'canvas' && SV.assets && SV.assets.tex[key]; return a && a.diff ? a : null; }
   function tex(key, make) {
     if (texCache[key]) return texCache[key];
+    if (!make && photo(key)) return texCache[key] = photo(key).diff;
     var t = new T.CanvasTexture((make || PAINT[key])()); t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; t.encoding = T.sRGBEncoding; return texCache[key] = t;
   }
   // A normal map from a painted texture: brightness is taken as height, so scratches, seams and specks catch the light.
@@ -115,8 +121,8 @@
     function lay(store, k) { return store[k] || (store[k] = { P: [], N: [], C: [], U: [] }); }
     // append a transformed geometry to a layer. World-space UVs by default, the geometry's own UVs when opt.fit.
     function push(geo, c, t, opt, store) {
-      opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, t), ts = TS[t] || TS.plain;
-      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear();
+      opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, t), ph = !store && photo(t), ts = (ph && PHT[t]) || TS[t] || TS.plain;
+      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear(); if (ph) col.lerp(WHITE, 1 - (KEEP[t] || .6)).multiplyScalar(GAIN[t] || 1.15);
       for (i = 0; i < p.length / 3; i++) {
         var px = p[i * 3], py = p[i * 3 + 1], pz = p[i * 3 + 2], nx = n[i * 3], ny = n[i * 3 + 1], q = k;
         l.P.push(px, py, pz); l.N.push(nx, ny, n[i * 3 + 2]);
@@ -129,7 +135,18 @@
     }
     function coll(x, z, w, d, h, y0) { b.boxes.push({ minx: x - w / 2, maxx: x + w / 2, miny: y0, maxy: y0 + h, minz: z - d / 2, maxz: z + d / 2 }); }
     var b = {
-      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false,
+      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {},
+      has: function (id) { return !!(SV.assets && SV.assets.model[id]); },
+      // one copy of a scanned model: position, turn about the vertical, scale (number or [x, y, z]), and an optional tilt to lay it down
+      model: function (id, x, y, z, ry, s, rx) {
+        if (!b.has(id)) return false; var m = new T.Matrix4(), q = new T.Quaternion().setFromEuler(new T.Euler(rx || 0, ry || 0, 0, 'YXZ')), sc = s == null ? [1, 1, 1] : s.length ? s : [s, s, s];
+        m.compose(new T.Vector3(x, y, z), q, new T.Vector3(sc[0], sc[1], sc[2])); (b.inst[id] = b.inst[id] || []).push(m); return true;
+      },
+      // a scanned prop standing on the ground with a collision box taken from its own size
+      prop: function (id, x, z, ry, s, y, soft) {
+        if (!b.model(id, x, y || 0, z, ry, s)) return false; var bx = SV.assets.box[id], k = s == null ? 1 : s, cx = (bx.min.x + bx.max.x) / 2 * k, cz = (bx.min.z + bx.max.z) / 2 * k, c = Math.cos(ry || 0), sn = Math.sin(ry || 0);
+        b.rsolid(x + cx * c + cz * sn, z - cx * sn + cz * c, (bx.max.x - bx.min.x) * k, (bx.max.z - bx.min.z) * k, (bx.max.y - bx.min.y) * k, y || 0, ry || 0, soft); return true;
+      },
       // a lamp that really lights its surroundings; the game keeps the nearest few switched on
       light: function (x, y, z, c, i, d) { if (!b.day) b.lights.push({ x: x, y: y, z: z, c: new T.Color(c).convertSRGBToLinear(), i: i, d: d }); },
       box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false) coll(x, z, w, d, h, y0); },
@@ -167,11 +184,12 @@
         for (i = -1; i <= 1; i += 2) for (j = -1; j <= 1; j += 2) b.box(x + i * (e - t / 2), z + j * (e - t / 2), t, t, h + .02, q, y0 - .01, false, 'crate');
         [y0 + t / 2, y0 + h - t / 2].forEach(function (y) { for (i = -1; i <= 1; i += 2) { b.box(x + i * (e - t / 2), z, t, s, t, q, y - t / 2, false, 'crate'); b.box(x, z + i * (e - t / 2), s, t, t, q, y - t / 2, false, 'crate'); } });
       },
-      barrel: function (x, z, c, y0) { y0 = y0 || 0; b.cyl(x, z, .29, .88, c, y0, y0 < .5, 'metal', .29, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .28, false, 'plain', .305, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .58, false, 'plain', .305, 14); b.cyl(x, z, .25, .02, 0x1c1f22, y0 + .875, false, 'plain', .25, 14); },
-      tires: function (x, z, n) { for (var i = 0; i < n; i++) { var g = new T.TorusGeometry(.3, .13, 6, 14); g.rotateX(PI / 2); g.translate(x + rnd(-.03, .03), .13 + i * .25, z + rnd(-.03, .03)); push(g, 0x17191b, 'plain', {}); } coll(x, z, .8, .8, n * .25, 0); },
+      barrel: function (x, z, c, y0) { y0 = y0 || 0; var id = c === C.red ? 'Barrel_01' : 'barrel_03'; if (b.model(id, x, y0, z, Math.random() * 6.28, id === 'barrel_03' ? .94 : 1)) { if (y0 < .5) coll(x, z, .58, .58, .88, y0); return; } b.cyl(x, z, .29, .88, c, y0, y0 < .5, 'metal', .29, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .28, false, 'plain', .305, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .58, false, 'plain', .305, 14); b.cyl(x, z, .25, .02, 0x1c1f22, y0 + .875, false, 'plain', .25, 14); },
+      tires: function (x, z, n) { if (b.has('old_tyre')) { for (var j = 0; j < n; j++) b.model('old_tyre', x + rnd(-.04, .04), .11 + j * .215, z + rnd(-.04, .04), Math.random() * 6.28, 1.35, PI / 2); coll(x, z, .8, .8, n * .215, 0); return; } for (var i = 0; i < n; i++) { var g = new T.TorusGeometry(.3, .13, 6, 14); g.rotateX(PI / 2); g.translate(x + rnd(-.03, .03), .13 + i * .25, z + rnd(-.03, .03)); push(g, 0x17191b, 'plain', {}); } coll(x, z, .8, .8, n * .25, 0); },
       cone: function (x, z) { var g = new T.CylinderGeometry(.03, .16, .5, 10); g.translate(x, .27, z); push(g, C.orange, 'plain', {}); g = new T.CylinderGeometry(.075, .11, .12, 10); g.translate(x, .3, z); push(g, 0xf0efe8, 'plain', { flat: true }); b.box(x, z, .36, .36, .03, C.orange, 0, false); },
       pallet: function (x, z, y0, rot) { y0 = y0 || 0; var w = rot ? 1 : 1.2, d = rot ? 1.2 : 1, i; b.box(x, z, w, d, .03, C.wood, y0 + .11, false, 'crate', true); for (i = -1; i <= 1; i++) { if (rot) b.box(x, z + i * .5, 1, .1, .11, 0x8a6a3c, y0, false); else b.box(x + i * .5, z, .1, 1, .11, 0x8a6a3c, y0, false); } },
       jersey: function (x, z, len, rot) {                                // concrete road barrier with a sloped profile
+        if (b.has('concrete_road_barrier')) { var nb = Math.max(1, Math.round(len / 1.5)), pl = len / nb, kk; for (kk = 0; kk < nb; kk++) { var o = -len / 2 + pl * (kk + .5); b.model('concrete_road_barrier', x + (rot ? 0 : o), 0, z + (rot ? o : 0), (rot ? PI / 2 : 0) + (kk % 2 ? PI : 0), [pl / 1.55, 1.22, 1]); } coll(x, z, rot ? .6 : len, rot ? len : .6, 1.0, 0); return; }
         var s = new T.Shape(); s.moveTo(-.3, 0); s.lineTo(-.3, .16); s.lineTo(-.11, .46); s.lineTo(-.08, 1.02); s.lineTo(.08, 1.02); s.lineTo(.11, .46); s.lineTo(.3, .16); s.lineTo(.3, 0); s.lineTo(-.3, 0);
         var g = new T.ExtrudeGeometry(s, { depth: len, bevelEnabled: false }); g.translate(0, 0, -len / 2); if (!rot) g.rotateY(PI / 2); g.translate(x, 0, z); push(g, 0xa9aba6, 'conc', { y0: 0 });
         coll(x, z, rot ? .5 : len, rot ? len : .5, 1.02, 0);
@@ -195,10 +213,14 @@
         function geo(l) { var g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(l.P, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(l.N, 3)); g.setAttribute('color', new T.Float32BufferAttribute(l.C, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(l.U, 2)); return g; }
         for (k in L) {
           var sf = SURF[k] || SURF.plain, mat = k === 'glow' ? new T.MeshBasicMaterial({ vertexColors: true, fog: false, color: new T.Color(3, 3, 3) })   // brighter than white: this is what blooms
+            : photo(k) ? new T.MeshStandardMaterial({ vertexColors: true, map: tex(k), normalMap: photo(k).nor || null, roughnessMap: photo(k).arm || null, metalnessMap: photo(k).arm || null, roughness: photo(k).arm ? 1 : sf[0], metalness: photo(k).arm ? 1 : sf[1], side: T.DoubleSide })
             : new T.MeshStandardMaterial({ vertexColors: true, map: k === 'plain' ? null : tex(k), normalMap: sf[2] ? nrm(k, sf[2]) : null, roughness: sf[0], metalness: sf[1], side: T.DoubleSide });
           mat.userData.surf = k;
           var m = new T.Mesh(geo(L[k]), mat); if (k !== 'glow') { m.castShadow = true; m.receiveShadow = true; } grp.add(m);
         }
+        for (k in b.inst) (function (list, src, k) {
+          src.traverse(function (o) { if (!o.isMesh) return; var mt = o.material; if (TINT[k]) { mt = o.userData.tinted || (o.userData.tinted = o.material.clone()); mt.color.setHex(TINT[k]); } var im = new T.InstancedMesh(o.geometry, mt, list.length), m = new T.Matrix4(); list.forEach(function (w, i) { im.setMatrixAt(i, m.multiplyMatrices(w, o.matrixWorld)); }); im.castShadow = im.receiveShadow = true; im.frustumCulled = false; im.userData.shared = true; grp.add(im); });
+        })(b.inst[k], SV.assets.model[k], k);
         for (k in Q) {
           var q = Q[k], qm = q.mode === 'add' ? new T.MeshBasicMaterial({ map: q.tex, blending: T.AdditiveBlending, transparent: true, depthWrite: false, vertexColors: true })
             : q.mode === 'alpha' ? new T.MeshStandardMaterial({ map: q.tex, vertexColors: true, transparent: true, alphaTest: .25, side: T.DoubleSide, roughness: .7, metalness: .1 })
@@ -336,8 +358,9 @@
   // Free-form parts for a frame: boxes at any tilt, cylinders along any axis, lathed and extruded shapes. None of these collide;
   // a prop adds its own collision volume with f.solid.
   function extend(f, b, cx, cz, ang, fr) {
+    f.b = b;
     function put(g, col, tex) { g.rotateY(ang); g.translate(cx, 0, cz); b.geo(g, col, tex || 'plain', {}); }
-    f.g = put;
+    f.g = put; f.ang = ang; f.cx = cx; f.cz = cz;
     f.bx = function (lx, y, lz, w, h, d, col, tex, rx, ry, rz) { var g = new T.BoxGeometry(w, h, d); if (rx) g.rotateX(rx); if (rz) g.rotateZ(rz); if (ry) g.rotateY(ry); g.translate(lx, y, lz); put(g, col, tex); };
     f.cyl = function (lx, y, lz, r, len, axis, col, tex, seg, r2) { var g = new T.CylinderGeometry(r2 == null ? r : r2, r, len, seg || 12); if (axis === 'x') g.rotateZ(-PI / 2); else if (axis === 'z') g.rotateX(PI / 2); g.translate(lx, y, lz); put(g, col, tex); };
     // [[distance along the axis, radius], ...]
@@ -417,6 +440,10 @@
     },
     // a wall of sandbags, chest high
     bags: function (f, len) {
+      if (f.b.has('cement_bag')) {   // sacks stacked in a running bond, each a little out of line
+        var per = Math.max(2, Math.round(len / .68)), ly, bi; for (ly = 0; ly < 6; ly++) for (bi = 0; bi < per - (ly % 2); bi++) { var q = f.p(-len / 2 + .35 + bi * (len - .7) / Math.max(1, per - 1) + (ly % 2) * .34 + rnd(-.03, .03), rnd(-.04, .04)); f.b.model('cement_bag', q[0], ly * .175, q[1], f.ang + PI / 2 + rnd(-.08, .08), [1.05, 1, .98]); }
+        f.solid(0, 0, len, .56, 1.08); return;
+      }
       var rows = 6, n = Math.max(2, Math.round(len / .58)), r, i, cols = [0x9a8f6c, 0x8a8262, 0xa39874, 0x7f775a];
       for (r = 0; r < rows; r++) for (i = 0; i < n - (r % 2); i++) { var x = -len / 2 + .29 + i * (len - .58) / Math.max(1, n - 1) + (r % 2) * .29; f.sph(x + rnd(-.02, .02), .095 + r * .185, rnd(-.04, .04) + (r > 3 ? 0 : (i % 2 ? .06 : -.06)), .3, cols[(i + r * 3) % 4], 'canvas', 1, .36, .72 + (r < 2 ? .25 : 0)); }
       f.solid(0, 0, len, .62, 1.18);
@@ -450,6 +477,7 @@
     },
     // ammunition box with latches and rope handles
     ammo: function (f, w, d, h, y, col) {
+      if (f.b.model('wooden_military_crate', f.cx, y || 0, f.cz, f.ang, [w / 1.24, h / .46, d / .52])) { f.solid(0, 0, w, d, h, y || 0); return; }
       col = col || 0x4b5637; y = y || 0; f.ex([[-w / 2, y], [w / 2, y], [w / 2, y + h], [-w / 2, y + h]], -d / 2, d / 2, col, 'paint', .012); f.bx(0, y + h * .78, 0, w + .012, .012, d + .012, 0x1c1f1a);
       [-1, 1].forEach(function (s) { f.bx(s * w * .3, y + h * .76, d / 2 + .01, .05, .09, .02, 0x8d9296, 'metal'); f.bx(s * (w / 2 + .012), y + h * .55, 0, .02, .03, d * .5, 0x8a7a50, 'canvas'); });
       f.bx(0, y + h * .4, d / 2 + .008, w * .6, h * .22, .004, 0xd6c96a);
@@ -591,6 +619,11 @@
     truck(40, -10, true, 1); stack(30, -3, 2); stack(38, 3, 1, 0x9c8a62); b.jersey(31, 4, 3, true); b.jersey(43, -17, 3, false); b.tires(47, 1, 3); b.barrel(27, 7, C.olive);
     var G0 = fr(-46, -6, -.2); G0.box(0, 0, 3, 3, 2.8, 0xb0ae9e, 0, true, 'block'); G0.box(0, 0, 3.5, 3.5, .25, 0x464c4f, 2.8, false); PR.door(G0, 1.5, .6, .9, 2, [1, 0]); PR.win(G0, 0, -1.5, 1.6, 1.4, 1, [0, -1]); PR.win(G0, 0, 1.5, 1.6, 1.4, 1, [0, 1]); PR.win(G0, -1.5, 0, 1.6, 1.4, 1, [-1, 0]); G0.bx(4.4, 1, 0, 5, .12, .12, 0xd8d2bc, 'paint'); G0.bx(4.4, 1, .001, 1, .13, .13, 0xb02a20); G0.cyl(1.9, .55, 0, .09, 1.1, 'y', 0x8d9296, 'metal', 8); stack(-45, 12, 2); b.jersey(-40, 3, 3, true);
     [[-42, -22, 1, 0], [-28, -31, 0, 1], [-4, -33, 0, 1], [14, -33, 0, 1], [-18, -12, 0, 1], [-28, 6, 1, 0], [-12, 13, 0, -1], [6, 8, 0, 1], [22, -9, -1, 0], [18, 14, 1, 0], [-36, 32, 0, -1], [-8, 33.5, 0, -1], [20, 33.5, 0, -1], [44, -4, -1, 0], [50, 14, -1, 0], [-50, 10, 1, 0], [28, 6, 0, -1]].forEach(function (p) { b.lamp(p[0], p[1], 6, p[2], p[3]); });
+    // scanned dressing: generator, compressor, tool cart, hand trucks, jerrycans, military crates, a car under a cover
+    [['portable_generator', -9.5, -6.5, .6, 1.25], ['old_military_crate', 30.5, -25.5, .3, 1], ['old_military_crate', 30.6, -25.4, .25, 1, .3], ['old_military_crate', 42, -13, 1.2, 1], ['hand_truck', 37, -22, 2, 1], ['hand_truck', 26, 22.5, -.6, 1],
+      ['tool_cart', 31, 24.5, .15, 1], ['metal_toolbox', 28.5, 24.8, .9, 1.2], ['utility_box_01', -1.2, 5.6, .35, 1.2], ['utility_box_01', 44.6, 11.2, .1, 1.2], ['metal_jerrycan_green', 10.2, 5.2, .4, 1], ['metal_jerrycan_green', 10.7, 5.5, 1.9, 1], ['metal_jerrycan_green', 15.8, .4, -.7, 1],
+      ['covered_car', -34, 13, 1.25, 1.05], ['wooden_crate_02', -16, 9, .4, 1.4], ['wooden_crate_02', 21, 27, 1.1, 1.4], ['old_military_crate', -27, -30.5, .1, 1], ['portable_generator', 38, 12, 2.2, 1.25], ['old_military_crate', 3, 10, .7, 1], ['wooden_crate_02', -2, -9.5, 2, 1.4]
+    ].forEach(function (q) { b.prop(q[0], q[1], q[2], q[3], q[4], q[5] || 0); });
     b.spawn('A', -49, 2); b.spawn('B', 49, -1);
     function L(f, q, l) { return f.p(q[0], q[1], l || 0); }
     return { name: '보급기지', b: b, bounds: { minx: -54, maxx: 54, minz: -36, maxz: 36 }, bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], rain: false, sky: [0x26313f, 0xb9885e], dim: .7,

@@ -12,14 +12,16 @@ import pathlib, shutil, sys
 
 here = pathlib.Path(__file__).resolve().parent
 src = lambda n: (here / 'src' / n).read_text(encoding='utf-8')
-SCRIPTS = ['cfg.js', 'models.js', 'maps.js', 'game.js', 'ui.js']
+SCRIPTS = ['cfg.js', 'assets.js', 'models.js', 'maps.js', 'game.js', 'ui.js']
+ASSETS = here / 'assets'   # fetch_assets.py 가 받아 둔다. 없으면 그린 텍스처와 조립한 모양으로 돈다.
 FONTS = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900'
          '&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">')
 
 
 def page(three, fonts):
     head = src('head.html').replace('<!--FONTS-->', fonts)
-    return head + '\n<script src="%s"></script>\n' % three + ''.join('<script>\n%s</script>\n' % src(n) for n in SCRIPTS)
+    extra = ''.join('<script src="a/%s"></script>\n' % n for n in ('GLTFLoader.js', 'SkeletonUtils.js')) if (ASSETS / 'GLTFLoader.js').exists() and three == 'three.min.js' else ''
+    return head + '\n<script src="%s"></script>\n' % three + extra + ''.join('<script>\n%s</script>\n' % src(n) for n in SCRIPTS)
 
 
 if '--artifact' in sys.argv:
@@ -35,4 +37,8 @@ else:
              '<style>body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>')
     (assets / 'index.html').write_text(shell + page('three.min.js', '') + '</body></html>', encoding='utf-8')
     shutil.copyfile(here / 'vendor' / 'three.min.js', assets / 'three.min.js')
+    if ASSETS.exists():
+        shutil.rmtree(assets / 'a', ignore_errors=True)
+        shutil.copytree(ASSETS, assets / 'a')
+        print('assets', sum(p.stat().st_size for p in (assets / 'a').rglob('*') if p.is_file()) // 1024, 'KB')
     print('wrote', assets / 'index.html', (assets / 'index.html').stat().st_size, 'bytes')

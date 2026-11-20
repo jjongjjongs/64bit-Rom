@@ -192,17 +192,10 @@ var SV = window.SV = window.SV || {};
 
   // First-person weapon: the gun plus two gloved hands and sleeves.
   SV.viewModel = function (id, team) {
-    var d = GUN[id](), g = d.g, k = kit(g), sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, V = function (x, y, z) { return new T.Vector3(x, y, z); }, i;
-    var h1 = V(d.grip[0], d.grip[1], .012); ball(g, V(h1.x - .012, h1.y, h1.z + .012), .036, MAT.glove, 1, 1.25, .8);                      // palm behind the grip
-    for (i = 0; i < 4; i++) k.cz(.0105, .062, MAT.glove, h1.x + .026 - i * .004, h1.y + .032 - i * .021, h1.z - .012, 6);                   // fingers round the front
-    tube(g, V(h1.x - .02, h1.y + .04, h1.z + .02), V(h1.x + .03, h1.y + .055, h1.z - .005), .012, .011, MAT.glove); k.b(.03, .05, .012, MAT.poly2, h1.x - .03, h1.y + .01, h1.z + .034);   // thumb, knuckle guard
-    tube(g, V(h1.x - .02, h1.y - .02, h1.z + .03), V(h1.x - .1, h1.y - .13, h1.z + .3), .038, .052, sl); tube(g, V(h1.x - .016, h1.y - .012, h1.z + .026), V(h1.x - .034, h1.y - .04, h1.z + .08), .04, .041, MAT.glove);
-    if (d.fore) {
-      var h2 = V(d.fore[0], d.fore[1], -.01); ball(g, V(h2.x, h2.y - .012, h2.z), .036, MAT.glove, 1.35, .7, 1);                               // palm under the fore-end
-      for (i = 0; i < 4; i++) k.cy(.0105, .06, MAT.glove, h2.x + .034 - i * .022, h2.y + .022, h2.z + .034, 6);                               // fingers up the far side
-      tube(g, V(h2.x - .01, h2.y, h2.z - .02), V(h2.x + .03, h2.y + .035, h2.z - .034), .012, .011, MAT.glove);
-      tube(g, V(h2.x - .03, h2.y - .02, h2.z - .03), V(h2.x - .22, h2.y - .12, h2.z - .3), .038, .052, sl); tube(g, V(h2.x - .024, h2.y - .016, h2.z - .024), V(h2.x - .06, h2.y - .036, h2.z - .08), .04, .041, MAT.glove);
-    }
+    var d = GUN[id](), g = d.g, sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, V = function (x, y, z) { return new T.Vector3(x, y, z); };
+    // gun space: +X is the muzzle, +Z the shooter's right. Each arm comes in from below and behind, elbow down and out.
+    var h1 = V(d.grip[0] - .02, d.grip[1] + .01, .03); arm(g, V(h1.x - .3, h1.y - .24, h1.z + .17), h1, V(0, -1, .5), sl, MAT.glove, sl, MAT.poly2, true);
+    if (d.fore) { var h2 = V(d.fore[0] - .02, d.fore[1] - .03, -.03); arm(g, V(h2.x - .36, h2.y - .2, h2.z - .2), h2, V(0, -1, -.5), sl, MAT.glove, sl, MAT.poly2, true); }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
     out.userData = { muzzle: d.muzzle, sight: d.sight }; return out;
@@ -219,13 +212,12 @@ var SV = window.SV = window.SV || {};
   function slab(k, pts, depth, bv, mat, x, y, z, rx, ry, rz) { var g = exg(pts, -depth / 2, depth / 2, bv); return k.add(g, mat, x, y, z, rx, ry, rz); }
   function rect(w, h) { return [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]; }
   var UP = [[0, .066], [.12, .074], [.45, .07], [1, .054]], FORE = [[0, .054], [.25, .06], [.7, .046], [1, .04]];
-  function arm(g, S, Tg, bend, cloth, glove, band, pad) {
+  function arm(g, S, Tg, bend, cloth, glove, band, pad, bare) {
     var L = .31, v = new T.Vector3().subVectors(Tg, S), d = Math.min(v.length(), L * 2 - .01); v.normalize();
     var h = Math.sqrt(Math.max(L * L - d * d / 4, 0)), perp = bend.clone().addScaledVector(v, -bend.dot(v)).normalize();
     var E = S.clone().addScaledVector(v, d / 2).addScaledVector(perp, h), H = S.clone().addScaledVector(v, d), k = kit(g), i;
-    ball(g, S, .08, cloth, 1.05, .95, 1); limb(g, S, E, UP, cloth); ball(g, E, .055, cloth); limb(g, E, H, FORE, cloth);
-    limb(g, S.clone().lerp(E, .3), S.clone().lerp(E, .5), [[0, .0725], [1, .067]], band);                                           // team armband
-    limb(g, S.clone().lerp(E, .12), S.clone().lerp(E, .26), [[0, .076], [1, .075]], pad);                                           // shoulder pocket
+    if (!bare) ball(g, S, .08, cloth, 1.05, .95, 1); limb(g, S, E, UP, cloth); ball(g, E, .055, cloth); limb(g, E, H, FORE, cloth);
+    if (!bare) { limb(g, S.clone().lerp(E, .3), S.clone().lerp(E, .5), [[0, .0725], [1, .067]], band); limb(g, S.clone().lerp(E, .12), S.clone().lerp(E, .26), [[0, .076], [1, .075]], pad); }   // team armband, shoulder pocket
     var ep = ball(g, E, .052, pad, 1.15, 1.25, .8); ep.lookAt(S);                                                                    // elbow pad
     limb(g, E.clone().lerp(H, .78), E.clone().lerp(H, .97), [[0, .044], [.5, .047], [1, .045]], glove);                              // glove cuff
     // hand: a palm and four fingers curled round whatever it holds
@@ -238,7 +230,40 @@ var SV = window.SV = window.SV || {};
   var cache = {}, HIP = .93, KNEE = .52, blob = new T.CircleGeometry(.5, 20), blobMat = new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .42, depthWrite: false });
   blob.rotateX(-PI / 2); (function () { var p = blob.attributes.position, c = [], i; for (i = 0; i < p.count; i++) { var k = 1 - .62 * Math.pow(1 - Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / .5), 1.4); c.push(k, k, k); } blob.setAttribute('color', new T.Float32BufferAttribute(c, 3)); })();
   blobMat.vertexColors = true; blobMat.blending = T.MultiplyBlending; blobMat.color.set(0xffffff); blobMat.opacity = 1;
+  // The downloaded soldier: a skinned mesh with idle and run cycles. The weapon is fixed in front of the chest and both arms
+  // are solved onto it every frame (see SV.poseArms); the rest of the body follows the animation.
+  var gunCache = {}, teamMats = {};
+  function heldGun(gunId, gx, gy, gz) {
+    var c = gunCache[gunId]; if (c) return c; var d = GUN[gunId](), gg = new T.Group(); d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);
+    return gunCache[gunId] = { geo: merge(gg), grip: new T.Vector3(gx, gy + d.grip[1] + .03, gz + d.grip[0]), fore: d.fore ? new T.Vector3(gx + .02, gy + d.fore[1], gz + d.fore[0]) : null, muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
+  }
+  function skinned(team, gunId) {
+    var src = SV.assets.soldier, model = T.SkeletonUtils.clone(src.scene), root = new T.Group(), up = new T.Group(), bones = {}, tm = teamMats[team] || (teamMats[team] = {});
+    model.rotation.y = PI; up.add(model); root.add(up);   // the file faces -Z, the game's rig faces +Z
+    model.traverse(function (o) {
+      if (o.isBone) bones[o.name.replace('mixamorig', '')] = o;
+      if (o.isMesh) { var k = o.material.name; if (!tm[k]) { tm[k] = o.material.clone(); if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } o.material = tm[k]; o.frustumCulled = false; }
+    });
+    var mixer = new T.AnimationMixer(model), acts = {}; ['Idle', 'Run', 'Walk'].forEach(function (n) { var cl = T.AnimationClip.findByName(src.animations, n); acts[n] = mixer.clipAction(cl); acts[n].play(); acts[n].setEffectiveWeight(n === 'Idle' ? 1 : 0); }); mixer.update(Math.random());
+    var hg = heldGun(gunId, -.14, 1.38, .46), gun = new T.Mesh(hg.geo, SV.litMat); up.add(gun);
+    var sh = new T.Mesh(blob, blobMat); sh.position.y = .025; sh.scale.setScalar(1.25); sh.renderOrder = 1; root.add(sh);
+    return { root: root, up: up, skinned: true, mixer: mixer, acts: acts, bones: bones, gun: gun, grip: hg.grip, fore: hg.fore, shadow: sh, muzzle: hg.muzzle };
+  }
+  // put one arm's hand on a point given in the soldier's own space, elbow pushed toward `hint`
+  var vS = new T.Vector3(), vT = new T.Vector3(), vE = new T.Vector3(), vHd = new T.Vector3(), vDir = new T.Vector3(), vHint = new T.Vector3(), qP = new T.Quaternion(), q1 = new T.Quaternion(), q2 = new T.Quaternion(), YY = new T.Vector3(0, 1, 0), vSc = new T.Vector3();
+  function reach(m, side, target, hx, hy, hz) {
+    var A = m.bones[side + 'Arm'], F = m.bones[side + 'ForeArm'], Hn = m.bones[side + 'Hand']; if (!A || !F || !Hn) return;
+    A.parent.updateWorldMatrix(true, false); A.getWorldPosition(vS); A.getWorldScale(vSc); vT.copy(target).add(m.gun.position).applyMatrix4(m.up.matrixWorld);
+    var L1 = F.position.length() * vSc.x, L2 = Hn.position.length() * vSc.x, d = Math.min(vDir.subVectors(vT, vS).length(), L1 + L2 - .002); vDir.normalize();
+    var a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(L1 * L1 - a * a, 0));
+    vHint.set(hx, hy, hz).transformDirection(m.up.matrixWorld); vHint.addScaledVector(vDir, -vHint.dot(vDir)).normalize();
+    vE.copy(vS).addScaledVector(vDir, a).addScaledVector(vHint, h); vHd.copy(vS).addScaledVector(vDir, d);
+    A.parent.getWorldQuaternion(qP); q1.setFromUnitVectors(YY, vDir.subVectors(vE, vS).normalize()); A.quaternion.copy(qP.invert()).multiply(q1);
+    q2.setFromUnitVectors(YY, vDir.subVectors(vHd, vE).normalize()); F.quaternion.copy(q1.invert()).multiply(q2); Hn.quaternion.set(0, 0, 0, 1);
+  }
+  SV.poseArms = function (m) { m.root.updateMatrixWorld(true); reach(m, 'Right', m.grip, -.5, -1, -.2); reach(m, 'Left', m.fore || m.grip, .6, -1, .1); };
   SV.soldier = function (team, gunId) {
+    if (SV.assets && SV.assets.soldier && T.SkeletonUtils) return skinned(team, gunId);
     var key = team + gunId, c = cache[key];
     if (!c) {
       var A = team === 'A', tc = A ? 0xffb347 : 0x6cc4e0, cloth = A ? camo(0x8a7a58, 0x6b5d40, 0x4d4733) : camo(0x5d6a70, 0x44525a, 0x2c363d), cloth2 = A ? camo(0x7b6c4c, 0x5e5239, 0x433d2c) : camo(0x525e64, 0x3c4950, 0x283137);
