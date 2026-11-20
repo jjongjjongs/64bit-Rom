@@ -238,7 +238,15 @@ var SV = window.SV = window.SV || {};
 
   // First-person weapon: the gun plus two gloved hands and sleeves.
   // gun space: +X is the muzzle, +Y up, +Z the shooter's right; the camera looks along +X from behind.
+  // A weapon shown as one picture (arms and gun cut out of a painted first-person frame) instead of a model. All numbers are
+  // pixels in that picture: its size, where the muzzle is, and the middle of the optic window that aiming brings to the crosshair.
+  var ART = { rifle: { key: 'fp_rifle', w: 990, h: 509, frame: 864, muzzle: [400, 92], eye: [607, 50], zoom: 1.45 } };
+  function pictureVM(a, tex) {
+    var m = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false })), g = new T.Group();
+    m.renderOrder = 5; g.add(m); g.userData = { art: a, muzzle: [0, 0], sight: 0 }; return g;
+  }
   SV.viewModel = function (id, team) {
+    if (ART[id] && SV.assets && SV.assets.art[ART[id].key]) return pictureVM(ART[id], SV.assets.art[ART[id].key]);
     var d = GUN[id](), g = d.g, sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
     if (id === 'knife') hand(g, V(d.grip[0], d.grip[1], 0), V(1, 0, 0), V(0, .25, 1), -1, .016, V(-.36, -.2, .16), sl, gl);
     else if (id === 'pistol') {

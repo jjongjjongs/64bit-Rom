@@ -447,7 +447,7 @@
   // ---------- view model ----------
   function setVm() {
     var p = G.player, id = p.guns[p.slot].id; if (vmCur) vmCur.visible = false;
-    if (!vms[id + p.team]) { vms[id + p.team] = SV.viewModel(id, p.team); vms[id + p.team].rotation.y = PI / 2; vmRoot.add(vms[id + p.team]); }
+    if (!vms[id + p.team]) { vms[id + p.team] = SV.viewModel(id, p.team); if (!vms[id + p.team].userData.art) vms[id + p.team].rotation.y = PI / 2; vmRoot.add(vms[id + p.team]); }
     vmCur = vms[id + p.team]; vmCur.visible = true; vmSwap = .3; var mz = vmCur.userData.muzzle; flash.position.set(0, mz[1], -mz[0] - .04);
   }
   function updVm(dt, p) {
@@ -455,11 +455,22 @@
     vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt);
     if (p.moving && p.ground) bobT += dt * 9;
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
+    var art = vmCur.userData.art;
+    if (art) {   // a picture: pinned to the lower right of the screen; aiming slides its optic window onto the crosshair
+      var hh = Math.tan(vmCam.fov * PI / 360), hw = hh * vmCam.aspect, sc = 1 + (art.zoom - 1) * k + vmKick * .035, hs = 2 * hh * art.h / art.frame * sc, ws = hs * art.w / art.h;
+      var cx0 = hw + .03 - ws / 2, cy0 = -hh - .04 + hs / 2, cx1 = -(art.eye[0] / art.w - .5) * ws, cy1 = -(.5 - art.eye[1] / art.h) * hs;
+      var cx = cx0 * (1 - k) + cx1 * k + bx * 2.5 + vmKick * .012, cy = cy0 * (1 - k) + cy1 * k + bob * 2.5 - vmKick * .014 * (1 - k) - vmSwap * 1.6;
+      vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(cx, cy, -1); vmCur.scale.set(ws, hs, 1); vmRoot.visible = true;
+      flash.position.set((art.muzzle[0] / art.w - .5) * ws, (.5 - art.muzzle[1] / art.h) * hs, .02); flash.scale.setScalar(1.3);
+      var mp = G.map, tone = mp && mp.hdri ? ({ night: .75, dusk: 1.15, day: 1.9, indoor: 1.25 })[mp.hdri[0]] : 1.2; vmCur.children[0].material.color.setScalar(tone);
+    } else {
+    flash.scale.setScalar(1);
     var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = id === 'pistol' ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis
     vmRoot.rotation.order = 'YXZ';
     vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
     vmRoot.rotation.set(ps[3] * h + vmKick * (w.melee ? -.9 : .05) - vmSwap * 1.2, ps[4] * h + (w.melee ? -.5 * vmKick : 0), ps[5] * h);
     vmRoot.visible = !(w.scope && vmAds > .8);
+    }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
     $('scope').hidden = !(w.scope && vmAds > .8);
   }

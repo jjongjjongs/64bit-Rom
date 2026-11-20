@@ -40,5 +40,7 @@ else:
     if ASSETS.exists():
         shutil.rmtree(assets / 'a', ignore_errors=True)
         shutil.copytree(ASSETS, assets / 'a')
+        if (here / 'art').exists():   # 직접 넣은 그림 (1인칭 무기 등)
+            shutil.copytree(here / 'art', assets / 'a' / 'art')
         print('assets', sum(p.stat().st_size for p in (assets / 'a').rglob('*') if p.is_file()) // 1024, 'KB')
     print('wrote', assets / 'index.html', (assets / 'index.html').stat().st_size, 'bytes')
