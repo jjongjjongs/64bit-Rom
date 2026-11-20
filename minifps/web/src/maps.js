@@ -833,7 +833,15 @@
       B(46, -9, 53.3, -1, 3.6, CW, 'conc'); win(sd * 46, -5, 1.6, 1.1, 1.3, -sd, 0); door(sd * 46, -2.5, 1.1, 2.2, -sd, 0); acu(sd * 50, -5, 3.6);
       cr(sd * 31.5, 1, 1.3, 1.2, TAN); cr(sd * 31.5, 2.4, 1, .8, TAN); cr(sd * 50.5, 12.5, 1.3, 1.2, OLV); cr(sd * 50.5, 13.9, 1, .8, OLV); cr(sd * 33.5, -4, 1.3, 1.2, OLV); b.jersey(sd * 38, -5.5, 3, false); b.jersey(sd * 31, 23, 3, true);
       lampW(sd * 45, 9, 2.9, sd, 0); lampW(sd * 37, 16, 2.6, -sd, 0); lampW(sd * 46, -5, 2.9, -sd, 0);
-      // cables from the guard building to the plaza wall
+      // more of the compound from the reference picture: stores along the outer wall, a workshop with a rusty roof,
+      // painted containers in the lane and yard, extra wall stubs that break up the long views
+      B(48.5, 20.5, 53.3, 27, 3.4, CW, 'conc'); door(sd * 48.5, 23.5, 1.2, 2.2, -sd, 0); B(48.5, -13, 53.3, -9, 3.4, CW, 'conc');
+      B(47, 28.5, 53.3, 32.5, 3, 0x8a8f8c, 'block'); var r3 = new T.BoxGeometry(6.9, .14, 4.6); r3.rotateZ(sd * .18); r3.translate(sd * 50.1, 3.7, 30.5); b.geo(r3, 0x8a4f38, 'corr', {});
+      b.cont(sd * 30.2, 14.5, true, A ? 0x7a3f30 : 0x3f5f7a, 0, 6.1); b.cont(sd * 37, 37.4, false, 0x596a4a, 0, 6.1); b.cont(sd * 24.5, -30.5, false, A ? 0x596a4a : 0x8a7a52, 0, 6.1);
+      B(31.5, -9.2, 36, -8.8, 2.6, CW, 'conc'); B(41, 22.8, 46, 23.2, 2.6, CW, 'conc'); B(20.8, 12, 21.2, 17, 2.2, CW, 'conc'); B(8, -24, 12, -23.6, 1.1, CW, 'conc');
+      b.barrel(sd * 34.2, 20.6, 0x7a3f30); b.barrel(sd * 34.9, 21.2, OLV); b.barrel(sd * 47.5, 3.2, 0x3f5f7a); b.barrel(sd * 20.5, 28.2, OLV); b.tires(sd * 44.5, 26.5, 3);
+      [[36, 26.5], [47.5, -11.5], [22.8, 19.5]].forEach(function (q) { b.box(sd * q[0], q[1], .8, .5, 1.3, 0x5a6168, 0, true, 'metal'); b.glow(sd * q[0], 1, q[1] + .26, .12, .08, .02, 0x8fe0a8); });                       // electrical cabinets
+      for (i = 0; i < 5; i++) b.box(sd * 52.95, -30 + i * 14, .12, .12, 4, 0x7a6048, .4, false, 'metal');                                                                                       // rusty downpipes on the wall
       b.seg(sd * 18, 3.5, 31, sd * 27, 3.7, 22, .03, 0x1c1c1c, 'plain'); b.seg(sd * 27, 3.7, 12, sd * 35, 3.5, 12, .03, 0x1c1c1c, 'plain');
     }
     function mk(t, x, y, z, ry) { b.mark(t, x, y, z, 1.5, 1.5, ry, '#e2562f'); }
@@ -846,7 +854,7 @@
         spots: [[39.5, -22.5], [38.5, -27.5], [45, -26], [40, -16.5], [34.5, -20.5]].map(function (q) { return { x: sd * q[0], z: q[1], y: H, l: 1 }; }),
         via: [[sd * 40, 29, 0], [sd * 31, 3, 0], [sd * 19.5, 0, 0], [sd * 40, -8, 0], [sd * 22, -15, 0]] };
     }
-    return { name: '전술 기지', b: b, bounds: { minx: -54, maxx: 54, minz: -41.5, maxz: 41.5 }, bg: 0x93a7b8, fog: [50, 220], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xffe6c0, 1.6, [-30, 34, 22]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1,
+    return { name: '전술 기지', b: b, bounds: { minx: -54, maxx: 54, minz: -41.5, maxz: 41.5 }, bg: 0x93a7b8, fog: [50, 220], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xffd2a0, 1.5, [-38, 22, 24]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .7, 1.3, 8, .95], dim: 1,   // low, warm late-afternoon sun as in the picture
       H: H, links: links, ladders: [], sites: [site('A', -1), site('B', 1)],
       fwd: [[-19.5, -9, 0], [19.5, -9, 0], [-40, -8, 0], [40, -8, 0], [0, -22, 0], [-36, -18, 1], [36, -18, 1], [-24, -30, 0], [24, -30, 0]] };
   }
@@ -858,7 +866,7 @@
   //  · 남동: 방 넷과 복도로 된 연구동. 남쪽 가운데 보안 게이트(공격 출발)에서 왼쪽 외곽 / 하역장 / 오른쪽 외곽 세 갈래.
   //  · 바깥은 눈밭 외곽 도로이고, 북쪽과 가장자리는 눈 덮인 벼랑이 막는다. 위성 안테나·레이돔(북서), 저장 탱크(북동)는 장식이다.
   function arctic() {
-    var b = Builder(), PN = 0x6c7884, PN2 = 0x55626e, SNOW = 0xdde5ee, ROCK = 0x737b86, DK = 0x2c3238, OLV = 0x56604a, TAN = 0xa89a78, WHT = 0xc9d0d6, i;
+    var b = Builder(), PN = 0x6c7884, PN2 = 0x55626e, SNOW = 0xc3ccd6, ROCK = 0x737b86, DK = 0x2c3238, OLV = 0x56604a, TAN = 0xa89a78, WHT = 0xc9d0d6, i;
     function T2(x0, z0, x1, z1, h, c, t, y0, solid) { b.box((x0 + x1) / 2, (z0 + z1) / 2, Math.abs(x1 - x0), Math.abs(z1 - z0), h, c, y0 || 0, solid, t || 'plain'); }
     // walls with door openings: gaps are [from, to] along the wall; each gets a lintel above 2.5 m
     function WX(z, x0, x1, h, gaps, c) { var cur = x0; (gaps || []).concat([[x1, x1]]).forEach(function (g) { if (g[0] > cur + .01) T2(cur, z - .2, g[0], z + .2, h, c || PN, 'conc'); if (g[1] > g[0]) { T2(g[0], z - .2, g[1], z + .2, h - 2.5, c || PN, 'conc', 2.5, false); T2(g[0] - .06, z - .26, g[0] + .06, z + .26, 2.5, DK, 'metal', 0, false); T2(g[1] - .06, z - .26, g[1] + .06, z + .26, 2.5, DK, 'metal', 0, false); } cur = g[1]; }); }
@@ -970,6 +978,15 @@
     ctn(49, -10, true, 0x6d7c88); ctn(51.5, 8, true, 0x93826a); ctn(47.5, 27, false, 0x7f8a93); T2(44, 34, 50, 40, 3, PN2, 'conc'); T2(43.7, 33.7, 50.3, 40.3, .3, SNOW, 'plain', 3, false); ctn(30, 33, false, 0x7f8a93); ctn(17, 38, false, 0x93826a); cr(13, 30, 1.3, 1.2, OLV); cr(46, 19, 1.3, 1.2, TAN); cr(46, -22, 1.3, 1.2, OLV); cr(47.4, -22, 1, .8, OLV); b.jersey(36, 26, 3, false);
     [[-54, 22, 2.4, 1.3, 1], [-46.5, 24.5, 1.8, 1, 1], [-27, 42.5, 3, 1.4, 0], [8, 42.8, 2.6, 1.2, 0], [38, 42.6, 3, 1.5, 0], [54.5, 16, 2.2, 1.3, 1], [44.5, -1.5, 1.6, 1, 1], [54.3, -24, 2.4, 1.4, 0], [-54.2, -9, 2.2, 1.3, 0], [-46.5, 1.2, 1.5, .9, 1], [-13, 24, 1.6, .9, 1], [12, 24.2, 1.5, .9, 1], [-22, 23.6, 1.8, .8, 0], [35, 23.5, 2, .8, 0]].forEach(function (q) { mound(q[0], q[1], q[2], q[3], q[4]); });
     [[-50.5, 26, 1, 0], [-50.5, -2, 1, 0], [-30, 40, 0, -1], [30, 40, 0, -1], [50, 20, -1, 0], [50, -16, -1, 0]].forEach(function (q) { b.lamp(q[0], q[1], 6, q[2], q[3]); });
+    // pipes and cable trays under the ceilings (corridors, warehouses, labs), as the brief asks
+    function pipe(x0, z0, x1, z1, y, c, w) { b.seg(x0, y, z0, x1, y, z1, w || .14, c || 0x8e979e, 'plain'); }
+    pipe(-24.3, -14.6, 19.6, -14.6, 3.05, 0x9b7a4e); pipe(-24.3, -15.1, 19.6, -15.1, 3.05); T2(-24, -13.2, 19.6, -12.7, .06, 0x3a4046, 'plain', 3.05, false);
+    pipe(-24.4, -15.6, -24.4, 7.6, 3.05); T2(-21.9, -11.6, -21.4, 7.6, .06, 0x3a4046, 'plain', 3.05, false); pipe(26.6, -11.6, 26.6, 21.6, 3.05, 0x9b7a4e); T2(24.4, -11.6, 24.9, 21.6, .06, 0x3a4046, 'plain', 3.05, false);
+    [[-44.4, 2.6, -44.4, 21.6], [-25.6, 2.6, -25.6, 21.6]].forEach(function (q) { pipe(q[0], q[1], q[2], q[3], 5, 0x8e979e, .22); }); [7, 12, 17].forEach(function (z) { T2(-44.6, z - .12, -25.4, z + .12, .25, 0x4a545c, 'plain', 5.2, false); });
+    [[20.6, -31.4, 41.4, -31.4], [20.6, -12.6, 41.4, -12.6]].forEach(function (q) { pipe(q[0], q[1], q[2], q[3], 5, 0x8e979e, .22); }); [26, 31, 36].forEach(function (x) { T2(x - .12, -31.6, x + .12, -12.4, .25, 0x4a545c, 'plain', 5.2, false); });
+    pipe(-4.4, -35.4, 19.4, -35.4, 3.7, 0x9b7a4e); pipe(6.4, -35.4, 6.4, -16.6, 3.7); T2(-4.4, -26.6, 6.6, -26.1, .06, 0x3a4046, 'plain', 3.7, false); T2(27.6, 4.3, 41.6, 4.7, .06, 0x3a4046, 'plain', 3.05, false); T2(15.6, 8.3, 23.6, 8.7, .06, 0x3a4046, 'plain', 3.05, false);
+    // chain-link fence along the outer edges, in front of the cliffs
+    b.fence(-55.4, -12, -55.4, 28, 2.6); b.fence(55.4, -28, 55.4, 30, 2.6); b.fence(-40, 43.4, -12, 43.4, 2.6); b.fence(12, 43.4, 42, 43.4, 2.6);
     [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 38 }); b.spawns.B.push({ x: x * 2, z: -14 }); });
     function spots(l) { return l.map(function (q) { return { x: q[0], z: q[1], y: 0, l: 0 }; }); }
     return { name: '설산 연구기지', b: b, bounds: { minx: -57, maxx: 57, minz: -37, maxz: 45 }, bg: 0x2b3b55, fog: [30, 170], hemi: [0xb9cde8, 0x5b6676, .95], sun: [0xa9c4ec, .55, [30, 40, 26]], rain: false, sky: [0x0c1626, 0x3a5070], hdri: ['night', .14, .22, 2, .9], dim: .8,
@@ -1018,7 +1035,9 @@
     })();
     // tunnel floor and roofs (the roofs are the ground above); the stair wells and ladder shafts stay open
     b.box(0, 30, 96, 26, .3, 0x5a4c3c, -.3, false, 'conc');
-    [[-44, 34, -30, 37], [-30, 30, -18, 40], [-18, 30, -4, 33], [-4, 30, -1, 39], [-1, 36, 18, 39], [18, 30, 30, 40], [30, 33, 44, 36], [-24, 22, -21, 30], [21, 22, 24, 30]].forEach(function (q) { b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .6, SAND, 2.6, true, 'conc'); });
+    [[-44, 34, -30, 37], [-30, 30, -18, 40], [-18, 30, -4, 33], [-4, 30, -1, 39], [-1, 36, 18, 39], [18, 30, 30, 40], [30, 33, 44, 36], [-24, 22, -21, 30], [21, 22, 24, 30]].forEach(function (q) { b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .5, 0x3a3026, 2.6, true, 'conc'); b.box((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, q[2] - q[0], q[3] - q[1], .1, SAND, 3.1, true, 'conc'); });
+    // dark timber props and lintels along the tunnels, so they read as dug out and dim
+    [[-40, 34, 37, 0], [-34, 34, 37, 0], [-11, 30, 33, 0], [-2.5, 33, 36, 1], [6, 36, 39, 0], [12, 36, 39, 0], [34, 33, 36, 0], [40, 33, 36, 0], [-22.5, 24, 27, 2], [22.5, 24, 27, 2]].forEach(function (q) { var ax = q[3] === 0; if (q[3] === 1) { b.box(-2.5, 34.5, 3, .25, .22, 0x2e2418, 2.38, false, 'plain'); return; } if (q[3] === 2) { b.box(q[0], 25.5, 3, .25, .22, 0x2e2418, 2.38, false, 'plain'); b.box(q[0] - 1.4, 25.5, .2, .25, 2.4, 0x2e2418, 0, false, 'plain'); b.box(q[0] + 1.4, 25.5, .2, .25, 2.4, 0x2e2418, 0, false, 'plain'); return; } b.box(q[0], (q[1] + q[2]) / 2, .25, 3, .22, 0x2e2418, 2.38, false, 'plain'); b.box(q[0], q[1] + .1, .25, .2, 2.4, 0x2e2418, 0, false, 'plain'); b.box(q[0], q[2] - .1, .25, .2, 2.4, 0x2e2418, 0, false, 'plain'); });
     f.stairs(-22.5, 22, 0, -1, 3); f.stairs(22.5, 22, 0, -1, 3); f.ladder(-46, 35.5, -1, 0); f.ladder(46, 34.5, 1, 0);
     [-1, 1].forEach(function (sd) { rail(sd * 24.1, 18, sd * 24.1, 22.2); rail(sd * 20.9, 18, sd * 20.9, 22.2); rail(sd * 20.9, 22.2, sd * 24.1, 22.2); });
     rail(-46, 33.9, -43.9, 33.9); rail(-46, 37.1, -43.9, 37.1); rail(-43.9, 33.9, -43.9, 37.1); rail(43.9, 32.9, 46, 32.9); rail(43.9, 36.1, 46, 36.1); rail(43.9, 32.9, 43.9, 36.1);
@@ -1034,6 +1053,10 @@
     Bg(-66, -50, 66, -42, 7, SAND2); Bg(-66, 44, 66, 50, 7, SAND2); Bg(-66, -42, -60, 44, 7, SAND2); Bg(60, -42, 66, 44, 7, SAND2); Bg(-14, 22.6, 14, 44, 6, SAND2);
     [[-60, -30], [-60, -8], [-60, 14], [-59.5, 34], [60, -34], [60, -12], [60, 12], [59.5, 32], [-44, -42], [-22, -42], [12, -42], [40, -42], [-46, 44], [-28, 44], [26, 44], [48, 44], [-14, 30], [14, 28], [-10, 23], [9, 23.5], [0, 40]].forEach(function (q, n) { rock(q[0], q[1], 2.6 + (n % 3), 4 + (n % 4) * 1.4, false); });
     [[-38, 24, -28, 31, 4], [-36, 40.5, -16, 44, 3.4], [27, 25, 38, 30.5, 4], [16, 40.5, 36, 44, 3.4], [-58, 22, -52, 30, 3]].forEach(function (q) { Bg(q[0], q[1], q[2], q[3], q[4], ROCKC); rock((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, (q[2] - q[0]) * .55, q[4] * 1.1, false); });
+    // the south outcrop and the rims are heaped with boulders so no flat slab shows; ledges step down the gorge walls
+    for (i = 0; i < 26; i++) rock(-13 + (i * 7.3) % 26, 24 + (i * 5.1) % 19, 3 + (i % 3) * 1.2, 5.5 + (i % 4) * 1.5, false, H + (i % 3));
+    for (i = 0; i < 40; i++) { var t = i / 40 * 6.2832, ex = Math.cos(t), ez = Math.sin(t), kx = Math.abs(ex) > Math.abs(ez) * 1.4; rock(kx ? (ex > 0 ? 61.5 : -61.5) : -58 + (i * 23) % 116, kx ? -40 + (i * 17) % 82 : (ez > 0 ? 45.5 : -43.5), 2.4 + (i % 3) * .9, 6 + (i % 5) * 1.3, false, H + 1); }
+    [-1, 1].forEach(function (sd) { for (i = 0; i < 9; i++) { b.box(sd * (8 - .7 - (i % 3) * .5), -30 + i * 6, 1.4 + (i % 3), 4.5, 1.2, i % 2 ? ROCKC : SAND2, -3 - (i % 4) * 2.3, false, 'conc'); } });
     // parapets along the gorge so nobody steps off by accident
     [-1, 1].forEach(function (sd) { [[-42, -38.4], [-33.6, -5.9], [-.1, 22.6]].forEach(function (q) { Bg(sd * 8.2, q[0], sd * 8.7, q[1], 1.1, CW); }); });
     Bg(-8.2, -38.5, 8.2, -38.1, 1.1, CW); Bg(-8.2, -33.9, 8.2, -33.5, 1.1, CW);
