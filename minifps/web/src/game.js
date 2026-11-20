@@ -460,9 +460,10 @@
       var hh = Math.tan(vmCam.fov * PI / 360), hw = hh * vmCam.aspect, sc = 1 + (art.zoom - 1) * k + vmKick * .035, hs = 2 * hh * art.h / art.frame * sc, ws = hs * art.w / art.h;
       var cx0 = hw + .03 - ws / 2, cy0 = -hh - .04 + hs / 2, cx1 = -(art.eye[0] / art.w - .5) * ws, cy1 = -(.5 - art.eye[1] / art.h) * hs;
       var cx = cx0 * (1 - k) + cx1 * k + bx * 2.5 + vmKick * .012, cy = cy0 * (1 - k) + cy1 * k + bob * 2.5 - vmKick * .014 * (1 - k) - vmSwap * 1.6;
-      vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(cx, cy, -1); vmCur.scale.set(ws, hs, 1); vmRoot.visible = true;
+      if (w.melee) { cx -= vmKick * .34; cy -= vmKick * .05; }   // a knife sweeps across instead of kicking back
+      vmRoot.rotation.set(0, 0, w.melee ? vmKick * .7 : 0); vmRoot.position.set(cx, cy, -1); vmCur.scale.set(ws, hs, 1); vmRoot.visible = !(w.scope && vmAds > .8);
       flash.position.set((art.muzzle[0] / art.w - .5) * ws, (.5 - art.muzzle[1] / art.h) * hs, .02); flash.scale.setScalar(1.3);
-      var mp = G.map, tone = mp && mp.hdri ? ({ night: .75, dusk: 1.15, day: 1.9, indoor: 1.25 })[mp.hdri[0]] : 1.2; vmCur.children[0].material.color.setScalar(tone);
+      var mp = G.map, tone = mp && mp.hdri ? ({ night: .75, dusk: 1.15, day: 1.9, indoor: 1.25 })[mp.hdri[0]] : 1.2; vmCur.children[0].material.color.setScalar(tone * art.gain);
     } else {
     flash.scale.setScalar(1);
     var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = id === 'pistol' ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis

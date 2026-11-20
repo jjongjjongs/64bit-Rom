@@ -240,7 +240,14 @@ var SV = window.SV = window.SV || {};
   // gun space: +X is the muzzle, +Y up, +Z the shooter's right; the camera looks along +X from behind.
   // A weapon shown as one picture (arms and gun cut out of a painted first-person frame) instead of a model. All numbers are
   // pixels in that picture: its size, where the muzzle is, and the middle of the optic window that aiming brings to the crosshair.
-  var ART = { rifle: { key: 'fp_rifle', w: 990, h: 509, frame: 864, muzzle: [400, 92], eye: [607, 50], zoom: 1.45 } };
+  // `frame` is the height of the frame the picture was cut from (so it keeps its size on screen), `gain` evens out how
+  // brightly each picture was lit.
+  var ART = { rifle: { key: 'fp_rifle', w: 990, h: 509, frame: 864, muzzle: [400, 92], eye: [607, 50], zoom: 1.45, gain: 1 },
+    smg: { key: 'fp_smg', w: 822, h: 568, frame: 900, muzzle: [346, 71], eye: [678, 46], zoom: 1.3, gain: .8 },
+    shotgun: { key: 'fp_shotgun', w: 760, h: 557, frame: 900, muzzle: [269, 23], eye: [356, 45], zoom: 1.25, gain: .8 },
+    sniper: { key: 'fp_sniper', w: 790, h: 629, frame: 900, muzzle: [316, 90], eye: [686, 130], zoom: 1.5, gain: .8 },
+    pistol: { key: 'fp_pistol', w: 686, h: 601, frame: 900, muzzle: [262, 42], eye: [412, 43], zoom: 1.3, gain: .8 },
+    knife: { key: 'fp_knife', w: 635, h: 686, frame: 900, muzzle: [0, 0], eye: [317, 343], zoom: 1, gain: .8 } };
   function pictureVM(a, tex) {
     var m = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false })), g = new T.Group();
     m.renderOrder = 5; g.add(m); g.userData = { art: a, muzzle: [0, 0], sight: 0 }; return g;

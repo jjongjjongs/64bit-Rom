@@ -16,7 +16,7 @@
       for (k in m.model) (function (k) { total++; gl.load(A.base + m.model[k], function (g) { g.scene.updateMatrixWorld(true); A.model[k] = g.scene; A.box[k] = new T.Box3().setFromObject(g.scene); step(); }, undefined, step); })(k);
       if (T.RGBELoader) for (k in (m.hdr || {})) (function (k) { total++; new T.RGBELoader().setDataType(T.HalfFloatType).load(A.base + m.hdr[k], function (tx) { tx.minFilter = tx.magFilter = T.LinearFilter; tx.wrapS = T.RepeatWrapping; tx.generateMipmaps = false; A.hdr[k] = tx; step(); }, undefined, step); })(k);
       // hand-supplied pictures: a first-person weapon drawn as one image (see SV.viewModel)
-      ['fp_rifle'].forEach(function (n) { total++; var t = tl.load(A.base + 'art/' + n + '.png', function () { A.art[n] = t; step(); }, undefined, step); t.encoding = T.sRGBEncoding; t.anisotropy = 4; });
+      ['fp_rifle', 'fp_smg', 'fp_shotgun', 'fp_sniper', 'fp_pistol', 'fp_knife'].forEach(function (n) { total++; var t = tl.load(A.base + 'art/' + n + '.png', function () { A.art[n] = t; step(); }, undefined, step); t.encoding = T.sRGBEncoding; t.anisotropy = 4; });
       total++; gl.load(A.base + 'art/soldier_scan.glb', function (g) { A.scan = g; step(); }, undefined, step);   // a soldier made from a picture; it borrows soldier.glb's skeleton and animations
       total++; gl.load(A.base + 'soldier.glb', function (g) { A.soldier = g; step(); }, undefined, step);
       step();
