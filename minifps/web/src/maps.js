@@ -291,7 +291,7 @@
     [[-60, -58], [-20, -62], [30, -60], [70, -55]].forEach(function (p) { b.box(p[0] - 4, p[1], 1, 1, 26, 0x8d6a2a, 0, false); b.box(p[0] + 4, p[1], 1, 1, 26, 0x8d6a2a, 0, false); b.box(p[0], p[1] + 8, 9, 30, 1.2, 0x8d6a2a, 26, false); b.glow(p[0], 28.4, p[1] + 22, .6, .5, .6, 0xff4a30); b.glow(p[0], 26.5, p[1], 2, .3, .3, C.lamp); });
     for (i = 0; i < 46; i++) b.glow(rnd(-150, 150), rnd(1.5, 9), rnd(110, 118), rnd(.5, 1.6), .5, .2, Math.random() < .8 ? C.lamp : 0x9fd0e0);
     b.spawn('A', -32.5, -2); b.spawn('B', 32.5, -2);
-    return { name: '컨테이너 부두', b: b, bounds: { minx: -36, maxx: 36, minz: -24, maxz: 20 }, bg: 0x1b2832, fog: [22, 120], hemi: [0x9fb6c8, 0x2e2a24, .78], sun: [0xbcd0ea, .62, [34, 58, 22]], rain: true, sky: [0x05080c, 0x1b2832] };
+    return { name: '컨테이너 부두', b: b, bounds: { minx: -36, maxx: 36, minz: -24, maxz: 20 }, bg: 0x1b2832, fog: [22, 120], hemi: [0x9fb6c8, 0x2e2a24, .78], sun: [0xbcd0ea, .62, [34, 58, 22]], rain: true, sky: [0x05080c, 0x1b2832], hdri: ['night', .05, .08, 2, .6] };
   }
 
   // 02 물류 창고 — 38 x 26 m, one hall under a trussed roof.
@@ -351,8 +351,12 @@
     (function (x, z) { b.box(x, z, 1.2, 2.2, .7, C.yellow, .25, true, 'metal'); b.box(x, z + .35, 1.1, 1, .9, 0x2a2e31, .95, false); b.box(x, z - .4, 1.15, 1.2, .06, 0x2a2e31, 2.05, false); [[-.5, -.9], [.5, -.9], [-.5, .1], [.5, .1]].forEach(function (q) { b.box(x + q[0], z + q[1], .06, .06, 1.15, 0x2a2e31, .95, false); }); b.box(x - .3, z - 1.25, .1, .1, 2, 0x2a2e31, .1, false); b.box(x + .3, z - 1.25, .1, .1, 2, 0x2a2e31, .1, false); b.box(x - .3, z - 1.8, .1, 1.1, .05, 0x55595c, .14, false); b.box(x + .3, z - 1.8, .1, 1.1, .05, 0x55595c, .14, false); [[-.6, -.6], [.6, -.6], [-.6, .7], [.6, .7]].forEach(function (q) { var g = new T.CylinderGeometry(.28, .28, .22, 10); g.rotateZ(PI / 2); g.translate(x + q[0], .28, z + q[1]); b.geo(g, 0x17191b); }); })(-3.5, -1.4);
     // hanging lamps
     [[-16.5, -8], [-16.5, 8], [16.5, -8], [16.5, 8], [-10, 0], [10, 0], [0, -7], [0, 7], [-4, 0], [4, 0]].forEach(function (p) { b.seg(p[0], h - .3, p[1], p[0], h - 1.5, p[1], .03, C.dark, 'plain'); b.cyl(p[0], p[1], .34, .22, 0x33383c, h - 1.72, false, 'metal', .12, 10); b.glow(p[0], h - 1.74, p[1], .36, .04, .36, C.lamp); b.quad('pool', p[0], .035, p[1], 8, 8, 0, { flat: true, mode: 'add' }); });
+    // scanned fittings in the spawn rooms: steel shelving, a desk, tool chests, gas bottles
+    [['steel_frame_shelves_01', -18.42, -10.6, PI / 2, .1], ['steel_frame_shelves_01', -18.42, 10.6, PI / 2, .1], ['steel_frame_shelves_01', 18.42, 10.6, -PI / 2, .1], ['steel_frame_shelves_01', 18.42, -10.6, -PI / 2, .1],
+      ['metal_office_desk', -18.1, 7, PI / 2, 1], ['metal_office_desk', 18.1, -7, -PI / 2, 1], ['metal_tool_chest', -17.9, -8.6, PI / 2, 1], ['metal_tool_chest', 17.9, 8.6, -PI / 2, 1], ['propane_tank', -14.2, 11.9, .4, 1], ['propane_tank', 14.2, -11.9, 2, 1]
+    ].forEach(function (q) { b.prop(q[0], q[1], q[2], q[3], q[4]); });
     b.spawn('A', -16.3, 0); b.spawn('B', 16.3, 0);
-    return { name: '물류 창고', b: b, bounds: { minx: -19, maxx: 19, minz: -13, maxz: 13 }, bg: 0x101315, fog: [28, 90], hemi: [0xc9d2d8, 0x4a4338, .88], sun: [0xfff1dc, .32, [9, 30, 7]], rain: false, indoor: true };
+    return { name: '물류 창고', b: b, bounds: { minx: -19, maxx: 19, minz: -13, maxz: 13 }, bg: 0x101315, fog: [28, 90], hemi: [0xc9d2d8, 0x4a4338, .88], sun: [0xfff1dc, .32, [9, 30, 7]], rain: false, indoor: true, hdri: ['indoor', .3, .3, 4, .6] };
   }
 
   // Free-form parts for a frame: boxes at any tilt, cylinders along any axis, lathed and extruded shapes. None of these collide;
@@ -622,11 +626,12 @@
     // scanned dressing: generator, compressor, tool cart, hand trucks, jerrycans, military crates, a car under a cover
     [['portable_generator', -9.5, -6.5, .6, 1.25], ['old_military_crate', 30.5, -25.5, .3, 1], ['old_military_crate', 30.6, -25.4, .25, 1, .3], ['old_military_crate', 42, -13, 1.2, 1], ['hand_truck', 37, -22, 2, 1], ['hand_truck', 26, 22.5, -.6, 1],
       ['tool_cart', 31, 24.5, .15, 1], ['metal_toolbox', 28.5, 24.8, .9, 1.2], ['utility_box_01', -1.2, 5.6, .35, 1.2], ['utility_box_01', 44.6, 11.2, .1, 1.2], ['metal_jerrycan_green', 10.2, 5.2, .4, 1], ['metal_jerrycan_green', 10.7, 5.5, 1.9, 1], ['metal_jerrycan_green', 15.8, .4, -.7, 1],
-      ['covered_car', -34, 13, 1.25, 1.05], ['wooden_crate_02', -16, 9, .4, 1.4], ['wooden_crate_02', 21, 27, 1.1, 1.4], ['old_military_crate', -27, -30.5, .1, 1], ['portable_generator', 38, 12, 2.2, 1.25], ['old_military_crate', 3, 10, .7, 1], ['wooden_crate_02', -2, -9.5, 2, 1.4]
+      ['covered_car', -34, 13, 1.25, 1.05], ['wooden_crate_02', -16, 9, .4, 1.4], ['wooden_crate_02', 21, 27, 1.1, 1.4], ['old_military_crate', -27, -30.5, .1, 1], ['portable_generator', 38, 12, 2.2, 1.25], ['old_military_crate', 3, 10, .7, 1], ['wooden_crate_02', -2, -9.5, 2, 1.4],
+      ['propane_tank', -8.2, -7.5, .3, 1], ['propane_tank', -7.8, -7, 1.7, 1], ['metal_tool_chest', 29.9, 25.4, .2, 1], ['fire_hydrant', 7.2, 8.7, .5, 1], ['propane_tank', 39.2, 12.8, 2, 1]
     ].forEach(function (q) { b.prop(q[0], q[1], q[2], q[3], q[4], q[5] || 0); });
     b.spawn('A', -49, 2); b.spawn('B', 49, -1);
     function L(f, q, l) { return f.p(q[0], q[1], l || 0); }
-    return { name: '보급기지', b: b, bounds: { minx: -54, maxx: 54, minz: -36, maxz: 36 }, bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], rain: false, sky: [0x26313f, 0xb9885e], dim: .7,
+    return { name: '보급기지', b: b, bounds: { minx: -54, maxx: 54, minz: -36, maxz: 36 }, bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], rain: false, sky: [0x26313f, 0xb9885e], dim: .7, hdri: ['dusk', .42, .75, 6, .85],
       H: H, links: links, ladders: ladders,
       // a site is a set of zones in its own frame; `spots` are where a bot may choose to plant, `via` the approaches, `fwd` forward posts for defenders
       sites: [{ id: 'A', x: AF.p(1, 0)[0], z: AF.p(1, 0)[1], l: 0, y: 0, f: [34, -19, .15], zones: zA, spots: [{ x: AF.p(7, -5)[0], z: AF.p(7, -5)[1], y: .42, l: 0 }, { x: AF.p(5, -7)[0], z: AF.p(5, -7)[1], y: .42, l: 0 }, { x: AF.p(-3.5, 4.5)[0], z: AF.p(-3.5, 4.5)[1], y: 0, l: 0 }, { x: AF.p(-1, 6.8)[0], z: AF.p(-1, 6.8)[1], y: 0, l: 0 }],
@@ -704,8 +709,9 @@
     b.jersey(-30, 2, 3, true); b.jersey(34, -2, 3, true); b.jersey(8, -3.5, 3, false); b.jersey(16, 28, 3, false); b.tires(-8, 28.6, 3); b.tires(30, -27, 3);
     [[-30, -18, 1, 0], [-8, -27, 0, 1], [8, -16, -1, 0], [-20, 11, 1, 0], [-2, 27.5, 0, -1], [10, 4, 0, 1], [32, 5, -1, 0], [38, -12, -1, 0], [20, 28, 0, -1], [-36, 4, 1, 0], [24, -27, 0, 1]].forEach(function (q) { b.lamp(q[0], q[1], 5.5, q[2], q[3]); });
     [[-10, -24], [6, -12], [-18, 14], [12, 12], [34, 12], [-34, -2]].forEach(function (q) { b.quad('puddle', q[0], .025, q[1], rnd(3, 5), rnd(2.4, 3.6), rnd(0, 3), { flat: true, mode: 'alpha' }); });
+    [['fire_hydrant', -6.8, -27.4, .3, 1], ['propane_tank', 2.9, -18.4, 1, 1], ['propane_tank', 3.2, -17.9, 2.2, 1], ['fire_hydrant', 21.2, 28.3, 2, 1]].forEach(function (q) { b.prop(q[0], q[1], q[2], q[3], q[4]); });
     b.spawn('A', -39.5, 3); b.spawn('B', 39.5, -1);
-    return { name: '구시가지', b: b, bounds: { minx: -44, maxx: 44, minz: -30, maxz: 30 }, bg: 0x93a7b8, fog: [40, 190], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, .9, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4],
+    return { name: '구시가지', b: b, bounds: { minx: -44, maxx: 44, minz: -30, maxz: 30 }, bg: 0x93a7b8, fog: [40, 190], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.7, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1,
       H: H, links: links, ladders: ladders,
       sites: [{ id: 'A', x: sa[0], z: sa[1], l: 0, y: 0, via: [[-4, -25, 0], [-12, -8, 0], [5, -9, 0], M.p(0, -1, 1), A.p(-9, 6, 1)] }, { id: 'B', x: sb[0], z: sb[1], l: 0, y: 0, via: [[-2, 27, 0], [-8, 12.5, 0], [8, 11, 0], Bf.p(-6, 2, 1), M.p(3, 4.5, 1)] }],
       fwd: [A.p(-9, 3, 1), M.p(6, 0, 1), [8, 3, 0], Bf.p(-6, -2, 1), [14, -27, 0], [8, 25, 0]] };
@@ -713,5 +719,5 @@
 
   var MAKERS = [dock, warehouse, depot, oldtown];
   SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true }];
-  SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) m.group.add(skyDome(m.sky[0], m.sky[1])); m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
+  SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) { var sd = skyDome(m.sky[0], m.sky[1]); sd.userData.sky = 1; m.group.add(sd); } m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

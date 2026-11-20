@@ -86,6 +86,39 @@
     var pm = new T.PMREMGenerator(renderer), old = envRT; envRT = pm.fromScene(sc, .04); pm.dispose(); g.dispose(); scene.environment = vmScene.environment = envRT.texture; if (old) old.dispose();
   }
 
+  // A photographed sky (HDRI): one dome that is both what you see overhead and what lights and reflects in the scene.
+  // The picture is turned so its brightest point sits where the map's sun is, and the fog takes the colour of its horizon.
+  var skyMesh = null, skyMat = null;
+  function h2f(h) { var e = (h >> 10) & 31, m = h & 1023; return e === 0 ? m / 1024 * 6.1e-5 : e === 31 ? 65504 : (1 + m / 1024) * Math.pow(2, e - 15); }
+  function skyInfo(tx) {
+    if (tx._info) return tx._info; var d = tx.image.data, w = tx.image.width, h = tx.image.height, n = d.length / (w * h), best = -1, bu = 0, x, y, i, l, hz = [0, 0, 0], c = 0, f = d instanceof Uint16Array ? h2f : function (v) { return v; };
+    for (y = 0; y < h; y += 2) for (x = 0; x < w; x += 2) { i = (y * w + x) * n; l = f(d[i]) + f(d[i + 1]) + f(d[i + 2]); if (l > best) { best = l; bu = x / w; } }
+    // the data runs top-down, so the horizon band is the rows just above the middle
+    for (y = Math.floor(h * .44); y < Math.floor(h * .5); y++) for (x = 0; x < w; x += 4) { i = (y * w + x) * n; hz[0] += Math.min(f(d[i]), 4); hz[1] += Math.min(f(d[i + 1]), 4); hz[2] += Math.min(f(d[i + 2]), 4); c++; }
+    // average brightness of the upper sky, so every photo can be brought to the exposure its map asks for
+    var av = 0, ca = 0; for (y = 0; y < Math.floor(h * .45); y += 4) for (x = 0; x < w; x += 4) { i = (y * w + x) * n; av += Math.min(.2126 * f(d[i]) + .7152 * f(d[i + 1]) + .0722 * f(d[i + 2]), 8); ca++; }
+    return tx._info = { u: bu, hz: [hz[0] / c, hz[1] / c, hz[2] / c], av: Math.max(av / ca, 1e-4) };
+  }
+  function setSky(map) {
+    if (skyMesh) { if (skyMesh.parent) skyMesh.parent.remove(skyMesh); skyMesh = null; }
+    var cfgS = map.hdri, tx = cfgS && SV.assets && SV.assets.hdr && SV.assets.hdr[cfgS[0]]; if (!tx || !renderer) return false;
+    if (!skyMat) skyMat = new T.ShaderMaterial({ uniforms: { t: { value: null }, gain: { value: 1 }, cap: { value: 50 } }, side: T.BackSide, depthWrite: false, fog: false,
+      vertexShader: 'varying vec3 d; void main(){ d = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+      fragmentShader: 'uniform sampler2D t; uniform float gain, cap; varying vec3 d; void main(){ vec3 n = normalize(d); vec2 uv = vec2(atan(n.z, n.x) * .15915494 + .5, asin(clamp(n.y, -1., 1.)) * .31830989 + .5); gl_FragColor = vec4(min(texture2D(t, uv).rgb * gain, vec3(cap)), 1.);\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}' });
+    var inf = skyInfo(tx), sd = map.sun[2], rot = Math.atan2(sd[2], sd[0]) - (inf.u - .5) * 2 * PI, geo = new T.SphereGeometry(300, 32, 16);
+    // light: a dimmer, capped copy so the sun disc does not sparkle in every reflection
+    var sc = new T.Scene(), em = skyMat.clone(); em.uniforms.t.value = tx; em.uniforms.gain.value = cfgS[2] / inf.av; em.uniforms.cap.value = cfgS[3] || 12; em.toneMapped = false;
+    var m2 = new T.Mesh(geo, em); m2.rotation.y = -rot; sc.add(m2);
+    var pm = new T.PMREMGenerator(renderer), old = envRT, tm = renderer.toneMapping, oe = renderer.outputEncoding; renderer.toneMapping = T.NoToneMapping; renderer.outputEncoding = T.LinearEncoding;
+    envRT = pm.fromScene(sc, 0); pm.dispose(); em.dispose(); renderer.toneMapping = tm; renderer.outputEncoding = oe; scene.environment = vmScene.environment = envRT.texture; if (old) old.dispose();
+    if (map.indoor) { geo.dispose(); return true; }
+    skyMat.uniforms.t.value = tx; skyMat.uniforms.gain.value = cfgS[1] / inf.av; skyMat.uniforms.cap.value = 60; skyMat.needsUpdate = true;
+    skyMesh = new T.Mesh(geo, skyMat); skyMesh.rotation.y = -rot; skyMesh.frustumCulled = false; skyMesh.renderOrder = -10; map.group.add(skyMesh);
+    map.group.children.forEach(function (o) { if (o.userData.sky) o.visible = false; });
+    scene.background = new T.Color(inf.hz[0], inf.hz[1], inf.hz[2]).multiplyScalar(cfgS[1] / inf.av); scene.fog.color.copy(scene.background);
+    return true;
+  }
+
   SV.resize = function () {
     if (!renderer) return; var w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     var want = !!(post && cfg.quality);
@@ -391,7 +424,7 @@
   }
   function throwNade(a, o, dir) {
     if (a.nade <= 0) return; a.nade--;
-    var m = new T.Mesh(SV.merge(SV.GUN.grenade().g), SV.litMat); m.scale.setScalar(1.6); scene.add(m);
+    var ns = SV.scanOf('grenade'), m = ns || new T.Mesh(SV.merge(SV.GUN.grenade().g), SV.litMat); m.scale.setScalar(ns ? 1 : 1.6); scene.add(m);
     G.nades.push({ pos: o.clone().addScaledVector(dir, .5), vel: dir.clone().multiplyScalar(15).add(new T.Vector3(0, 4, 0)), t: 2.6, by: a, m: m });
     if (a.isPlayer) sndTone(220, .08, .1, 'triangle');
   }
@@ -643,10 +676,10 @@
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
     if (verb) verb.buffer = map.indoor ? irIn : irOut;
-    setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
+    var photo = setSky(map); if (!photo) setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
     map.group.traverse(function (o) { var m = o.material; if (m && m.userData.surf === 'conc' && map.rain) { m.roughness = .3; m.metalness = .05; m.envMapIntensity = 1.4; } });   // wet ground
     var lit = cfg.quality && map.lights.length > 0; vmLamp.intensity = 0; LAMPS.forEach(function (p) { p.src = null; p.k = 0; p.l.intensity = 0; if (lit) scene.add(p.l); else scene.remove(p.l); });
-    hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2] * (lit ? (map.dim || .62) : 1);
+    hemi.color.setHex(map.hemi[0]); hemi.groundColor.setHex(map.hemi[1]); hemi.intensity = map.hemi[2] * (lit ? (map.dim || .62) : 1) * (photo ? map.hdri[4] : 1);
     sun.color.setHex(map.sun[0]); sun.intensity = map.sun[1] * (lit ? (map.dim || .62) : 1); sun.position.fromArray(map.sun[2]); sun.target.position.set(0, 0, 0);
     var r = Math.max(map.bounds.maxx, map.bounds.maxz) + 8, sc = sun.shadow.camera; sc.left = sc.bottom = -r; sc.right = sc.top = r; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
     if (renderer) renderer.shadowMap.needsUpdate = true;
@@ -717,14 +750,14 @@
   var thumbs = {};
   SV.thumb = function (id) {
     if (thumbs[id] || !renderer) return thumbs[id] || '';
-    var w = 320, h = 128, rt = new T.WebGLRenderTarget(w, h), sc = new T.Scene(), mesh = new T.Mesh(SV.merge(SV.GUN[id]().g), new T.MeshLambertMaterial({ color: 0xe8e4da }));
+    var w = 320, h = 128, rt = new T.WebGLRenderTarget(w, h), sc = new T.Scene(), mesh = SV.scanOf(id) || new T.Mesh(SV.merge(SV.GUN[id]().g), new T.MeshLambertMaterial({ color: 0xe8e4da }));
     var box = new T.Box3().setFromObject(mesh), c = box.getCenter(new T.Vector3()), sz = box.getSize(new T.Vector3()), half = Math.max(sz.x / 2 * 1.08, sz.y / 2 * 1.08 * w / h);
     var oc = new T.OrthographicCamera(-half, half, half * h / w, -half * h / w, .01, 10); oc.position.set(c.x, c.y, 3); oc.lookAt(c);
     sc.add(mesh); sc.add(new T.HemisphereLight(0xffffff, 0x666666, .9)); var dl = new T.DirectionalLight(0xffffff, .5); dl.position.set(-1, 2, 3); sc.add(dl);
     var px = new Uint8Array(w * h * 4), old = renderer.getClearAlpha(); renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, oc); renderer.readRenderTargetPixels(rt, 0, 0, w, h, px); renderer.setRenderTarget(null); renderer.setClearColor(0x000000, old);
     var cv = document.createElement('canvas'); cv.width = w; cv.height = h; var x = cv.getContext('2d'), im = x.createImageData(w, h), y;
     for (y = 0; y < h; y++) im.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
-    x.putImageData(im, 0, 0); rt.dispose(); mesh.geometry.dispose(); return thumbs[id] = cv.toDataURL();
+    x.putImageData(im, 0, 0); rt.dispose(); if (mesh.geometry) mesh.geometry.dispose(); return thumbs[id] = cv.toDataURL();
   };
   SV.board = function () { return G.actors.slice().sort(function (a, b) { return b.kills - a.kills || a.deaths - b.deaths; }); };
 

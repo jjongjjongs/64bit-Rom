@@ -15,9 +15,13 @@ out = here / 'assets'
 TEXTURES = {'conc': 'concrete_pavement', 'floor': 'garage_floor', 'block': 'concrete_block_wall', 'corr': 'corrugated_iron_02', 'panel': 'box_profile_metal_sheet',
             'metal': 'metal_plate', 'crate': 'brown_planks_05', 'paint': 'painted_metal_shutter', 'canvas': 'denim_fabric', 'asphalt': 'asphalt_02', 'plaster': 'plastered_wall_02', 'roof': 'clay_roof_tiles'}
 MODELS = ['Barrel_01', 'barrel_03', 'concrete_road_barrier', 'old_military_crate', 'wooden_military_crate', 'wooden_crate_02', 'ammo_box', 'metal_jerrycan_green', 'old_tyre', 'street_lamp_01',
-          'cement_bag', 'portable_generator', 'old_military_compressor', 'tool_cart', 'covered_car', 'metal_toolbox', 'hand_truck', 'utility_box_01']
+          'cement_bag', 'portable_generator', 'old_military_compressor', 'tool_cart', 'covered_car', 'metal_toolbox', 'hand_truck', 'utility_box_01',
+          'service_pistol', 'bolt_action_rifle_7_62', 'stick_grenade', 'steel_frame_shelves_01', 'metal_tool_chest', 'exterior_aircon_unit', 'flood_lights', 'propane_tank',
+          'fire_hydrant', 'metal_trash_can', 'metal_office_desk', 'overhead_crane', 'security_light']
+# 맵마다 쓰는 하늘 사진(HDRI). 눈에 보이는 야외 하늘은 2k, 반사에만 쓰는 실내는 1k
+HDRIS = {'night': 'qwantani_night_puresky', 'dusk': 'qwantani_dusk_2_puresky', 'day': 'kloofendal_43d_clear_puresky', 'indoor': 'empty_warehouse_01'}
 THREE = 'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/'
-EXTRA = {'soldier.glb': THREE + 'models/gltf/Soldier.glb', 'GLTFLoader.js': THREE + 'js/loaders/GLTFLoader.js', 'SkeletonUtils.js': THREE + 'js/utils/SkeletonUtils.js'}
+EXTRA = {'soldier.glb': THREE + 'models/gltf/Soldier.glb', 'GLTFLoader.js': THREE + 'js/loaders/GLTFLoader.js', 'SkeletonUtils.js': THREE + 'js/utils/SkeletonUtils.js', 'RGBELoader.js': THREE + 'js/loaders/RGBELoader.js'}
 
 
 def get(url, dest):
@@ -44,7 +48,7 @@ def api(path):
         return json.load(r)
 
 
-manifest = {'tex': {}, 'model': {}}
+manifest = {'tex': {}, 'model': {}, 'hdr': {}}
 for key, pid in TEXTURES.items():
     f = api('files/' + pid)
     maps = {}
@@ -63,6 +67,10 @@ for pid in MODELS:
     for rel, inc in g.get('include', {}).items():
         get(inc['url'], out / 'm' / pid / rel)
     manifest['model'][pid] = 'm/%s/%s.gltf' % (pid, pid)
+for key, pid in HDRIS.items():
+    f = api('files/' + pid)
+    get(f['hdri']['1k' if key == 'indoor' else '2k']['hdr']['url'], out / 'h' / (key + '.hdr'))
+    manifest['hdr'][key] = 'h/%s.hdr' % key
 for name, url in EXTRA.items():
     get(url, out / name)
 (out / 'manifest.json').write_text(json.dumps(manifest, indent=1), encoding='utf-8')

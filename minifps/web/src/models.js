@@ -139,6 +139,20 @@ var SV = window.SV = window.SV || {};
     return { g: g };
   };
 
+  // Scanned weapons (Poly Haven, CC0) stand in for the built ones when the files are there. `skip` drops loose parts of
+  // the scan (spare magazines, cartridges); dx/dy move it so the trigger sits where the built guns have theirs.
+  function scan(id, skip, dx, dy, tone) {
+    var src = SV.assets && SV.assets.model[id]; if (!src) return null;
+    var g = new T.Group(), o = src.clone(true), kill = [];
+    o.traverse(function (q) { if (q.isMesh) { if (skip && skip.test(q.name)) kill.push(q); else if (tone && !q.material.userData.toned) { q.material = q.material.clone(); q.material.color.multiplyScalar(tone); q.material.userData.toned = 1; } } });
+    kill.forEach(function (q) { q.parent.remove(q); }); o.position.set(dx, dy, 0); g.add(o); return g;
+  }
+  var built = { sniper: GUN.sniper, pistol: GUN.pistol, grenade: GUN.grenade };
+  GUN.sniper = function () { var sc = scan('bolt_action_rifle_7_62', /bullet/, .24, -.005, .82); return sc ? { g: new T.Group(), scan: sc, grip: [-.13, -.075], fore: [.2, -.04], muzzle: [.85, .03], sight: .085 } : built.sniper(); };
+  GUN.pistol = function () { var sc = scan('service_pistol', /_b$|magazine|bullet/, -.04, -.035, .9); return sc ? { g: new T.Group(), scan: sc, grip: [-.06, -.06], fore: [-.045, -.085], muzzle: [.135, .03], sight: .05 } : built.pistol(); };
+  GUN.grenade = function () { var sc = scan('stick_grenade', null, 0, 0, 1); return sc ? { g: new T.Group(), scan: sc } : built.grenade(); };
+  SV.scanOf = function (id) { var d = GUN[id](); return d.scan || null; };
+
   // Flatten a group into one geometry: positions, normals and a colour per vertex.
   var lin = new T.Color();
   function merge(root, shade, pick) {
@@ -198,7 +212,7 @@ var SV = window.SV = window.SV || {};
     if (d.fore) { var h2 = V(d.fore[0] - .02, d.fore[1] - .03, -.03); arm(g, V(h2.x - .36, h2.y - .2, h2.z - .2), h2, V(0, -1, -.5), sl, MAT.glove, sl, MAT.poly2, true); }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
-    out.userData = { muzzle: d.muzzle, sight: d.sight }; return out;
+    if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight }; return out;
   };
 
   // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
@@ -234,8 +248,9 @@ var SV = window.SV = window.SV || {};
   // are solved onto it every frame (see SV.poseArms); the rest of the body follows the animation.
   var gunCache = {}, teamMats = {};
   function heldGun(gunId, gx, gy, gz) {
-    var c = gunCache[gunId]; if (c) return c; var d = GUN[gunId](), gg = new T.Group(); d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);
-    return gunCache[gunId] = { geo: merge(gg), grip: new T.Vector3(gx, gy + d.grip[1] + .03, gz + d.grip[0]), fore: d.fore ? new T.Vector3(gx + .02, gy + d.fore[1], gz + d.fore[0]) : null, muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
+    var c = gunCache[gunId]; if (c) return c; var d = GUN[gunId](), gg = new T.Group(), sg = null; d.g.rotation.y = -PI / 2; d.g.position.set(gx, gy, gz); gg.add(d.g);
+    if (d.scan) { sg = new T.Group(); d.scan.rotation.y = -PI / 2; d.scan.position.set(gx, gy, gz); sg.add(d.scan); }
+    return gunCache[gunId] = { scan: sg, geo: merge(gg), grip: new T.Vector3(gx, gy + d.grip[1] + .03, gz + d.grip[0]), fore: d.fore ? new T.Vector3(gx + .02, gy + d.fore[1], gz + d.fore[0]) : null, muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]) };
   }
   function skinned(team, gunId) {
     var src = SV.assets.soldier, model = T.SkeletonUtils.clone(src.scene), root = new T.Group(), up = new T.Group(), bones = {}, tm = teamMats[team] || (teamMats[team] = {});
@@ -245,7 +260,7 @@ var SV = window.SV = window.SV || {};
       if (o.isMesh) { var k = o.material.name; if (!tm[k]) { tm[k] = o.material.clone(); if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } o.material = tm[k]; o.frustumCulled = false; }
     });
     var mixer = new T.AnimationMixer(model), acts = {}; ['Idle', 'Run', 'Walk'].forEach(function (n) { var cl = T.AnimationClip.findByName(src.animations, n); acts[n] = mixer.clipAction(cl); acts[n].play(); acts[n].setEffectiveWeight(n === 'Idle' ? 1 : 0); }); mixer.update(Math.random());
-    var hg = heldGun(gunId, -.14, 1.38, .46), gun = new T.Mesh(hg.geo, SV.litMat); up.add(gun);
+    var hg = heldGun(gunId, -.14, 1.38, .46), gun = new T.Mesh(hg.geo, SV.litMat); up.add(gun); if (hg.scan) gun.add(hg.scan.clone(true));
     var sh = new T.Mesh(blob, blobMat); sh.position.y = .025; sh.scale.setScalar(1.25); sh.renderOrder = 1; root.add(sh);
     return { root: root, up: up, skinned: true, mixer: mixer, acts: acts, bones: bones, gun: gun, grip: hg.grip, fore: hg.fore, shadow: sh, muzzle: hg.muzzle };
   }

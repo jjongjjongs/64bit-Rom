@@ -20,7 +20,7 @@ FONTS = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=
 
 def page(three, fonts):
     head = src('head.html').replace('<!--FONTS-->', fonts)
-    extra = ''.join('<script src="a/%s"></script>\n' % n for n in ('GLTFLoader.js', 'SkeletonUtils.js')) if (ASSETS / 'GLTFLoader.js').exists() and three == 'three.min.js' else ''
+    extra = ''.join('<script src="a/%s"></script>\n' % n for n in ('GLTFLoader.js', 'SkeletonUtils.js', 'RGBELoader.js')) if (ASSETS / 'GLTFLoader.js').exists() and three == 'three.min.js' else ''
     return head + '\n<script src="%s"></script>\n' % three + extra + ''.join('<script>\n%s</script>\n' % src(n) for n in SCRIPTS)
 
 
