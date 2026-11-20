@@ -406,8 +406,25 @@
   function castShot(a, o, d, range) {
     var tw = rayWorld(o, d, range), best = null, i, e, r;
     for (i = 0; i < G.actors.length; i++) { e = G.actors[i]; if (!e.alive || e.team === a.team) continue; r = rayActor(o, d, e); if (r && r.t < tw && (!best || r.t < best.t)) { best = r; best.actor = e; } }
+    // practice targets: boards that fall when hit (the player's shots only)
+    if (a.isPlayer && G.targets) for (i = 0; i < G.targets.length; i++) {
+      var tg = G.targets[i]; if (tg.down > 0) continue; var nx = Math.sin(tg.ry), nz = Math.cos(tg.ry), dn = d.x * nx + d.z * nz; if (Math.abs(dn) < 1e-4) continue;
+      var tt = ((tg.m.position.x - o.x) * nx + (tg.m.position.z - o.z) * nz) / dn; if (tt <= 0 || tt >= tw || (best && tt >= best.t)) continue;
+      var hx = o.x + d.x * tt - tg.m.position.x, hz = o.z + d.z * tt - tg.m.position.z, hy = o.y + d.y * tt - tg.m.position.y; if (Math.abs(hx * nz - hz * nx) < tg.w / 2 && Math.abs(hy) < tg.h / 2) best = { t: tt, actor: null, target: tg, bull: Math.hypot(hx * nz - hz * nx, hy - .12) < .14 };
+    }
     return best || { t: tw, actor: null, world: tw < range };
   }
+  var targetMat = null;
+  function makeTargets(map) {
+    G.targets = null; G.rangeHits = 0; if (!map.targets) return;
+    if (!targetMat) { var cv = document.createElement('canvas'), x; cv.width = 128; cv.height = 224; x = cv.getContext('2d'); x.fillStyle = '#e9e5da'; x.fillRect(0, 0, 128, 224); x.strokeStyle = '#2a2e31'; x.lineWidth = 6; x.strokeRect(3, 3, 122, 218); [[58, '#2a2e31'], [42, '#e9e5da'], [26, '#e8892a'], [10, '#2a2e31']].forEach(function (q) { x.fillStyle = q[1]; x.beginPath(); x.arc(64, 100, q[0], 0, 6.2832); x.fill(); }); var t = new T.CanvasTexture(cv); t.encoding = T.sRGBEncoding; targetMat = new T.MeshStandardMaterial({ map: t, roughness: .8, side: T.DoubleSide }); }
+    G.targets = map.targets.map(function (q) { var m = new T.Mesh(new T.PlaneGeometry(q.w, q.h), targetMat); m.rotation.order = 'YXZ'; m.rotation.y = q.ry; m.position.set(q.x, q.y, q.z); m.castShadow = true; map.group.add(m); return { m: m, x: q.x, z: q.z, ry: q.ry, w: q.w, h: q.h, mv: q.mv, down: 0, ph: Math.random() * 6 }; });
+  }
+  function updTargets(dt) {
+    if (!G.targets) return; for (var i = 0; i < G.targets.length; i++) { var t = G.targets[i]; if (t.mv) { t.ph += dt * t.mv[2]; var o = Math.sin(t.ph) * t.mv[1]; if (t.mv[0] === 'x') t.m.position.x = t.x + o; else t.m.position.z = t.z + o; }
+      if (t.down > 0) t.down -= dt; var want = t.down > 0 ? -1.45 : 0; t.m.rotation.x += (want - t.m.rotation.x) * Math.min(1, dt * 14); }
+  }
+  function hitTarget(t, bull) { t.down = 2.2; G.rangeHits++; G.marker = bull ? .3 : .18; G.markerHead = bull; sndTone(bull ? 1500 : 1000, .05, .1); showMsg('표적 ' + G.rangeHits + (bull ? ' · 정중앙' : ''), .9); }
   function reload(a) { var g = a.guns[a.slot], w = W[g.id]; if (w.melee || g.reload > 0 || g.mag >= w.mag || g.res <= 0) return; g.reload = w.reload; a.ads = false; if (a.isPlayer) { vmSwap = .25; tick(.12, 1800, .22); tick(w.reload * .55, 900, .3, 2); tick(w.reload * .84, 2600, .22); tick(w.reload * .9, 1500, .22); } }
   function fire(a, o, dir, muzzle) {
     var g = a.guns[a.slot], w = W[g.id], i, res;
@@ -427,6 +444,7 @@
       res = castShot(a, o, vD, w.range); vH.copy(o).addScaledVector(vD, res.t);
       if (i < 3) tracer(muzzle, vH);
       if (res.actor) { var dmg = w.dmg * (res.t > w.fall ? Math.max(.45, 1 - (res.t - w.fall) / w.range) : 1) * (res.head ? w.head : 1); if (hurt(res.actor, dmg, a, res.head, g.id)) { puff(vH, 0xc23b2a, .2, 1.3); if (a.isPlayer) G.stats.hits += 1 / w.pellets; } }
+      else if (res.target) { hitTarget(res.target, res.bull); if (a.isPlayer) G.stats.hits += 1 / w.pellets; }
       else if (res.world) impact(vH, hitNrm);
     }
     a.bloom = Math.min(a.bloom + w.bloom, .04);
@@ -704,7 +722,7 @@
   SV.start = function (match) {
     SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
-    var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group);
+    var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group); makeTargets(map);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
     if (verb) verb.buffer = map.indoor ? irIn : irOut;
     var photo = setSky(map); if (!photo) setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
@@ -724,7 +742,7 @@
     for (i = 0; i < (match.enemies || match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
     var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
     G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
-    G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '연습장 · 봇은 쏘지 않습니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
+    G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
   };
   SV.end = function () {
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); G.map = null; }
@@ -812,6 +830,7 @@
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
     if (G.shake > 0) { G.shake -= dt; cam.position.x += rnd(-1, 1) * G.shake * .12; cam.position.y += rnd(-1, 1) * G.shake * .12; }
     if (G.flashT > 0) { G.flashT -= dt; if (G.flashT <= 0) flash.visible = false; }
+    updTargets(dt);
   }
   // who the dead player's camera follows: living teammates in turn (the fire button steps to the next), else anyone alive
   function watch(p) { var i, a, mates = [], any = null; for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (!a.alive) continue; if (a.team === p.team) mates.push(a); any = any || a; } return mates.length ? mates[(G.specI || 0) % mates.length] : any; }

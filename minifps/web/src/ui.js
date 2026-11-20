@@ -68,7 +68,7 @@
   var practice = false;
   $('go-practice').addEventListener('click', function () { practice = true; begin(); });
   $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
-  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = 1; m.perTeam = 1; m.enemies = 3; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 2; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
   var lastPractice = false;
   $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') show('s-pause'); else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
   $('r-again').addEventListener('click', function () { practice = lastPractice; begin(); });

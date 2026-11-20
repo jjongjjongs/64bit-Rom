@@ -1152,7 +1152,69 @@
       fwd: [[-12, -3, 1], [12, -3, 1], [-22.5, 15, 1], [22.5, 15, 1], [-30, -10, 1], [30, -12, 1], [0, -36, 1], [-24, 35, 0], [24, 35, 0]] };
   }
 
-  var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon];
+  // 08 사격 연습장 — 사용자가 준 콘셉트 보드(가상의 FPS 훈련장)를 옮겼다. 조작 연습장에서만 쓰인다. 북쪽이 -z, 80 x 60 m.
+  //  1 사격 레인(서쪽, 지붕 있는 사선과 10~42 m 고정 표적)  2 이동 표적 구역(북쪽 가운데, 좌우·전후로 움직이는 표적)
+  //  3 CQB 구역(북동, 지붕 없는 방과 복도)  4 엄폐물 연습 구역(가운데)  5 투척 연습 구역(동쪽, 바닥 원)
+  //  6 무기 테스트 존(남동 건물)  7 스폰 및 장비 선택 구역(남쪽 가운데 정문 안)
+  function range() {
+    var b = Builder(), CW = 0x9a9b98, CW2 = 0x838583, DK = 0x2c3238, OLV = 0x5a6142, TAN = 0xb39a6a, tg = [], i;
+    b.day = true;
+    function B(x0, z0, x1, z1, h, c, t, y0, solid) { b.box((x0 + x1) / 2, (z0 + z1) / 2, Math.abs(x1 - x0), Math.abs(z1 - z0), h, c, y0 || 0, solid, t || 'conc'); }
+    function cr(x, z, sz, h, c) { b.crate(x, z, sz, c, 0, h); }
+    function post(x, z, h) { b.box(x, z, .16, .16, h, DK, 0, true, 'metal'); }
+    function sign(n, x, z, ry) { var o = b.tier; b.box(x, z, .1, .1, 2.6, DK, 0, false, 'metal'); b.quad('zone' + n, x + Math.sin(ry) * .08, 2.9, z + Math.cos(ry) * .08, .9, .9, ry, { mode: 'alpha', make: function () { var a = cv(128, 128), c = a[1]; c.fillStyle = '#ff8a1f'; c.beginPath(); c.arc(64, 64, 58, 0, 6.2832); c.fill(); c.fillStyle = '#fff'; c.font = '900 84px "Big Shoulders Display","Arial Narrow",sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, 64, 70); return a[0]; } }); b.quad('zone' + n, x - Math.sin(ry) * .08, 2.9, z - Math.cos(ry) * .08, .9, .9, ry + PI, {}); b.tier = o; }
+    function target(x, z, ry, y, mv) { tg.push({ x: x, y: y || 1.25, z: z, ry: ry, w: .62, h: 1.1, mv: mv || null }); if (!mv) b.box(x, z, .08, .08, (y || 1.25) - .5, DK, 0, false, 'metal'); }
+    function bags(x, z, len, ang) { b.rbox(x, z, len, .7, .8, 0xb09a6c, 0, ang, true, 'canvas'); }
+    function tower(x, z) { b.cyl(x, z, .14, 9, DK, 0, false, 'metal', .1, 8); b.box(x, z, 1.8, .5, .7, 0x23292d, 9, false, 'metal'); b.glow(x, 9.35, z + .26, 1.5, .45, .04, 0xfff2d0); b.solid(x, z, .5, .5, 3, 0); }
+
+    // ground: asphalt apron, dirt in the lane and the cover yard, painted safety lines
+    b.box(0, 0, 140, 110, .3, 0x5b5a3e, -.45, false, 'plain'); b.box(0, 0, 82, 62, .4, 0x7d7f7c, -.4, false, 'floor');
+    B(-38, -28, -24, 16, .03, 0xd6c8ae, 'sand', 0, false); B(-20, -2, 12, 14, .03, 0xcfc2aa, 'sand', 0, false); B(-18, -28, 10, -9, .03, 0xd6c8ae, 'sand', 0, false); B(18, -4, 38, 10, .03, 0xd6c8ae, 'sand', 0, false);
+    [[-22, 16, .15, 12], [13, 4, .15, 28], [0, 16.5, 44, .15], [0, -6, 26, .15]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], .02, 0xd8b13a, 0, false); });
+    // perimeter: concrete wall with a fence on top, steel gate in the middle of the south side
+    [[0, -30.3, 81.2, .6], [-40.3, 0, .6, 61.2], [40.3, 0, .6, 61.2], [-23, 30.3, 35, .6], [23, 30.3, 35, .6]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], 4, CW, 0, true, 'conc'); b.box(q[0], q[1], q[2] > 1 ? q[2] : .08, q[3] > 1 ? q[3] : .08, 1, 0x596268, 4, false, 'metal'); });
+    b.box(0, 30.4, 11, .25, 3.8, 0x3c4347, 0, true, 'metal'); [-5.6, 5.6].forEach(function (x) { b.box(x, 30.3, 1, 1, 4.6, CW2, 0, true, 'conc'); }); b.mark('TRAINING RANGE', 13, 2.6, 29.98, 8, 1.3, PI, '#e8e4da'); b.quad('hazard', 0, .3, 30.2, 11, .5, PI, { rep: [11, .5] });
+    [[-36, -26], [36, -26], [-36, 26], [36, 26]].forEach(function (q) { tower(q[0], q[1]); });
+    // 7 spawn and kit area: canopy, tables with crates, lockers
+    [[-8, 21], [8, 21], [-8, 28], [8, 28]].forEach(function (q) { post(q[0], q[1], 3); }); B(-8.4, 20.6, 8.4, 28.4, .14, 0x4a545c, 'corr', 3, false);
+    B(-7, 27.2, -2, 28.2, .9, 0x6a5e4c, 'crate'); B(2, 27.2, 7, 28.2, .9, 0x6a5e4c, 'crate'); cr(-5.5, 27.7, .7, .5, OLV); [-3.5, 3, 5].forEach(function (x) { b.box(x, 27.7, .9, .4, .3, 0x33383c, .9, false, 'metal'); });
+    [-7.6, 7.6].forEach(function (x) { b.box(x, 24, .6, 2.4, 2, 0x4a5a6a, 0, true, 'paint'); }); b.cont(-16, 26.5, false, 0x7a3f30, 0, 6.1); b.cont(14, 27, false, 0x3f5f7a, 0, 6.1); sign('7', 0, 19.5, 0);
+    // 1 firing lanes: roofed firing line with stalls, targets at 10 to 42 m, sand berm, fence toward the yard
+    [-38, -24.5].forEach(function (x) { [16.2, 22.8].forEach(function (z) { post(x + (x < -30 ? .4 : -.4), z, 3); }); }); B(-38.4, 15.8, -24, 23.2, .14, 0x4a545c, 'corr', 3, false); B(-37.8, 16.2, -24.4, 16.8, 1, 0x6a5e4c, 'crate');
+    [-35.1, -32.5, -29.9, -27.3].forEach(function (x) { B(x - .06, 16.2, x + .06, 19, 2.2, 0x4a545c, 'metal'); });
+    [[-36.4, 6], [-33.8, -4], [-31.2, -14], [-28.6, -25.5], [-26, 6], [-36.4, -14], [-31.2, -25.5], [-26, -4], [-33.8, -25.5]].forEach(function (q) { target(q[0], q[1], 0); });
+    B(-38, -29.9, -24, -27, 2.6, 0xc9b894, 'sand'); b.fence(-24, -28, -24, 16, 2.6); [[6, '10'], [-4, '20'], [-14, '30'], [-25.5, '42']].forEach(function (q) { b.mark(q[1] + 'm', -24.25, 1.6, q[0], 1.4, .6, -PI / 2, '#ffd27a'); }); sign('1', -23, 20, PI / 2);
+    // 2 moving targets: covered stand with a counter, two cross tracks and one that runs toward you
+    B(-18.2, -29.9, -17.8, -9, 3, CW, 'conc'); B(9.8, -29.9, 10.2, -9, 3, CW, 'conc'); B(-17.8, -9.3, 9.8, -8.7, 1, 0x6a5e4c, 'crate'); [[-17, -8.5], [9, -8.5], [-17, -4.5], [9, -4.5]].forEach(function (q) { post(q[0], q[1], 3); }); B(-17.6, -9.2, 9.6, -4.2, .14, 0x4a545c, 'corr', 3, false);
+    [-18, -25].forEach(function (z) { B(-16, z - .08, 8, z + .08, .12, 0x33383c, 'metal', .3, false); }); B(3.92, -25, 4.08, -13, .12, 0x33383c, 'metal', .3, false);
+    target(-4, -18, 0, 1.25, ['x', 10, .8]); target(-4, -25, 0, 1.25, ['x', 11, 1.3]); target(4, -19.5, 0, 1.25, ['z', 5, .7]); target(-12, -27, 0, 1.25); target(6, -27, 0, 1.25); sign('2', -4, -3.4, 0);
+    // 3 close-quarters house: roofless rooms and a corridor, targets round the corners
+    function wx(z, x0, x1, gaps) { var cur = x0; (gaps || []).concat([[x1, x1]]).forEach(function (g) { if (g[0] > cur + .01) B(cur, z - .15, g[0], z + .15, 2.8, 0xa7a39a, 'block'); cur = g[1]; }); }
+    function wz(x, z0, z1, gaps) { var cur = z0; (gaps || []).concat([[z1, z1]]).forEach(function (g) { if (g[0] > cur + .01) B(x - .15, cur, x + .15, g[0], 2.8, 0xa7a39a, 'block'); cur = g[1]; }); }
+    wz(14, -28, -8, [[-14.5, -12]]); wx(-8, 14, 38, [[29.5, 32]]); wz(22, -28, -18, [[-24.5, -22]]); wx(-18, 14, 30, [[16.5, 19], [25.5, 28]]); wz(30, -18, -8, [[-14.5, -12]]); wx(-22, 22, 38, [[32.5, 35]]);
+    target(18, -26.5, 0); target(15.2, -21, PI / 2); target(26, -27, 0); target(36.5, -25, -PI / 2); target(36.8, -12, -PI / 2); target(24, -10.5, PI); target(34, -19.5, 0); cr(27, -20.5, 1.3, 1.2, TAN); cr(20, -12, 1.3, 1.2, OLV); cr(33, -15.5, 1, .8, TAN);
+    b.mark('B', 13.83, 1.9, -17, 1.4, 1.4, -PI / 2, '#b8402e'); sign('3', 12.6, -13.2, PI / 2);
+    // 4 cover yard: blocks, crates, tyres and barriers at standing and crouching heights
+    [[-14, 10, 2, .6, 1.1], [-8, 2, .6, 2.4, 1.1], [-2, 8, 2.4, .6, 2], [4, 1, .6, 2, 2], [-12, -0, 2, .6, 2], [7, 10, 2, .6, 1.1], [-5, 12, .6, 2, 1.1]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], q[4], 0xa7a39a, 0, true, 'block'); });
+    cr(-16, 4, 1.3, 1.2, OLV); cr(-16, 5.4, 1, .8, OLV); cr(0, 3, 1.3, 1.2, TAN); cr(1.4, 3, 1.3, 1.2, TAN); cr(.7, 3, 1.1, .9, TAN); cr(9, 5, 1.3, 1.2, OLV); cr(-9, 8.5, 1, .8, TAN);
+    b.tires(-11, 5, 3); b.tires(3, 12, 3); b.tires(8.5, -.5, 2); b.jersey(-3, 0, 3, false); b.jersey(-17, 12, 3, true); b.barrel(5.5, 6, 0x7a3f30); b.barrel(-6.5, 5.5, OLV); bags(10, 12, 4, .3);
+    target(-13, 8.9, 0); target(-1, 6.6, 0); target(5.2, -1, PI / 2); target(8, 8.9, 0); sign('4', -4, 15.2, 0);
+    // 5 throwing bay: throw line, rings on the ground, a few drums to aim at
+    B(17.2, -3.5, 17.8, 1, 1.1, 0xa7a39a, 'block'); B(17.2, 4, 17.8, 9.5, 1.1, 0xa7a39a, 'block');   /* a gap in the throw line lets you walk in to look */ b.quad('rings', 29, .04, 3, 13, 13, 0, { flat: true, mode: 'alpha', make: function () { var a = cv(256, 256), c = a[1]; c.strokeStyle = '#e8892a'; [120, 84, 46].forEach(function (r, n) { c.lineWidth = n ? 5 : 7; c.beginPath(); c.arc(128, 128, r, 0, 6.2832); c.stroke(); }); c.fillStyle = '#e8892a'; c.beginPath(); c.arc(128, 128, 9, 0, 6.2832); c.fill(); return a[0]; } });
+    B(18, 10.2, 39.9, 10.6, 2.4, CW, 'conc'); B(18, -5.2, 39.9, -4.8, 1.1, CW, 'conc'); b.barrel(29, 3, 0x7a3f30); b.barrel(33, -1, OLV); b.barrel(25, 7, OLV); bags(36, 5, 4, PI / 2); sign('5', 15.6, 3, PI / 2);
+    // 6 weapon test hall: open front, racks on the wall, a workbench, three targets at the far end
+    B(16, 13.8, 38, 14.2, 4, CW, 'conc'); B(37.8, 14, 38.2, 28, 4, CW, 'conc'); B(16, 27.8, 38, 28.2, 4, CW, 'conc'); B(15.8, 14, 16.2, 17.5, 4, CW, 'conc'); B(15.8, 24.5, 16.2, 28, 4, CW, 'conc'); B(15.8, 17.5, 16.2, 24.5, .8, CW2, 'conc', 3.2, false); B(15.6, 13.6, 38.4, 28.4, .3, 0x5d666c, 'corr', 4, true);
+    for (i = 0; i < 7; i++) { b.box(19 + i * 2.2, 14.35, 1.6, .1, 1.5, 0x3a4046, .9, false, 'metal'); b.box(19 + i * 2.2, 14.45, 1.1, .06, .16, 0x15181a, 1.9, false, 'plain'); b.box(19 + i * 2.2, 14.45, .9, .06, .14, 0x15181a, 1.4, false, 'plain'); }
+    B(20, 26.4, 26, 27.4, .9, 0x6a5e4c, 'crate'); b.box(22, 26.9, .8, .4, .25, 0x33383c, .9, false, 'metal'); cr(28, 26.6, 1.3, 1.2, OLV); cr(36.6, 15.5, 1, .8, TAN); [20, 28, 35].forEach(function (x) { b.box(x, 21, 1.4, .3, .08, 0x3a3f44, 3.9, false, 'metal'); b.glow(x, 3.85, 21, 1.3, .05, .22, 0xfff2d0); });
+    target(37.4, 17.5, -PI / 2); target(37.4, 21, -PI / 2); target(37.4, 24.5, -PI / 2); b.mark('TEST', 15.78, 3.5, 21, 2.6, .8, -PI / 2, '#ffd27a'); sign('6', 14.6, 21, PI / 2);
+    // trees beyond the wall
+    [[-46, -20], [-47, 4], [-45, 24], [46, -22], [47, 2], [45, 22], [-24, -37], [4, -38], [28, -37], [-28, 37], [26, 38]].forEach(function (q, n) { var k = 1.2 + (n % 3) * .25; b.cyl(q[0], q[1], .28 * k, 3.2 * k, 0x4a3a28, 0, false, 'plain', .2 * k, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (c, m) { var g = new T.IcosahedronGeometry(c[3] * k, 1); g.translate(q[0] + c[0] * k, c[1] * k, q[1] + c[2] * k); b.geo(g, m % 2 ? 0x3f5a2c : 0x4c6a33, 'plain', {}); }); });
+    [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 24.5 }); b.spawns.B.push({ x: -6 + x, z: 6 }); });
+    return { name: '사격 연습장', b: b, bounds: { minx: -41, maxx: 41, minz: -31, maxz: 31 }, bg: 0x93a7b8, fog: [60, 240], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.7, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1, lod: [40, 80], targets: tg };
+  }
+
+  var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon, range];
+  SV.RANGE = 7;   // the practice range: not in the match list, opened from the lobby's practice button
   SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true },
     { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 좌우 대칭 세 갈래', bomb: true },
     { name: '설산 연구기지', info: '대형 · 실내', hint: '폭파 미션 가능 · 실내 근접전과 하역장', bomb: true },
