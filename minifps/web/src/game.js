@@ -30,6 +30,7 @@
   var hemi = new T.HemisphereLight(0xffffff, 0x222222, .6), sun = new T.DirectionalLight(0xffffff, .6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0008;
   scene.add(hemi); scene.add(sun); scene.add(sun.target);
   vmScene.add(new T.HemisphereLight(0xdfe6ea, 0x3a342b, 1)); var vmSun = new T.DirectionalLight(0xfff1dc, .5); vmSun.position.set(1, 2, 1); vmScene.add(vmSun);
+  var vmFill = new T.DirectionalLight(0xe8eef4, .9); vmFill.position.set(-.7, 1.1, 1.4); vmScene.add(vmFill);   // from over the shooter's left shoulder, so the side of the gun you see is never a black shape
   var vmRoot = new T.Group(); vmScene.add(vmRoot); var vmLamp = new T.PointLight(0xffffff, 0, 0, 1); vmLamp.position.set(.5, 1.2, -.2); vmScene.add(vmLamp);
   function paint(n, fn) { var c = document.createElement('canvas'); c.width = c.height = n; fn(c.getContext('2d'), n); var t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return t; }
   var TX = {
@@ -454,9 +455,10 @@
     vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt);
     if (p.moving && p.ground) bobT += dt * 9;
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
-    var hx = id === 'knife' ? .2 : .17, hy = id === 'knife' ? -.14 : -.15, hz = id === 'pistol' || id === 'knife' ? -.42 : -.36;
-    vmRoot.position.set(hx * (1 - k) + bx, (hy * (1 - k) + (-s) * k) + bob - vmSwap * .5, hz * (1 - k) + (-.26) * k + vmKick * .035);
-    vmRoot.rotation.set(vmKick * (w.melee ? -.9 : .05) - vmSwap * 1.2, w.melee ? -.5 * vmKick : 0, 0);
+    var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = id === 'pistol' ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis
+    vmRoot.rotation.order = 'YXZ';
+    vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
+    vmRoot.rotation.set(ps[3] * h + vmKick * (w.melee ? -.9 : .05) - vmSwap * 1.2, ps[4] * h + (w.melee ? -.5 * vmKick : 0), ps[5] * h);
     vmRoot.visible = !(w.scope && vmAds > .8);
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
     $('scope').hidden = !(w.scope && vmAds > .8);

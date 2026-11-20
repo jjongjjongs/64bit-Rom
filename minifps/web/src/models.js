@@ -5,7 +5,7 @@ var SV = window.SV = window.SV || {};
   function mk(c) { return new T.MeshBasicMaterial({ color: c }); }
   function camo(a, b, c) { var m = mk(a); m.userData.camo = [new T.Color(a).convertSRGBToLinear(), new T.Color(b).convertSRGBToLinear(), new T.Color(c).convertSRGBToLinear()]; return m; }
   var MAT = { steel: mk(0x2c3136), dark: mk(0x15181b), bright: mk(0x6f7a82), poly: mk(0x2b3035), poly2: mk(0x1a1d20), rubber: mk(0x0e1012),
-    wood: mk(0x7a4a26), wood2: mk(0x5c3619), accent: mk(0xffb347), brass: mk(0xb08a3c), red: mk(0xb23a2a), lens: mk(0xffb347), glass: mk(0x1c4a60),
+    wood: mk(0x432a18), wood2: mk(0x332012), accent: mk(0xffb347), brass: mk(0xb08a3c), red: mk(0xb23a2a), lens: mk(0xffb347), glass: mk(0x1c4a60),
     olive: mk(0x4b5a3a), glove: mk(0x2a2823), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
     sleeveA: camo(0x8a7a58, 0x6b5d40, 0x4d4733), sleeveB: camo(0x5d6a70, 0x44525a, 0x2c363d) };
 
@@ -174,7 +174,7 @@ var SV = window.SV = window.SV || {};
   }
   SV.merge = merge; SV.GUN = GUN; SV.kit = kit; SV.mk = mk; SV.exg = exg;
   SV.litMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .5, metalness: .3, envMapIntensity: .55 });
-  SV.gunMetal = new T.MeshStandardMaterial({ vertexColors: true, roughness: .34, metalness: .88, envMapIntensity: 1.25, side: T.DoubleSide });
+  SV.gunMetal = new T.MeshStandardMaterial({ vertexColors: true, roughness: .42, metalness: .55, envMapIntensity: 1.1, side: T.DoubleSide });
   SV.gunSoft = new T.MeshStandardMaterial({ vertexColors: true, roughness: .8, metalness: 0, envMapIntensity: .4, side: T.DoubleSide });
   SV.clothMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: .92, metalness: 0, envMapIntensity: .35 });   // fabric and webbing: no shine
   // Fine surface detail without UVs: a small tiling texture is projected along whichever axis the surface faces, and its value
@@ -204,16 +204,56 @@ var SV = window.SV = window.SV || {};
   }
   function ball(g, p, r, mat, sx, sy, sz) { var m = new T.Mesh(new T.SphereGeometry(r, 12, 9), mat); m.position.copy(p); m.scale.set(sx || 1, sy || 1, sz || 1); g.add(m); return m; }
 
+  // A gloved hand closed round a handle, the way first-person shooters show it: the back of the hand and knuckles toward the
+  // camera, fingers wrapped round the far side, thumb lying along the near side, wrist and sleeve running off-screen to E.
+  // O: where it grips, ax: along the handle from little finger to index, pn: from the handle out through the palm,
+  // sg: which way the fingers wrap (+1 / -1), r: handle radius.
+  function hand(g, O, ax, pn, sg, r, E, sleeve, glove, o) {
+    o = o || {}; ax = ax.clone().normalize(); pn = pn.clone().addScaledVector(ax, -pn.dot(ax)).normalize(); var w = new T.Vector3().crossVectors(ax, pn).multiplyScalar(sg), i, j;
+    function P(deg, rad, h) { var t = deg * PI / 180; return O.clone().addScaledVector(pn, Math.cos(t) * rad).addScaledVector(w, Math.sin(t) * rad).addScaledVector(ax, h); }
+    function blob(c, radial, sx, sy, sz, mat) {   // an ellipsoid whose thin axis points away from the handle
+      var m = new T.Mesh(new T.SphereGeometry(1, 14, 10), mat), tz = radial.clone().normalize(), tx = new T.Vector3().crossVectors(ax, tz).normalize();
+      m.matrixAutoUpdate = false; m.matrix.makeBasis(tx.multiplyScalar(sx), ax.clone().multiplyScalar(sy), tz.multiplyScalar(sz)).setPosition(c); m.matrixWorldNeedsUpdate = true; g.add(m); return m;
+    }
+    var top = o.top == null ? .033 : o.top, fr = r + .0105, n = o.fingers || 4, A = o.wrap || [58, 118, 178, 232];
+    for (i = 0; i < n; i++) {
+      var h = top - i * .0215, sh = i === 3 ? .88 : 1, rr = i === 3 ? .0092 : .0105, pts = A.map(function (a, k) { return P(a * (k > 1 ? sh : 1), fr + (k === 0 ? .004 : 0), h); });
+      for (j = 0; j < 3; j++) { limb(g, pts[j], pts[j + 1], [[0, rr * (1 - j * .06)], [1, rr * (.94 - j * .06)]], glove, 8); ball(g, pts[j], rr * (j ? 1.04 : 1.25), glove); }
+      ball(g, pts[3], rr * .86, glove);
+    }
+    var mid = top - (n - 1) * .0215 / 2, span = (n - 1) * .0215 / 2 + .014;
+    blob(P(22, r + .017, mid), P(22, 1, 0).sub(O).addScaledVector(ax, 0), .04, span, .02, glove);                                  // back of the hand
+    blob(P(-12, r + .02, mid - .004), P(-12, 1, 0).sub(O), .03, span * .95, .024, glove);                                           // heel of the palm
+    var t0 = P(-30, r + .02, top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : P(-122, r + .012, top + .048);
+    limb(g, t0, t1, [[0, .0145], [1, .0125]], glove, 8); limb(g, t1, t2, [[0, .0122], [1, .0105]], glove, 8); ball(g, t0, .0165, glove); ball(g, t1, .0128, glove); ball(g, t2, .0105, glove);
+    // wrist, cuff and sleeve
+    var Hh = P(-5, r + .026, mid - .012), d = new T.Vector3().subVectors(E, Hh).normalize(), Wp = Hh.clone().addScaledVector(d, .05);
+    limb(g, Hh.clone().addScaledVector(d, -.01), Wp, [[0, .03], [.5, .033], [1, .031]], glove, 12); limb(g, Wp, Wp.clone().addScaledVector(d, .04), [[0, .037], [.2, .04], [1, .039]], glove, 12);
+    limb(g, Wp.clone().addScaledVector(d, .035), E, [[0, .041], [.05, .046], [.5, .052], [1, .06]], sleeve, 14);
+    if (o.pad) { var kk = kit(g); kk.add(new T.BoxGeometry(.052, .012, .034), o.pad || glove, 0, 0, 0).position.copy(P(40, r + .034, mid));   // knuckle guard
+    g.children[g.children.length - 1].lookAt(P(40, r + .2, mid)); }
+  }
+
   // First-person weapon: the gun plus two gloved hands and sleeves.
+  // gun space: +X is the muzzle, +Y up, +Z the shooter's right; the camera looks along +X from behind.
   SV.viewModel = function (id, team) {
-    var d = GUN[id](), g = d.g, sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, V = function (x, y, z) { return new T.Vector3(x, y, z); };
-    // gun space: +X is the muzzle, +Z the shooter's right. Each arm comes in from below and behind, elbow down and out.
-    var h1 = V(d.grip[0] - .02, d.grip[1] + .01, .03); arm(g, V(h1.x - .3, h1.y - .24, h1.z + .17), h1, V(0, -1, .5), sl, MAT.glove, sl, MAT.poly2, true);
-    if (d.fore) { var h2 = V(d.fore[0] - .02, d.fore[1] - .03, -.03); arm(g, V(h2.x - .36, h2.y - .2, h2.z - .2), h2, V(0, -1, -.5), sl, MAT.glove, sl, MAT.poly2, true); }
+    var d = GUN[id](), g = d.g, sl = team === 'A' ? MAT.sleeveA : MAT.sleeveB, gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
+    if (id === 'knife') hand(g, V(d.grip[0], d.grip[1], 0), V(1, 0, 0), V(0, .25, 1), -1, .016, V(-.36, -.2, .16), sl, gl);
+    else if (id === 'pistol') {
+      var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
+      hand(g, c, up, V(-.55, 0, .85), 1, .017, V(c.x - .38, c.y - .2, .2), sl, gl, { top: .03, pad: MAT.poly2, thumbDir: V(.97, .22, -.12) });
+      hand(g, c.clone().add(V(.004, -.012, 0)), up, V(-.5, 0, -.87), -1, .03, V(c.x - .36, c.y - .24, -.26), sl, gl, { top: .026, pad: MAT.poly2, thumbDir: V(.97, .2, .12) });
+    } else {
+      hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2 });
+      if (d.fore) hand(g, V(d.fore[0], d.fore[1] + .028, 0), V(1, 0, 0), V(0, -.8, -.6), -1, .027, V(d.fore[0] - .3, d.fore[1] - .4, -.12), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .1, -.08) });
+    }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
-    if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight }; return out;
+    if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip }; return out;
   };
+  // where each weapon sits on screen at the hip: [x, y, z, pitch, yaw, roll] — low right, muzzle turned in toward the crosshair
+  var POSE = { rifle: [.115, -.125, -.3, .02, .07, -.06], smg: [.115, -.125, -.31, .02, .07, -.06], sniper: [.12, -.12, -.27, .02, .07, -.06], shotgun: [.115, -.12, -.3, .02, .07, -.06], pistol: [.115, -.085, -.37, .03, .08, -.06], knife: [.14, -.1, -.42, .75, .55, -.35] };
+  SV.vmPose = function (id) { return POSE[id] || POSE.rifle; };
 
   // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
   // Returns { root, legL, legR } with the legs pivoting at the hip.
