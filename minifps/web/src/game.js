@@ -240,6 +240,7 @@
     // ladder: pushing into it climbs, anything else slides down slowly
     if (lad && vx * lad.dx + vz * lad.dz > .5) a.vy = 3.4; else { a.vy -= 20 * dt; if (lad && a.vy < -3) a.vy = -3; } a.pos.y += a.vy * dt; var g = groundAt(a);
     if (a.pos.y <= g) { a.pos.y = g; a.vy = 0; a.ground = true; } else a.ground = a.pos.y - g < .05;
+    var vd = G.map && G.map.voids; if (vd && a.alive && a.pos.y < G.map.H - 2.6) for (i = 0; i < vd.length; i++) if (a.pos.x > vd[i][0] && a.pos.x < vd[i][2] && a.pos.z > vd[i][1] && a.pos.z < vd[i][3]) { a.prot = 0; hurt(a, 999, a); break; }   // fell into the gorge
   }
 
   // ---------- navigation grid for bots ----------
@@ -262,7 +263,8 @@
       for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > H + .5 && b.miny < H + 1.6) mark(b, N, .5, 1); }
     }
     nav = { nx: nx, nz: nz, N: N, H: H, blk: blk, ox: bd.minx, oz: bd.minz, g: new Float32Array(blk.length), par: new Int32Array(blk.length), stamp: new Int32Array(blk.length), cl: new Int32Array(blk.length), jmp: new Uint8Array(blk.length), run: 0, free: [], links: {}, exact: {} };
-    for (i = 0; i < N; i++) if (!blk[i]) nav.free.push(i);
+    (map.voids || []).forEach(function (v) { for (var x = Math.floor(v[0] - bd.minx); x < Math.ceil(v[2] - bd.minx); x++) for (var z = Math.floor(v[1] - bd.minz); z < Math.ceil(v[3] - bd.minz); z++) if (x >= 0 && z >= 0 && x < nx && z < nz) blk[z * nx + x] = 1; });   // pits: nobody walks on their floor
+    for (i = 0; i < (map.roamAll ? blk.length : N); i++) if (!blk[i]) nav.free.push(i);
     (map.links || []).forEach(function (L) {
       var ca = freeNear(cellOf(L.a[0], L.a[1], L.a[2])), cb = freeNear(cellOf(L.b[0], L.b[1], L.b[2])), cost = Math.hypot(L.a[0] - L.b[0], L.a[1] - L.b[1]) + 2;
       (nav.links[ca] = nav.links[ca] || []).push({ to: cb, cost: cost }); (nav.links[cb] = nav.links[cb] || []).push({ to: ca, cost: cost }); nav.exact[ca] = L.a; nav.exact[cb] = L.b;
@@ -361,7 +363,7 @@
   function spawn(a) {
     var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
-    a.pos.set(best.x, 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
+    a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
@@ -525,7 +527,7 @@
     if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
-    else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; want = { x: nav.ox + (c % nav.nx) + .5, z: nav.oz + ((c / nav.nx) | 0) + .5 }; } ai.goal = null; }
+    else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; var c2 = c % nav.N; want = { x: nav.ox + (c2 % nav.nx) + .5, z: nav.oz + ((c2 / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0 }; } ai.goal = null; }
     if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.goal.l !== (want.l || 0) || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z, l: want.l || 0 }; ai.path = findPath(a.pos.x, a.pos.z, lvl(a), want.x, want.z, want.l || 0); ai.pathT = 0; }
     var g = a.guns[a.slot]; if (!best && g.reload <= 0 && g.mag < W[g.id].mag * .4) reload(a);
   }
@@ -701,7 +703,7 @@
     if (renderer) renderer.shadowMap.needsUpdate = true;
     if (map.rain) makeRain();
     buildNav(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
-    HOT = [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
+    HOT = map.hot || [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
     G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
     function gun(n) { var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
@@ -730,7 +732,7 @@
   function set(id, v) { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } }
   function drawMini() {
     var cv = $('mini'), ctx = cv.getContext('2d'), b = G.map.bounds, w = cv.width, s = (w - 8) / Math.max(b.maxx - b.minx, b.maxz - b.minz), ox = (w - (b.maxx - b.minx) * s) / 2, oz = (w - (b.maxz - b.minz) * s) / 2, i, p = G.player;
-    if (!G.mini) { G.mini = document.createElement('canvas'); G.mini.width = G.mini.height = w; var c = G.mini.getContext('2d'); c.fillStyle = 'rgba(232,228,218,.42)'; for (i = 0; i < boxes.length; i++) { var q = boxes[i]; if (q.maxy < 1 || q.miny > 1.6 || (q.miny > .05 && !q.soft && q.maxy < 3.5 && q.maxx - q.minx < 1.3 && q.maxz - q.minz < 1.3)) continue; if (q.rot) { c.save(); c.translate(ox + (q.ox - b.minx) * s, oz + (q.oz - b.minz) * s); c.rotate(Math.atan2(-q.s, q.c)); c.fillRect(q.minx * s, q.minz * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); c.restore(); }
+    if (!G.mini) { G.mini = document.createElement('canvas'); G.mini.width = G.mini.height = w; var c = G.mini.getContext('2d'); c.fillStyle = 'rgba(232,228,218,.42)'; for (i = 0; i < boxes.length; i++) { var q = boxes[i], mb = G.map.base || 0; if (q.maxy < mb + 1 || q.miny > mb + 1.6 || (q.miny > mb + .05 && !q.soft && q.maxy < mb + 3.5 && q.maxx - q.minx < 1.3 && q.maxz - q.minz < 1.3)) continue; if (q.rot) { c.save(); c.translate(ox + (q.ox - b.minx) * s, oz + (q.oz - b.minz) * s); c.rotate(Math.atan2(-q.s, q.c)); c.fillRect(q.minx * s, q.minz * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); c.restore(); }
       else c.fillRect(ox + (q.minx - b.minx) * s, oz + (q.minz - b.minz) * s, (q.maxx - q.minx) * s, (q.maxz - q.minz) * s); } }
     ctx.clearRect(0, 0, w, w); ctx.drawImage(G.mini, 0, 0);
     if (G.bomb) { ctx.fillStyle = '#e2562f'; ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; G.map.sites.forEach(function (q) { ctx.fillText(q.id, ox + (q.x - b.minx) * s, oz + (q.z - b.minz) * s + 5); }); var bp = G.bomb.planted || G.bomb.drop; if (bp && (G.bomb.planted || p.team === G.bomb.atk)) { ctx.beginPath(); ctx.arc(ox + (bp.x - b.minx) * s, oz + (bp.z - b.minz) * s, 4, 0, 7); ctx.fill(); } }
