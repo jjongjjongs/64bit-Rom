@@ -1,7 +1,7 @@
 // ui.js — menus, settings, touch and keyboard input.
 (function () {
   var $ = function (id) { return document.getElementById(id); }, G = SV.G, inp = SV.inp, cfg = SV.cfg, W = SV.W;
-  var match = { mode: 0, map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', minutes: 10 };
+  var match = { mode: 0, map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', side: 'pistol', minutes: 10 };
   try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
   if (!SV.MAPS[match.map]) match.map = 0; if (match.mode !== 1 || !SV.MAPS[match.map].bomb) match.mode = 0;
   var stats = { w: 0, l: 0, k: 0, d: 0 }; try { var s0 = JSON.parse(localStorage.getItem('minifps.stats') || 'null'); if (s0) for (var k1 in stats) if (typeof s0[k1] === 'number') stats[k1] = s0[k1]; } catch (e) {}
@@ -19,7 +19,7 @@
       b.setAttribute('aria-pressed', get() === it[2] ? 'true' : 'false'); b.addEventListener('click', function () { set(it[2]); save(); refresh(host.closest('.scr').id); }); host.appendChild(b);
     });
   }
-  var GUNS = [['rifle', '중거리 만능. 연사 반동이 위로 올라갑니다.', [62, 70, 58, 66, 55]], ['smg', '가볍고 빠릅니다. 멀어질수록 약해집니다.', [40, 92, 48, 35, 88]], ['sniper', '한 발이 무겁습니다. 정조준하면 조준경이 열립니다.', [98, 12, 96, 100, 25]], ['shotgun', '좁은 통로의 주인. 여덟 알이 퍼져 나갑니다.', [90, 28, 30, 20, 60]]];
+  var GUNS = [['rifle', '기본 범용 소총. 중거리 만능, 연사 반동이 위로 올라갑니다.', [62, 70, 58, 66, 55]], ['rifle2', '짧고 가벼운 근·중거리 소총. 더 빨리 쏘고, 멀리서는 약해집니다.', [54, 80, 50, 52, 70]], ['smg', '가볍고 빠릅니다. 멀어질수록 약해집니다.', [40, 92, 48, 35, 88]], ['sniper', '한 발이 무겁습니다. 정조준하면 조준경이 열립니다.', [98, 12, 96, 100, 25]], ['shotgun', '좁은 통로의 주인. 여덟 알이 퍼져 나갑니다.', [90, 28, 30, 20, 60]]];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비'] };
   function refresh(id) {
     if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [match.mode ? '폭파 미션' : '팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, match.mode ? '5라운드 선승' : '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
@@ -38,6 +38,7 @@
     if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
     if (id === 's-load') {
       seg($('o-gun'), GUNS.map(function (g) { return [W[g[0]].name, '', g[0], SV.thumb(g[0])]; }), function () { return match.primary; }, function (v) { match.primary = v; });
+      if (!W[match.side] || !W[match.side].side) match.side = 'pistol'; seg($('o-side'), [['세이버', '12발 · 빠름', 'pistol'], ['스펙터', '9발 · 강함', 'pistol2']], function () { return match.side; }, function (v) { match.side = v; });
       var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1]; $('ga').textContent = W[g[0]].mag + ' / ' + W[g[0]].res + '발';
       var gb = $('gb'); gb.textContent = ''; ['위력', '연사', '정확도', '사거리', '기동성'].forEach(function (l, n) { var a = document.createElement('div'); a.textContent = l; var b = document.createElement('div'); b.className = 'bar'; var f = document.createElement('i'); f.style.width = g[2][n] + '%'; b.appendChild(f); gb.appendChild(a); gb.appendChild(b); });
       var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? (lastPractice ? '바로 적용' : '다음 투입부터 적용') : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
@@ -70,7 +71,7 @@
   $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
   function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 0; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
   var lastPractice = false;
-  $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') { SV.setPrimary(match.primary); show('s-pause'); } else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
+  $('go-fight').addEventListener('click', function () { save(); if (from['s-load'] === 's-pause') { SV.setPrimary(match.primary, match.side); show('s-pause'); } else if (from['s-load'] === 's-lobby') show('s-lobby'); else begin(); });
   $('r-again').addEventListener('click', function () { practice = lastPractice; begin(); });
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }

@@ -6,16 +6,18 @@
   function angd(a, b) { var d = (a - b) % (2 * PI); if (d > PI) d -= 2 * PI; if (d < -PI) d += 2 * PI; return d; }
 
   var W = SV.W = {
-    rifle:   { name: '돌격소총', short: '소총', dmg: 27, head: 2.2, interval: .1, mag: 30, res: 120, reload: 2.1, spread: .014, ads: .0035, bloom: .0035, recoil: .011, auto: true, range: 120, fall: 35, pellets: 1, fov: 46, snd: 1 },
-    smg:     { name: '기관단총', short: '기관단총', dmg: 18, head: 1.9, interval: .067, mag: 32, res: 160, reload: 1.8, spread: .022, ads: .011, bloom: .003, recoil: .0075, auto: true, range: 80, fall: 14, pellets: 1, fov: 50, snd: 1.35 },
-    sniper:  { name: '저격소총', short: '저격', dmg: 92, head: 2.5, interval: 1.25, mag: 5, res: 25, reload: 2.8, spread: .07, ads: .0004, bloom: 0, recoil: .05, auto: false, range: 200, fall: 200, pellets: 1, fov: 13, scope: true, snd: .55 },
-    shotgun: { name: '산탄총', short: '산탄총', dmg: 14, head: 1.4, interval: .85, mag: 6, res: 30, reload: 2.4, spread: .075, ads: .06, bloom: 0, recoil: .04, auto: false, range: 40, fall: 7, pellets: 8, fov: 50, snd: .7 },
-    pistol:  { name: '권총', short: '권총', dmg: 26, head: 2, interval: .15, mag: 12, res: 60, reload: 1.4, spread: .016, ads: .006, bloom: .006, recoil: .014, auto: false, range: 70, fall: 16, pellets: 1, fov: 50, snd: 1.15 },
-    knife:   { name: '나이프', short: '칼', dmg: 55, head: 1, interval: .5, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
+    rifle:   { name: 'AR-01 발키리', short: '소총', dmg: 27, head: 2.2, interval: .1, mag: 30, res: 120, reload: 2.1, spread: .014, ads: .0035, bloom: .0035, recoil: .011, auto: true, range: 120, fall: 35, pellets: 1, fov: 46, snd: 1 },
+    rifle2:  { name: 'AR-02 레이븐', short: '소총', dmg: 24, head: 2.1, interval: .085, mag: 30, res: 120, reload: 1.9, spread: .017, ads: .005, bloom: .0035, recoil: .0095, auto: true, range: 95, fall: 24, pellets: 1, fov: 48, snd: 1.15 },
+    smg:     { name: 'SM-01 사일런스', short: '기관단총', dmg: 18, head: 1.9, interval: .067, mag: 32, res: 160, reload: 1.8, spread: .022, ads: .011, bloom: .003, recoil: .0075, auto: true, range: 80, fall: 14, pellets: 1, fov: 50, snd: 1.35 },
+    sniper:  { name: 'SR-01 오리온', short: '저격', dmg: 92, head: 2.5, interval: 1.25, mag: 5, res: 25, reload: 2.8, spread: .07, ads: .0004, bloom: 0, recoil: .05, auto: false, range: 200, fall: 200, pellets: 1, fov: 13, scope: true, snd: .55 },
+    shotgun: { name: 'SG-01 하운드', short: '산탄총', dmg: 14, head: 1.4, interval: .85, mag: 6, res: 30, reload: 2.4, spread: .075, ads: .06, bloom: 0, recoil: .04, auto: false, range: 40, fall: 7, pellets: 8, fov: 50, snd: .7 },
+    pistol2: { name: 'HG-02 스펙터', short: '권총', side: true, dmg: 34, head: 2.1, interval: .2, mag: 9, res: 45, reload: 1.5, spread: .013, ads: .0045, bloom: .008, recoil: .019, auto: false, range: 75, fall: 20, pellets: 1, fov: 50, snd: 1.05 },
+    pistol:  { name: 'HG-01 세이버', short: '권총', side: true, dmg: 26, head: 2, interval: .15, mag: 12, res: 60, reload: 1.4, spread: .016, ads: .006, bloom: .006, recoil: .014, auto: false, range: 70, fall: 16, pellets: 1, fov: 50, snd: 1.15 },
+    knife:   { name: 'KN-01 스톰', short: '칼', dmg: 55, head: 1, interval: .5, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
   };
   var DIFF = [{ err: .05, react: .62, turn: 5 }, { err: .032, react: .42, turn: 7 }, { err: .02, react: .28, turn: 9.5 }, { err: .011, react: .17, turn: 13 }];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니', '삵'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비', '수리'] };
-  var BOTGUN = ['rifle', 'smg', 'sniper', 'shotgun', 'rifle', 'smg', 'rifle'];
+  var BOTGUN = ['rifle', 'smg', 'sniper', 'shotgun', 'rifle2', 'smg', 'rifle'];
   var EYE = 1.64, EYEC = 1.12, RAD = .35, TALL = 1.78;   // the map pack's player reference: 1.78 m tall, eye at 1.64 m, capsule radius 0.35 m
 
   var G = SV.G = { state: 'menu', actors: [], nades: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
@@ -40,7 +42,7 @@
     soft: paint(64, function (x, n) { var g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.5, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n); }),
     hole: paint(64, function (x, n) { var g = x.createRadialGradient(32, 32, 0, 32, 32, 30), i; g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.28, 'rgba(8,8,8,.95)'); g.addColorStop(.45, 'rgba(40,36,32,.55)'); g.addColorStop(1, 'rgba(30,28,26,0)'); x.fillStyle = g; x.fillRect(0, 0, n, n); x.strokeStyle = 'rgba(15,15,15,.6)'; x.lineWidth = 1; for (i = 0; i < 7; i++) { var a = Math.random() * 6.28, r = 12 + Math.random() * 16; x.beginPath(); x.moveTo(32 + Math.cos(a) * 7, 32 + Math.sin(a) * 7); x.lineTo(32 + Math.cos(a + .2) * r, 32 + Math.sin(a + .2) * r); x.stroke(); } })
   };
-  var FIRE = new T.Color(3.6, 2.5, 1.2), FLSIZE = { rifle: 1, smg: .8, sniper: 1.6, shotgun: 1.7, pistol: .7 };
+  var FIRE = new T.Color(3.6, 2.5, 1.2), FLSIZE = { rifle: 1, rifle2: 1, smg: .8, sniper: 1.6, shotgun: 1.7, pistol: .7, pistol2: .8 };
   var flash = new T.Group(); flash.visible = false; vmRoot.add(flash);
   (function () {
     var ms = new T.MeshBasicMaterial({ map: TX.star, color: FIRE, transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false }), mf = new T.MeshBasicMaterial({ map: TX.flame, color: FIRE, transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false, side: T.DoubleSide });
@@ -304,7 +306,7 @@
   // pitch). The sum is saturated, compressed, and part of it sent through a reverb made from a decaying noise burst. Distance
   // delays the sound, dulls it, and leaves more of the echo than the shot.
   var ac = null, noise = null, master = null, verb = null, irOut = null, irIn = null, hard = null;
-  var SND = { rifle: { b: 2600, t: [150, 48], len: .19, crk: .9, tail: .5, g: 1 }, smg: { b: 3400, t: [210, 80], len: .13, crk: .8, tail: .32, g: .8 }, sniper: { b: 1700, t: [105, 32], len: .36, crk: 1.1, tail: 1, g: 1.3 },
+  var SND = { rifle2: { b: 2900, t: [165, 55], len: .17, crk: .95, tail: .45, g: .95 }, pistol2: { b: 2600, t: [170, 60], len: .14, crk: .85, tail: .42, g: .95 }, rifle: { b: 2600, t: [150, 48], len: .19, crk: .9, tail: .5, g: 1 }, smg: { b: 3400, t: [210, 80], len: .13, crk: .8, tail: .32, g: .8 }, sniper: { b: 1700, t: [105, 32], len: .36, crk: 1.1, tail: 1, g: 1.3 },
     shotgun: { b: 1300, t: [120, 36], len: .3, crk: .7, tail: .8, g: 1.25 }, pistol: { b: 3000, t: [190, 70], len: .12, crk: .85, tail: .38, g: .85 }, boom: { b: 700, t: [80, 24], len: .75, crk: .4, tail: 1.3, g: 1.6 } };
   function impulse(len, decay, slap) {
     var n = (ac.sampleRate * len) | 0, buf = ac.createBuffer(2, n, ac.sampleRate), ch, i;
@@ -364,7 +366,7 @@
   }
 
   // ---------- actors ----------
-  function guns(primary, bot) { return [primary, 'pistol', 'knife'].map(function (id) { return { id: id, mag: W[id].mag, res: bot ? 9999 : W[id].res, cool: 0, reload: 0 }; }); }
+  function guns(primary, bot, side) { return [primary, side || 'pistol', 'knife'].map(function (id) { return { id: id, mag: W[id].mag, res: bot ? 9999 : W[id].res, cool: 0, reload: 0 }; }); }
   function actor(team, name, isPlayer, primary) {
     var a = { team: team, name: name, isPlayer: isPlayer, primary: primary, pos: new T.Vector3(), vy: 0, yaw: 0, pitch: 0, hp: 100, alive: false, respawn: 0, prot: 0, crouch: false, ground: true,
       kills: 0, deaths: 0, slot: 0, guns: null, nade: 1, bloom: 0, ads: false, walk: 0, moving: false, dead: 0, spot: 0, model: null, useP: 0, useAt: null, idx: 0,
@@ -377,7 +379,7 @@
     var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
     a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
-    if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer);
+    if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
@@ -501,7 +503,7 @@
       var mp = G.map, tone = mp && mp.hdri ? ({ night: .75, dusk: 1.15, day: 1.9, indoor: 1.25 })[mp.hdri[0]] : 1.2; vmCur.children[0].material.color.setScalar(tone * art.gain);
     } else {
     flash.scale.setScalar(1);
-    var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = id === 'pistol' ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis
+    var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = W[id].side ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis
     vmRoot.rotation.order = 'YXZ';
     vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
     vmRoot.rotation.set(ps[3] * h + vmKick * (w.melee ? -.9 : .05) - vmSwap * 1.2, ps[4] * h + (w.melee ? -.5 * vmKick : 0), ps[5] * h);
@@ -845,7 +847,7 @@
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
   // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
-  SV.setPrimary = function (id) { if (!G.match || G.state === 'menu') return; G.match.primary = id; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false); p.slot = 0; p.ads = false; setVm(); } };
+  SV.setPrimary = function (id, side) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();
