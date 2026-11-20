@@ -23,7 +23,7 @@
   var cfg = SV.cfg;
 
   // ---------- renderer ----------
-  var canvas = $('cv'), renderer = null, scene = new T.Scene(), cam = new T.PerspectiveCamera(62, 2, .08, 400), vmScene = new T.Scene(), vmCam = new T.PerspectiveCamera(48, 2, .01, 10);
+  var canvas = $('cv'), renderer = null, scene = new T.Scene(), cam = new T.PerspectiveCamera(62, 2, .08, 400), vmScene = new T.Scene(), vmCam = new T.PerspectiveCamera(50, 2, .01, 10);
   cam.rotation.order = 'YXZ';
   try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { SV.fatal = '이 기기에서는 3D 화면을 열 수 없습니다.'; }
   if (renderer) { renderer.autoClear = false; renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false; }

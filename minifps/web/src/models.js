@@ -55,9 +55,11 @@ var SV = window.SV = window.SV || {};
     for (i = 0; i < 6; i++) { k.b(.032, .003, .009, m.rubber, .16 + i * .048, .0002, 0); k.b(.032, .009, .003, m.rubber, .16 + i * .048, .03, .0298); k.b(.032, .009, .003, m.rubber, .16 + i * .048, .03, -.0298); }
     k.cx(.0085, .2, m.dark, .52, .03, 0, 12); k.cx(.0125, .03, m.steel, .45, .03, 0, 12);                                                                       // barrel, gas block
     lx(k, [[.6, 0], [.6, .0125], [.612, .0138], [.66, .0138], [.668, .011], [.668, 0]], m.dark, .03); for (i = 0; i < 3; i++) k.b(.007, .009, .03, m.rubber, .622 + i * .014, .03, 0);   // muzzle brake and its ports
-    k.b(.075, .012, .03, m.dark, .003, .074, 0); k.b(.02, .012, .034, m.steel, -.02, .076, 0); k.b(.02, .012, .034, m.steel, .026, .076, 0);                    // optic mount and clamps
-    exX(k, [[-.023, .082], [.023, .082], [.023, .13], [.017, .138], [-.017, .138], [-.023, .13]], -.03, .036, m.dark, .0015, [[[-.018, .09], [.018, .09], [.018, .128], [.014, .132], [-.014, .132], [-.018, .128]]]);   // reflex sight: you aim through the window
-    k.cz(.006, .008, m.steel, .0, .1, .027, 8); k.cy(.005, .006, m.steel, .0, .141, 0, 8);
+    // iron sights, carbine style: carry handle with a rear aperture, A-frame front sight tower on the gas block
+    ex(k, [[-.125, .066], [.05, .066], [.05, .074], [.02, .098], [-.125, .098]], -.011, .011, m.steel, .002, [[[-.095, .072], [.028, .072], [.008, .09], [-.095, .09]]]);
+    exX(k, [[-.012, .098], [.012, .098], [.012, .114], [.007, .119], [-.007, .119], [-.012, .114]], -.125, -.113, m.dark, .001, [[[-.007, .1015], [.007, .1015], [.007, .1135], [-.007, .1135]]]); k.cz(.006, .01, m.dark, -.1, .09, .015, 8);
+    ex(k, [[.425, .03], [.475, .03], [.458, .1], [.446, .1]], -.006, .006, m.dark, .001, [[[.44, .045], [.462, .045], [.455, .08], [.447, .08]]]); k.b(.003, .014, .003, m.dark, .452, .104, 0);
+    k.b(.004, .016, .003, m.dark, .452, .1, .008); k.b(.004, .016, .003, m.dark, .452, .1, -.008);
     ex(k, [[-.09, -.02], [-.045, -.02], [-.058, -.07], [-.08, -.145], [-.128, -.138], [-.108, -.07]], -.014, .014, m.fde, .005); trig(k, -.005, -.03, m.bright, m.steel);   // pistol grip, trigger
     ex(k, [[.04, -.04], [.094, -.034], [.104, -.12], [.122, -.2], [.07, -.214], [.055, -.13]], -.0125, .0125, m.poly2, .002);                                  // curved magazine, ribs, floor plate
     for (i = 0; i < 4; i++) k.b(.05, .004, .0275, m.dark, .083 + i * .007, -.072 - i * .036, 0, 0, 0, .2); k.b(.06, .01, .03, m.fde, .097, -.212, 0, 0, 0, .27);
@@ -66,7 +68,7 @@ var SV = window.SV = window.SV || {};
     k.cx(.0145, .2, m.steel, -.235, .03, 0, 12); k.cx(.0185, .012, m.steel, -.142, .03, 0, 12);                                                                 // buffer tube, castle nut
     ex(k, [[-.21, .052], [-.37, .052], [-.385, .04], [-.385, -.07], [-.365, -.078], [-.3, -.028], [-.21, .004]], -.019, .019, m.fde, .004, [[[-.33, 0], [-.365, 0], [-.365, -.05], [-.33, -.02]]]);   // skeleton stock
     k.b(.02, .13, .044, m.rubber, -.397, -.012, 0); k.b(.012, .03, .006, m.steel, -.2, -.012, .021);
-    return { g: g, grip: [-.105, -.1], fore: [.265, -.035], muzzle: [.67, .03], sight: .11 };
+    return { g: g, grip: [-.105, -.1], fore: [.265, -.035], muzzle: [.67, .03], sight: .1075 };
   };
   GUN.smg = function () {
     var g = new T.Group(), k = kit(g), m = MAT, i;
@@ -215,7 +217,7 @@ var SV = window.SV = window.SV || {};
       var m = new T.Mesh(new T.SphereGeometry(1, 14, 10), mat), tz = radial.clone().normalize(), tx = new T.Vector3().crossVectors(ax, tz).normalize();
       m.matrixAutoUpdate = false; m.matrix.makeBasis(tx.multiplyScalar(sx), ax.clone().multiplyScalar(sy), tz.multiplyScalar(sz)).setPosition(c); m.matrixWorldNeedsUpdate = true; g.add(m); return m;
     }
-    var top = o.top == null ? .033 : o.top, fr = r + .0105, n = o.fingers || 4, A = o.wrap || [58, 118, 178, 232];
+    var top = o.top == null ? .033 : o.top, fr = r + .0105, n = o.fingers || 4, A = o.wrap || [58, 118, 178, 232];   // how far round the handle each finger joint sits
     for (i = 0; i < n; i++) {
       var h = top - i * .0215, sh = i === 3 ? .88 : 1, rr = i === 3 ? .0092 : .0105, pts = A.map(function (a, k) { return P(a * (k > 1 ? sh : 1), fr + (k === 0 ? .004 : 0), h); });
       for (j = 0; j < 3; j++) { limb(g, pts[j], pts[j + 1], [[0, rr * (1 - j * .06)], [1, rr * (.94 - j * .06)]], glove, 8); ball(g, pts[j], rr * (j ? 1.04 : 1.25), glove); }
@@ -224,7 +226,7 @@ var SV = window.SV = window.SV || {};
     var mid = top - (n - 1) * .0215 / 2, span = (n - 1) * .0215 / 2 + .014;
     blob(P(22, r + .017, mid), P(22, 1, 0).sub(O).addScaledVector(ax, 0), .04, span, .02, glove);                                  // back of the hand
     blob(P(-12, r + .02, mid - .004), P(-12, 1, 0).sub(O), .03, span * .95, .024, glove);                                           // heel of the palm
-    var t0 = P(-30, r + .02, top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : P(-122, r + .012, top + .048);
+    var t0 = P(o.thumbAt || -30, r + (o.thumbAt ? .008 : .02), top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : P(-122, r + .012, top + .048);
     limb(g, t0, t1, [[0, .0145], [1, .0125]], glove, 8); limb(g, t1, t2, [[0, .0122], [1, .0105]], glove, 8); ball(g, t0, .0165, glove); ball(g, t1, .0128, glove); ball(g, t2, .0105, glove);
     // wrist, cuff and sleeve
     var Hh = P(-5, r + .026, mid - .012), d = new T.Vector3().subVectors(E, Hh).normalize(), Wp = Hh.clone().addScaledVector(d, .05);
@@ -245,14 +247,20 @@ var SV = window.SV = window.SV || {};
       hand(g, c.clone().add(V(.004, -.012, 0)), up, V(-.5, 0, -.87), -1, .03, V(c.x - .36, c.y - .24, -.26), sl, gl, { top: .026, pad: MAT.poly2, thumbDir: V(.97, .2, .12) });
     } else {
       hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2 });
-      if (d.fore) hand(g, V(d.fore[0], d.fore[1] + .028, 0), V(1, 0, 0), V(0, -.8, -.6), -1, .027, V(d.fore[0] - .3, d.fore[1] - .4, -.12), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .1, -.08) });
+      if (d.fore) hand(g, V(d.fore[0], d.fore[1] + .028, 0), V(1, 0, 0), V(0, -1, -.3), -1, .027, V(d.fore[0] - .36, d.fore[1] - .3, -.13), sl, gl, { thumbDir: V(1, .05, .03), thumbAt: -62, wrap: [45, 95, 145, 190] });
     }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip }; return out;
   };
   // where each weapon sits on screen at the hip: [x, y, z, pitch, yaw, roll] — low right, muzzle turned in toward the crosshair
-  var POSE = { rifle: [.115, -.125, -.3, .02, .07, -.06], smg: [.115, -.125, -.31, .02, .07, -.06], sniper: [.12, -.12, -.27, .02, .07, -.06], shotgun: [.115, -.12, -.3, .02, .07, -.06], pistol: [.115, -.085, -.37, .03, .08, -.06], knife: [.14, -.1, -.42, .75, .55, -.35] };
+  // Framing after Call of Duty 4: a wide view-model lens, the gun big in the lower right and held almost parallel to the
+  // line of sight (no roll), so you look along its left side and top; x/y place the sight line, z the rear sight's distance.
+  SV.VMFOV = 50;
+  // sx, sy: where the sight line sits right of and below the eye; d: how far ahead the rear sight is
+  function hip(sight, rear, sx, sy, d) { return [sx, sy - sight, -(d - rear), 0, .03, 0]; }
+  var POSE = { rifle: hip(.1075, -.12, .13, -.075, .24), smg: hip(.085, -.1, .13, -.075, .24), sniper: hip(.085, -.1, .13, -.075, .26), shotgun: hip(.054, -.1, .13, -.07, .26),
+    pistol: hip(.05, -.08, .09, -.068, .36), knife: [.17, -.13, -.38, .75, .55, -.35] };
   SV.vmPose = function (id) { return POSE[id] || POSE.rifle; };
 
   // Third-person soldier, built from tubes and balls so limbs and helmet read as round. Faces +Z, feet at y = 0.
