@@ -50,7 +50,7 @@
     var g1 = new T.PlaneGeometry(.3, .13); g1.rotateY(PI / 2); g1.translate(0, 0, -.11); flash.add(new T.Mesh(g1, mf)); var g2 = new T.PlaneGeometry(.3, .13); g2.rotateX(-PI / 2); g2.rotateY(PI / 2); g2.translate(0, 0, -.11); flash.add(new T.Mesh(g2, mf));
   })();
   var mzLight = new T.PointLight(0xffb060, 0, 10, 1.4), vmFlash = new T.PointLight(0xffb060, 0, 0, 1); scene.add(mzLight); vmFlash.position.set(.25, .1, -.9); vmScene.add(vmFlash);
-  var vms = {}, vmCur = null, vmKick = 0, vmAds = 0, vmSwap = 0, bobT = 0;
+  var vms = {}, vmCur = null, vmKick = 0, vmAds = 0, vmSwap = 0, vmSwing = 0, bobT = 0;
 
   // ---------- post-processing ----------
   // With "high quality" on, the scene is drawn in linear HDR into an off-screen target; bright parts are blurred into a bloom,
@@ -135,7 +135,7 @@
   };
 
   // ---------- effects ----------
-  var tracers = [], booms = [], fx = new T.Group(), parts = [], decals = [], shells = [], di = 0, si = 0; scene.add(fx);
+  var tracers = [], booms = [], fx = new T.Group(), parts = [], decals = [], slashes = [], shells = [], di = 0, si = 0, sli = 0; scene.add(fx);
   (function () {
     var i, m;
     for (i = 0; i < 28; i++) { m = new T.Line(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)), new T.LineBasicMaterial({ color: new T.Color(2.4, 1.8, 1), transparent: true, opacity: .8 })); m.visible = false; m.frustumCulled = false; fx.add(m); tracers.push({ m: m, life: 0 }); }
@@ -145,6 +145,12 @@
     for (i = 0; i < 64; i++) { m = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, transparent: true, depthWrite: false, fog: false })); m.visible = false; fx.add(m); parts.push({ m: m, life: 0, max: 1, v: new T.Vector3(), g: 0, s0: 1, s1: 1, a: 1 }); }
     var dg = new T.PlaneGeometry(.11, .11), dm = new T.MeshBasicMaterial({ map: TX.hole, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     for (i = 0; i < 48; i++) { m = new T.Mesh(dg, dm); m.visible = false; fx.add(m); decals.push(m); }
+    /* knife cuts: a thin gash with a pale scraped edge, drawn once */
+    var sc = document.createElement('canvas'), sx; sc.width = 256; sc.height = 64; sx = sc.getContext('2d');
+    sx.strokeStyle = 'rgba(205,200,188,.55)'; sx.lineWidth = 7; sx.lineCap = 'round'; sx.beginPath(); sx.moveTo(14, 36); sx.quadraticCurveTo(128, 20, 242, 30); sx.stroke();
+    sx.strokeStyle = 'rgba(12,11,10,.95)'; sx.lineWidth = 4.6; sx.beginPath(); sx.moveTo(16, 35); sx.quadraticCurveTo(128, 21, 240, 30); sx.stroke();
+    var st = new T.CanvasTexture(sc), sg2 = new T.PlaneGeometry(.5, .125), sm2 = new T.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    for (i = 0; i < 12; i++) { m = new T.Mesh(sg2, sm2); m.visible = false; fx.add(m); slashes.push(m); }
     var cg = new T.CylinderGeometry(.0055, .0055, .024, 6), cm = new T.MeshStandardMaterial({ color: 0xc9a14a, roughness: .3, metalness: .9 });
     for (i = 0; i < 12; i++) { m = new T.Mesh(cg, cm); m.visible = false; fx.add(m); shells.push({ m: m, life: 0, v: new T.Vector3(), floor: 0, hit: false }); }
   })();
@@ -162,6 +168,11 @@
     var d = decals[di = (di + 1) % decals.length], i; d.position.copy(p).addScaledVector(n, .012); d.lookAt(vP.copy(d.position).add(n)); d.rotation.z = Math.random() * 6.28; d.scale.setScalar(.7 + Math.random() * .7); d.visible = true;
     part(TX.soft, cDust, false, p, .45, .07, .5, .45, n.x * .9, n.y * .9 + .25, n.z * .9, 0);
     for (i = 0; i < 3; i++) if (Math.random() < .6) part(TX.soft, cSpark, true, p, .16 + Math.random() * .14, .035, .012, 1, n.x * 3 + rnd(-2, 2), n.y * 3 + rnd(0, 2.5), n.z * 3 + rnd(-2, 2), 9);
+  }
+  function slashMark(p, n) {   // the cut a knife leaves: slanted the way the blade travels, a little dust and a spark or two
+    var d = slashes[sli = (sli + 1) % slashes.length], i; d.position.copy(p).addScaledVector(n, .014); d.lookAt(vP.copy(d.position).add(n)); d.rotation.z = -.5 + rnd(-.25, .25); d.scale.setScalar(.85 + Math.random() * .4); d.visible = true;
+    part(TX.soft, cDust, false, p, .35, .05, .3, .4, n.x * .6, n.y * .6 + .2, n.z * .6, 0);
+    for (i = 0; i < 2; i++) if (Math.random() < .5) part(TX.soft, cSpark, true, p, .12 + Math.random() * .1, .03, .01, 1, n.x * 2 + rnd(-2, 2), n.y * 2 + rnd(0, 2), n.z * 2 + rnd(-2, 2), 9);
   }
   function muzzleFx(p, dir, size, mine) {
     if (!mine) part(TX.star, FIRE, true, p, .055, .45 * size, .7 * size, 1, 0, 0, 0, 0);
@@ -432,8 +443,14 @@
     var g = a.guns[a.slot], w = W[g.id], i, res;
     if (g.cool > 0 || g.reload > 0) return false;
     if (w.melee) {
-      g.cool = w.interval; res = castShot(a, o, dir, w.range); if (a.isPlayer) { vmKick = 1; sndShot(2.4, .25); }
-      if (res.actor) { var back = Math.abs(angd(res.actor.yaw, a.yaw)) < 1; hurt(res.actor, back ? 200 : w.dmg, a, false, g.id); }
+      /* a blade sweeps a width, not a line: try the middle and a little to each side and above and below, keep the best thing met */
+      g.cool = w.interval; var d0 = new T.Vector3().copy(dir); vR.set(d0.z, 0, -d0.x).normalize(); vU.crossVectors(vR, d0); var bestM = null, bx2, by2;
+      for (i = 0; i < 5; i++) { bx2 = [0, -.12, .12, 0, 0][i]; by2 = [0, 0, 0, .1, -.1][i]; vD.copy(d0).addScaledVector(vR, bx2).addScaledVector(vU, by2).normalize(); res = castShot(a, o, vD, w.range);
+        var rank = res.actor ? 3 : res.target ? 2 : res.world ? 1 : 0; if (rank && (!bestM || rank > bestM.rank || (rank === bestM.rank && res.t < bestM.t))) { bestM = res; bestM.rank = rank; bestM.p = new T.Vector3().copy(o).addScaledVector(vD, res.t); bestM.n = hitNrm.clone(); } }
+      if (a.isPlayer) { vmSwing = 1; sndShot(2.4, .25); }
+      if (bestM && bestM.actor) { var back = Math.abs(angd(bestM.actor.yaw, a.yaw)) < 1; if (hurt(bestM.actor, back ? 200 : w.dmg, a, false, g.id)) puff(bestM.p, 0xc23b2a, .2, 1.3); if (a.isPlayer) tick(.06, 500, .3, 2); }
+      else if (bestM && bestM.target) { hitTarget(bestM.target, bestM.bull); if (a.isPlayer) tick(.06, 700, .3, 2); }
+      else if (bestM && bestM.world) { slashMark(bestM.p, bestM.n); if (a.isPlayer) { tick(.07, 2600, .22); tick(.08, 900, .28, 2); } }
       return true;
     }
     if (g.mag <= 0) { reload(a); return false; }
@@ -487,7 +504,7 @@
   }
   function updVm(dt, p) {
     var id = p.guns[p.slot].id, w = W[id], s = vmCur.userData.sight, ads = p.ads && !w.melee ? 1 : 0;
-    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt);
+    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .34);
     if (p.moving && p.ground) bobT += dt * 9;
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
     var art = vmCur.userData.art;
@@ -506,7 +523,12 @@
     var ps = SV.vmPose(id), h = 1 - k, gp = vmCur.userData.grip, az = W[id].side ? -.36 : -Math.max(.26, .24 - (gp ? gp[0] : 0));   // hip pose from the table; aiming brings the sights onto the view axis
     vmRoot.rotation.order = 'YXZ';
     vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
-    vmRoot.rotation.set(ps[3] * h + vmKick * (w.melee ? -.9 : .05) - vmSwap * 1.2, ps[4] * h + (w.melee ? -.5 * vmKick : 0), ps[5] * h);
+    vmRoot.rotation.set(ps[3] * h + (w.melee ? 0 : vmKick * .05) - vmSwap * 1.2, ps[4] * h, ps[5] * h);
+    if (w.melee && vmSwing > 0) {   // a slash: a short draw back to the right, a fast cut across to the lower left, then back to rest
+      var q = 1 - vmSwing, u = q < .12 ? -.35 * (q / .12) : q < .45 ? -.35 + 1.35 * (1 - Math.pow(1 - (q - .12) / .33, 2)) : 1 - (q - .45) / .55; if (q >= .45) u = u * u * (3 - 2 * u);
+      vmRoot.position.x -= .3 * u; vmRoot.position.y -= .07 * u - .03 * Math.sin(Math.max(0, u) * PI); vmRoot.position.z -= .1 * Math.max(0, u);
+      vmRoot.rotation.y += .75 * u; vmRoot.rotation.z += .65 * u; vmRoot.rotation.x -= .25 * Math.max(0, u);
+    }
     vmRoot.visible = !(w.scope && vmAds > .8);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
