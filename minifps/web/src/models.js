@@ -6,10 +6,10 @@ var SV = window.SV = window.SV || {};
   function camo(a, b, c) { var m = mk(a); m.userData.camo = [new T.Color(a).convertSRGBToLinear(), new T.Color(b).convertSRGBToLinear(), new T.Color(c).convertSRGBToLinear()]; return m; }
   var MAT = { steel: mk(0x2c3136), dark: mk(0x15181b), bright: mk(0x6f7a82), poly: mk(0x2b3035), poly2: mk(0x1a1d20), rubber: mk(0x0e1012),
     wood: mk(0x432a18), wood2: mk(0x332012), accent: mk(0xffb347), brass: mk(0xb08a3c), red: mk(0xb23a2a), lens: mk(0xffb347), glass: mk(0x0e1c24),
-    olive: mk(0x4b5a3a), olive2: mk(0x2f3724), sand: mk(0x6f6046), sand2: mk(0x5a4d38), bronze: mk(0x9a7440), mark: mk(0xc9ccc8), yel: mk(0xd1a82a), glove: mk(0x2c2d2e), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
+    olive: mk(0x4b5a3a), olive2: mk(0x2f3724), sand: mk(0x6f6046), sand2: mk(0x5a4d38), bronze: mk(0x9a7440), mark: mk(0xc9ccc8), yel: mk(0xd1a82a), glove: mk(0x2c2d2e), glove2: mk(0x1b1c1e), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
     sleeveA: camo(0x8a7a58, 0x6b5d40, 0x4d4733), sleeveB: camo(0x5d6a70, 0x44525a, 0x2c363d) };
 
-  ['poly', 'poly2', 'rubber', 'wood', 'wood2', 'olive', 'olive2', 'glove', 'fde', 'fde2', 'sand', 'sand2', 'skin', 'sleeveA', 'sleeveB'].forEach(function (n) { MAT[n].userData.soft = true; });
+  ['poly', 'poly2', 'rubber', 'wood', 'wood2', 'olive', 'olive2', 'glove', 'glove2', 'fde', 'fde2', 'sand', 'sand2', 'skin', 'sleeveA', 'sleeveB'].forEach(function (n) { MAT[n].userData.soft = true; });
 
   function kit(g) {
     function add(geo, mat, x, y, z, rx, ry, rz) { var m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, rz || 0); g.add(m); return m; }
@@ -274,8 +274,68 @@ var SV = window.SV = window.SV || {};
   // camera, fingers wrapped round the far side, thumb lying along the near side, wrist and sleeve running off-screen to E.
   // O: where it grips, ax: along the handle from little finger to index, pn: from the handle out through the palm,
   // sg: which way the fingers wrap (+1 / -1), r: handle radius.
+  // The hand itself: a real hand mesh (see art/README.txt) with its fingers closed by bending the joints, then baked to
+  // plain geometry. The model's joints are not linked to each other, so a bend carries the rest of that finger by hand.
+  var HR = null;
+  function handRest() {
+    if (HR) return HR; var sc = SV.assets.hand.scene, sm = null; sc.updateMatrixWorld(true); sc.traverse(function (o) { if (o.isSkinnedMesh) sm = o; });
+    var H = { sm: sm, pos: [], quat: [], ix: {} }, s = new T.Vector3();
+    sm.skeleton.bones.forEach(function (b, i) { var p = new T.Vector3(), q = new T.Quaternion(); b.matrixWorld.decompose(p, q, s); H.pos.push(p); H.quat.push(q); H.ix[b.name] = i; });
+    function J(n) { return H.pos[H.ix[n]]; }
+    H.ez = J('pinky-finger-phalanx-proximal').clone().sub(J('index-finger-phalanx-proximal')).normalize();          // across the knuckles, index to little finger
+    H.ex = new T.Vector3(1, 0, 0).addScaledVector(H.ez, -H.ez.x).normalize(); H.ey = new T.Vector3().crossVectors(H.ez, H.ex);   // out of the back of the hand; from the fingers to the wrist
+    H.mid = J('index-finger-phalanx-proximal').clone().add(J('pinky-finger-phalanx-proximal')).multiplyScalar(.5);
+    var v = new T.Vector3(), pa = sm.geometry.attributes.position, k, lo = 1e9, d = new T.Vector3();
+    for (k = 0; k < pa.count; k++) { v.fromBufferAttribute(pa, k).applyMatrix4(sm.bindMatrix); d.subVectors(v, H.mid); if (Math.abs(d.dot(H.ez)) < .012 && d.dot(H.ey) > .01 && d.dot(H.ey) < .03) lo = Math.min(lo, d.dot(H.ex)); }
+    H.palm = lo;   // how far the palm's surface lies from the knuckle line, along ex
+    return HR = H;
+  }
+  // curl: bend of each finger's three joints (radians), th: thumb [swing toward the palm, bend, bend], aim: where the forearm goes (model space)
+  function handBake(curl, th, aim, spread) {
+    var H = handRest(), pos = H.pos.map(function (p) { return p.clone(); }), quat = H.quat.map(function (q) { return q.clone(); }), R = new T.Quaternion(), i, k;
+    function bend(ch, j, axis, ang) { R.setFromAxisAngle(axis, ang); var p = pos[H.ix[ch[j]]].clone(); for (var m = j; m < ch.length; m++) { var b = H.ix[ch[m]]; pos[b].sub(p).applyQuaternion(R).add(p); quat[b].premultiply(R); } }
+    ['index', 'middle', 'ring', 'pinky'].forEach(function (f, n) {
+      var ch = ['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), c = curl[n] && curl[n].length ? curl[n] : curl;
+      if (spread) bend(ch, 0, H.ex, (n - 1.5) * spread);
+      for (k = 0; k < 3; k++) bend(ch, k, H.ez, -c[k]);
+    });
+    var tc = ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'], td = pos[H.ix['thumb-tip']].clone().sub(pos[H.ix['thumb-metacarpal']]).normalize(), tax = new T.Vector3().crossVectors(td, H.ex).normalize();
+    bend(tc, 0, H.ez, th[0]); if (th[3]) bend(tc, 0, H.ex, th[3]); bend(tc, 1, tax, th[1]); bend(tc, 2, tax, th[2]);
+    var wi = H.ix.wrist, wq = new T.Quaternion();
+    if (aim) { var a = aim.clone().normalize(), ang = Math.min(H.ey.angleTo(a), .7), axw = new T.Vector3().crossVectors(H.ey, a); if (axw.lengthSq() > 1e-8) { wq.setFromAxisAngle(axw.normalize(), ang); quat[wi].premultiply(wq); } }
+    var sm = H.sm, geo = sm.geometry, pa = geo.attributes.position, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight, inv = sm.skeleton.boneInverses, one = new T.Vector3(1, 1, 1),
+      M = pos.map(function (p, b) { return new T.Matrix4().compose(p, quat[b], one).multiply(inv[b]); }), out = new Float32Array(pa.count * 3), v = new T.Vector3(), t = new T.Vector3(), acc = new T.Vector3();
+    for (i = 0; i < pa.count; i++) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(sm.bindMatrix); acc.set(0, 0, 0);
+      for (k = 0; k < 4; k++) { var w = sw.array[i * 4 + k]; if (w) acc.addScaledVector(t.copy(v).applyMatrix4(M[si.array[i * 4 + k]]), w); }
+      out[i * 3] = acc.x; out[i * 3 + 1] = acc.y; out[i * 3 + 2] = acc.z;
+    }
+    var bg = new T.BufferGeometry(); bg.setAttribute('position', new T.BufferAttribute(out, 3)); bg.setIndex(geo.index.clone()); bg.computeVertexNormals();
+    return { geo: bg, wrist: pos[wi].clone(), arm: H.ey.clone().applyQuaternion(wq), H: H };
+  }
+  function realHand(g, O, ax, pn, wv, sg, r, E, sleeve, glove, o) {
+    if (o.off) O = O.clone().add(new T.Vector3(o.off[0], o.off[1], o.off[2]));
+    var top = o.top == null ? .033 : o.top, H = handRest(), pad = o.pad || MAT.poly2, re = o.re || r, rho = re + .01, a = o.up == null ? .02 : o.up, tight = o.tight || 0,
+      // a finger laid round a cylinder is a chain of straight bones each touching it at its middle: that fixes the three bends
+      b0 = Math.atan(a / rho) + Math.atan(.0225 / rho) + tight, b1 = Math.atan(.0225 / rho) + Math.atan(.013 / rho) + tight, b2 = Math.atan(.013 / rho) + Math.atan(.012 / rho),
+      curl = o.curl || [[b0 - .06, b1, b2], [b0, b1, b2], [b0 + .04, b1 + .03, b2], [b0 + .1, b1 + .08, b2]],
+      th = o.thumb || (o.thumbWrap ? [-.7, -.3, -.6, -.8] : [-.2, .2, .2, -.5]),
+      G = H.mid.clone().addScaledVector(H.ex, H.palm - re + (o.sink == null ? .006 : o.sink)).addScaledVector(H.ey, a),   // the handle's axis in the model: in front of the palm, a little behind the knuckles
+      hz = top - 1.5 * .0205, B = new T.Matrix4().makeBasis(pn, wv.clone().multiplyScalar(-sg), ax.clone().negate()), Bi = new T.Matrix4().makeBasis(H.ex, H.ey, H.ez).transpose();
+    // model -> grip: back of the hand to +pn, fingers-to-wrist to -sg*wv, index-to-little-finger down the handle
+    var X = new T.Matrix4().makeTranslation(O.x + ax.x * hz, O.y + ax.y * hz, O.z + ax.z * hz).multiply(B).multiply(Bi).multiply(new T.Matrix4().makeTranslation(-G.x, -G.y, -G.z));
+    var Wr = H.pos[H.ix.wrist].clone().applyMatrix4(X), aimW = new T.Vector3().subVectors(E, Wr).normalize(), aim = aimW.clone().applyMatrix4(new T.Matrix4().extractRotation(X).transpose());
+    var bk = handBake(curl, th, aim, o.spread), geo = bk.geo; geo.applyMatrix4(X);
+    if (sg < 0) { var ix = geo.index.array, q; for (q = 0; q < ix.length; q += 3) { var s0 = ix[q]; ix[q] = ix[q + 1]; ix[q + 1] = s0; } geo.computeVertexNormals(); }   // mirrored into a left hand
+    g.add(new T.Mesh(geo, MAT.glove2));
+    var d = bk.arm.clone().transformDirection(X), Wp = Wr.clone().addScaledVector(d, .006), d2 = new T.Vector3().subVectors(E, Wp).normalize();
+    limb(g, Wp.clone().addScaledVector(d2, -.012), Wp.clone().addScaledVector(d2, .012), [[0, .0325], [.15, .034], [.85, .034], [1, .0325]], pad, 16);          // wrist strap
+    limb(g, Wp.clone().addScaledVector(d2, .008), Wp.clone().addScaledVector(d2, .05), [[0, .033], [.2, .037], [1, .038]], glove, 16);                                   // cuff
+    limb(g, Wp.clone().addScaledVector(d2, .042), E, [[0, .042], [.04, .049], [.1, .051], [.5, .057], [1, .066]], sleeve, 18);
+  }
   function hand(g, O, ax, pn, sg, r, E, sleeve, glove, o) {
     o = o || {}; ax = ax.clone().normalize(); pn = pn.clone().addScaledVector(ax, -pn.dot(ax)).normalize(); var wv = new T.Vector3().crossVectors(ax, pn), pad = o.pad || MAT.poly2, i, j;
+    if (SV.assets && SV.assets.hand) { realHand(g, O, ax, pn, wv, sg, r, E, sleeve, glove, o); return; }
     function P(deg, rad, h) { var t = deg * PI / 180; return O.clone().addScaledVector(pn, Math.cos(t) * rad).addScaledVector(wv, Math.sin(t) * sg * rad).addScaledVector(ax, h); }
     // a curved slab wrapped round the handle: from angle a0 to a1, between two radii, between two heights along the handle
     function band(a0, a1, r0, r1, h0, h1, mat, bv) {
@@ -336,13 +396,13 @@ var SV = window.SV = window.SV || {};
     }
     else if (id === 'pistol') {
       var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
-      hand(g, c, up, V(-.55, 0, .85), 1, .017, V(c.x - .38, c.y - .2, .2), sl, gl, { top: .03, pad: MAT.poly2, thumbDir: V(.97, .22, -.12) });
-      hand(g, c.clone().add(V(.004, -.012, 0)), up, V(-.5, 0, -.87), -1, .03, V(c.x - .36, c.y - .24, -.26), sl, gl, { top: .026, pad: MAT.poly2, thumbDir: V(.97, .2, .12) });
+      hand(g, c, up, V(-.55, 0, .85), 1, .017, V(c.x - .38, c.y - .2, .2), sl, gl, { top: .03, pad: MAT.poly2, thumbDir: V(.97, .22, -.12), off: [.014, 0, 0], re: .022 });
+      hand(g, c.clone().add(V(.004, -.012, 0)), up, V(-.5, 0, -.87), -1, .03, V(c.x - .36, c.y - .24, -.26), sl, gl, { top: .026, pad: MAT.poly2, thumbDir: V(.97, .2, .12), off: [.014, 0, 0], tight: .15 });
     } else {
-      hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2 });
+      hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2, off: [.02, 0, 0], re: .024, sink: .008 });
       var cup = d.cup || (d.fore ? [d.fore[0], d.fore[1] + .028, .027] : null);   // [x, y of the part's axis, its radius]
       if (d.vgrip) hand(g, V(d.fore[0], d.fore[1] + .015, 0), V(.05, 1, 0), V(-.5, 0, -.87), -1, .017, V(d.fore[0] - .3, d.fore[1] - .22, -.3), sl, gl, { top: .028, pad: MAT.poly2, thumbWrap: true });   // a vertical foregrip is held like a second pistol grip
-      else if (cup) hand(g, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -1, -.35), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160] });
+      else if (cup) hand(g, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -1, -.35), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160], thumb: [-.3, .2, .2, .5] });
     }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));

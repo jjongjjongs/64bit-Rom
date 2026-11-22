@@ -2,7 +2,7 @@
 // The files live next to the page under a/ (see web/fetch_assets.py). If they are missing (a browser preview, a broken
 // download) everything falls back to the painted textures and built shapes, so the game still runs.
 (function () {
-  var T = THREE, A = SV.assets = { tex: {}, model: {}, box: {}, hdr: {}, art: {}, soldier: null, scan: null, ready: false, base: 'a/' };
+  var T = THREE, A = SV.assets = { tex: {}, model: {}, box: {}, hdr: {}, art: {}, soldier: null, hand: null, scan: null, ready: false, base: 'a/' };
   SV.preload = function (onProg, done) {
     if (!T.GLTFLoader) { A.ready = true; done(); return; }
     var fl = new T.FileLoader(), tl = new T.TextureLoader(), gl = new T.GLTFLoader(), total = 1, got = 0, fin = false;
@@ -18,6 +18,7 @@
       // the soldier's repainted skins (camouflage per team) and the model's own normal map; glTF textures are not flipped
       ['soldier_A', 'soldier_B', 'soldier_nrm'].forEach(function (n) { total++; var t = tl.load(A.base + 'art/' + n + '.jpg', function () { A.art[n] = t; step(); }, undefined, step); t.flipY = false; t.anisotropy = 4; if (n !== 'soldier_nrm') t.encoding = T.sRGBEncoding; });
       total++; gl.load(A.base + 'soldier.glb', function (g) { A.soldier = g; step(); }, undefined, step);
+      total++; gl.load(A.base + 'art/hand.glb', function (g) { A.hand = g; step(); }, undefined, step);   // a real hand mesh for the first-person gloves
       step();
     }, undefined, function () { A.ready = true; done(); });
   };
