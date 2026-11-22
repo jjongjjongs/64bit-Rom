@@ -275,29 +275,32 @@ var SV = window.SV = window.SV || {};
   // O: where it grips, ax: along the handle from little finger to index, pn: from the handle out through the palm,
   // sg: which way the fingers wrap (+1 / -1), r: handle radius.
   function hand(g, O, ax, pn, sg, r, E, sleeve, glove, o) {
-    o = o || {}; ax = ax.clone().normalize(); pn = pn.clone().addScaledVector(ax, -pn.dot(ax)).normalize(); var w = new T.Vector3().crossVectors(ax, pn).multiplyScalar(sg), i, j;
-    function P(deg, rad, h) { var t = deg * PI / 180; return O.clone().addScaledVector(pn, Math.cos(t) * rad).addScaledVector(w, Math.sin(t) * rad).addScaledVector(ax, h); }
-    function blob(c, radial, sx, sy, sz, mat) {   // an ellipsoid whose thin axis points away from the handle
-      var m = new T.Mesh(new T.SphereGeometry(1, 14, 10), mat), tz = radial.clone().normalize(), tx = new T.Vector3().crossVectors(ax, tz).normalize();
-      m.matrixAutoUpdate = false; m.matrix.makeBasis(tx.multiplyScalar(sx), ax.clone().multiplyScalar(sy), tz.multiplyScalar(sz)).setPosition(c); m.matrixWorldNeedsUpdate = true; g.add(m); return m;
+    o = o || {}; ax = ax.clone().normalize(); pn = pn.clone().addScaledVector(ax, -pn.dot(ax)).normalize(); var wv = new T.Vector3().crossVectors(ax, pn), pad = o.pad || MAT.poly2, i, j;
+    function P(deg, rad, h) { var t = deg * PI / 180; return O.clone().addScaledVector(pn, Math.cos(t) * rad).addScaledVector(wv, Math.sin(t) * sg * rad).addScaledVector(ax, h); }
+    // a curved slab wrapped round the handle: from angle a0 to a1, between two radii, between two heights along the handle
+    function band(a0, a1, r0, r1, h0, h1, mat, bv) {
+      var pts = [], n = Math.max(3, Math.ceil(Math.abs(a1 - a0) / 5)), k, t;
+      for (k = 0; k <= n; k++) { t = (a0 + (a1 - a0) * k / n) * PI / 180; pts.push(new T.Vector2(Math.cos(t) * r1, Math.sin(t) * sg * r1)); }
+      for (k = n; k >= 0; k--) { t = (a0 + (a1 - a0) * k / n) * PI / 180; pts.push(new T.Vector2(Math.cos(t) * r0, Math.sin(t) * sg * r0)); }
+      var geo = new T.ExtrudeGeometry(new T.Shape(pts), { depth: h1 - h0 - 2 * bv, bevelEnabled: true, bevelSize: bv, bevelThickness: bv, bevelSegments: 2, curveSegments: 1 }), m = new T.Mesh(geo, mat);
+      m.matrixAutoUpdate = false; m.matrix.makeBasis(pn, wv, ax).setPosition(O.clone().addScaledVector(ax, h0 + bv)); m.matrixWorldNeedsUpdate = true; g.add(m);
     }
-    var top = o.top == null ? .033 : o.top, fr = r + .0105, n = o.fingers || 4, A = o.wrap || [58, 118, 178, 232];   // how far round the handle each finger joint sits
-    for (i = 0; i < n; i++) {
-      var h = top - i * .0215, sh = i === 3 ? .88 : 1, rr = i === 3 ? .0092 : .0105, pts = A.map(function (a, k) { return P(a * (k > 1 ? sh : 1), fr + (k === 0 ? .004 : 0), h); });
-      for (j = 0; j < 3; j++) { limb(g, pts[j], pts[j + 1], [[0, rr * (1 - j * .06)], [1, rr * (.94 - j * .06)]], glove, 8); ball(g, pts[j], rr * (j ? 1.04 : 1.25), glove); }
-      ball(g, pts[3], rr * .86, glove);
-      ball(g, P(44, r + .0225, h), rr * 1.3, o.pad || glove, 1, 1, .8);   // knuckle under a hard pad
+    var top = o.top == null ? .033 : o.top, n = o.fingers || 4, A = o.wrap || [50, 112, 168, 212], R = [.024, .0135, .011, .0105], step = .0205, hTop = top + .0115, hBot = top - (n - 1) * step - .0115;
+    band(-40, 46, r + .007, r + .026, hBot + .003, hTop - .003, glove, .007);                                   // the palm, wrapped round the handle
+    band(-22, 20, r + .0325, r + .0345, hBot + .012, hTop - .011, MAT.poly, .002);                // stitched panel on the back of the hand
+    for (i = 0; i < n; i++) { var kb = ball(g, P(44, r + .0295, top - i * step), .0108, pad, 1, .86, .62); kb.lookAt(P(44, r + .2, top - i * step)); }   // a hard cap over each knuckle
+    for (i = 0; i < n; i++) {                                                                     // fingers: three joints each, tapering, closed round the far side
+      var h = top - i * step, sh = i === 3 ? .92 : i === 0 ? 1.02 : 1, rr = i === 3 ? .0086 : .0098, pts = A.map(function (a, k) { return P(k ? a * sh : a, r + R[k], h); });
+      for (j = 0; j < 3; j++) { limb(g, pts[j], pts[j + 1], [[0, rr * (1 - j * .08)], [1, rr * (.93 - j * .08)]], glove, 10); ball(g, pts[j + 1], rr * (.96 - j * .08), glove); }
+      limb(g, pts[1].clone().lerp(pts[2], .25), pts[1].clone().lerp(pts[2], .75), [[0, rr * 1.06], [1, rr * 1.0]], pad, 10);   // a reinforced strip on each finger
     }
-    var mid = top - (n - 1) * .0215 / 2, span = (n - 1) * .0215 / 2 + .014;
-    blob(P(22, r + .017, mid), P(22, 1, 0).sub(O).addScaledVector(ax, 0), .04, span, .02, glove);                                  // back of the hand
-    blob(P(-12, r + .02, mid - .004), P(-12, 1, 0).sub(O), .03, span * .95, .024, glove);                                           // heel of the palm
-    var t0 = P(o.thumbAt || -30, r + (o.thumbAt ? .008 : .02), top + .004), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .034) : o.thumbWrap ? P(-88, r + .013, top + .008) : P(-78, r + .013, top + .03), t2 = td ? t1.clone().addScaledVector(td, .028).addScaledVector(pn, -.006) : o.thumbWrap ? P(-145, r + .012, top + .01) : P(-122, r + .012, top + .048);
-    limb(g, t0, t1, [[0, .0145], [1, .0125]], glove, 8); limb(g, t1, t2, [[0, .0122], [1, .0105]], glove, 8); ball(g, t0, .0165, glove); ball(g, t1, .0128, glove); ball(g, t2, .0105, glove);
-    // wrist, cuff and sleeve
-    var Hh = P(-5, r + .026, mid - .012), d = new T.Vector3().subVectors(E, Hh).normalize(), Wp = Hh.clone().addScaledVector(d, .05);
-    limb(g, Hh.clone().addScaledVector(d, -.01), Wp, [[0, .027], [.5, .029], [1, .03]], glove, 12); limb(g, Wp, Wp.clone().addScaledVector(d, .04), [[0, .033], [.2, .037], [1, .038]], glove, 12);
-    limb(g, Wp.clone().addScaledVector(d, .035), E, [[0, .043], [.04, .05], [.1, .052], [.5, .058], [1, .068]], sleeve, 18);
-    limb(g, Wp.clone().addScaledVector(d, .028), Wp.clone().addScaledVector(d, .062), [[0, .0445], [.15, .047], [.85, .047], [1, .0445]], o.pad || glove, 16);   // wrist strap over the cuff
+    var t0 = P(o.thumbAt || -38, r + .02, top + .002), td = o.thumbDir, t1 = td ? t0.clone().addScaledVector(td, .03) : o.thumbWrap ? P(-84, r + .013, top + .01) : P(-78, r + .013, top + .026), t2 = td ? t1.clone().addScaledVector(td, .024).addScaledVector(pn, -.004) : o.thumbWrap ? P(-128, r + .011, top + .012) : P(-118, r + .011, top + .04);
+    ball(g, t0, .0165, glove); limb(g, t0, t1, [[0, .0128], [1, .0112]], glove, 10); ball(g, t1, .0112, glove); limb(g, t1, t2, [[0, .0108], [1, .009]], glove, 10); ball(g, t2, .009, glove);
+    // wrist, strap, cuff and sleeve
+    var Hh = P(-8, r + .022, (hTop + hBot) / 2 - .008), d = new T.Vector3().subVectors(E, Hh).normalize(), Wp = Hh.clone().addScaledVector(d, .05);
+    limb(g, Hh.clone().addScaledVector(d, -.012), Wp, [[0, .026], [.4, .0285], [1, .029]], glove, 14); limb(g, Wp.clone().addScaledVector(d, -.014), Wp.clone().addScaledVector(d, .008), [[0, .0305], [.15, .032], [.85, .032], [1, .0305]], pad, 14);
+    limb(g, Wp, Wp.clone().addScaledVector(d, .04), [[0, .031], [.2, .036], [1, .037]], glove, 14);
+    limb(g, Wp.clone().addScaledVector(d, .035), E, [[0, .041], [.04, .048], [.1, .05], [.5, .056], [1, .066]], sleeve, 18);
   }
 
   // First-person weapon: the gun plus two gloved hands and sleeves.
