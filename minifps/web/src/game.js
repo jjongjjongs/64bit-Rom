@@ -147,9 +147,9 @@
     for (i = 0; i < 48; i++) { m = new T.Mesh(dg, dm); m.visible = false; fx.add(m); decals.push(m); }
     /* knife cuts: a thin gash with a pale scraped edge, drawn once */
     var sc = document.createElement('canvas'), sx; sc.width = 256; sc.height = 64; sx = sc.getContext('2d');
-    sx.strokeStyle = 'rgba(205,200,188,.55)'; sx.lineWidth = 7; sx.lineCap = 'round'; sx.beginPath(); sx.moveTo(14, 36); sx.quadraticCurveTo(128, 20, 242, 30); sx.stroke();
-    sx.strokeStyle = 'rgba(12,11,10,.95)'; sx.lineWidth = 4.6; sx.beginPath(); sx.moveTo(16, 35); sx.quadraticCurveTo(128, 21, 240, 30); sx.stroke();
-    var st = new T.CanvasTexture(sc), sg2 = new T.PlaneGeometry(.5, .125), sm2 = new T.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    /* a plain thin scratch for now, with no pale outline, until it is redrawn from a reference */
+    sx.lineCap = 'round'; sx.strokeStyle = 'rgba(14,13,12,.8)'; sx.lineWidth = 2.4; sx.beginPath(); sx.moveTo(16, 35); sx.quadraticCurveTo(128, 21, 240, 30); sx.stroke();
+    var st = new T.CanvasTexture(sc), sg2 = new T.PlaneGeometry(.3, .075), sm2 = new T.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     for (i = 0; i < 12; i++) { m = new T.Mesh(sg2, sm2); m.visible = false; fx.add(m); slashes.push(m); }
     var cg = new T.CylinderGeometry(.0055, .0055, .024, 6), cm = new T.MeshStandardMaterial({ color: 0xc9a14a, roughness: .3, metalness: .9 });
     for (i = 0; i < 12; i++) { m = new T.Mesh(cg, cm); m.visible = false; fx.add(m); shells.push({ m: m, life: 0, v: new T.Vector3(), floor: 0, hit: false }); }
@@ -557,7 +557,7 @@
     if (inp.reload) { reload(p); inp.reload = false; }
     if (inp.nade) { throwNade(p, vO, vD); inp.nade = false; }
     var want = inp.fire || (cfg.autoFire && onTarget && !w.melee);
-    if (want && (w.auto || !G.fireHeld || (cfg.autoFire && onTarget && !inp.fire))) { vmCam.updateMatrixWorld(); vmRoot.updateMatrixWorld(); muzzleWorld(p, vM); fire(p, vO, vD, vM); }
+    if (want && (w.auto || w.melee || !G.fireHeld || (cfg.autoFire && onTarget && !inp.fire))) { vmCam.updateMatrixWorld(); vmRoot.updateMatrixWorld(); muzzleWorld(p, vM); fire(p, vO, vD, vM); }
     G.fireHeld = inp.fire;
     if (g.mag <= 0 && !w.melee && g.reload <= 0 && g.res > 0) reload(p);
   }
