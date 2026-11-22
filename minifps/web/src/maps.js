@@ -150,8 +150,11 @@
       geo.dispose(); if (g !== geo) g.dispose();
     }
     function coll(x, z, w, d, h, y0) { b.boxes.push({ minx: x - w / 2, maxx: x + w / 2, miny: y0, maxy: y0 + h, minz: z - d / 2, maxz: z + d / 2 }); }
+    // What you can see, you can bump into and hit: pieces drawn without their own collision still get one, unless they are
+    // paint on the floor, a kerb you step over, or too thin to matter. `b.ghost` switches this off for scenery out of reach.
+    function real(w, d, h) { return !b.ghost && h >= .25 && Math.max(w, d) >= .2 && Math.min(w, d) >= .04; }
     var b = {
-      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {}, tier: 0,   // tier 1: small clutter and decals, tier 2: medium props; both are hidden with distance (see map.lod)
+      boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {}, tier: 0, ghost: false,   // tier 1: small clutter and decals, tier 2: medium props; both are hidden with distance (see map.lod)
       has: function (id) { return !!(SV.assets && SV.assets.model[id]); },
       // one copy of a scanned model: position, turn about the vertical, scale (number or [x, y, z]), and an optional tilt to lay it down
       model: function (id, x, y, z, ry, s, rx) {
@@ -165,18 +168,21 @@
       },
       // a lamp that really lights its surroundings; the game keeps the nearest few switched on
       light: function (x, y, z, c, i, d) { if (!b.day) b.lights.push({ x: x, y: y, z: z, c: new T.Color(c).convertSRGBToLinear(), i: i, d: d }); },
-      box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false) coll(x, z, w, d, h, y0); },
-      cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false) coll(x, z, r * 1.7, r * 1.7, h, y0); },
-      geo: function (g, c, t, opt) { push(g, c, t || 'plain', opt); },
+      box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false || real(w, d, h)) coll(x, z, w, d, h, y0); },
+      cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false || (!b.ghost && h >= .3 && r >= .05)) coll(x, z, Math.max(r, r2 == null ? r : r2) * 1.7, Math.max(r, r2 == null ? r : r2) * 1.7, h, y0); },
+      geo: function (g, c, t, opt) {   // free-form pieces (pitched roofs, rocks, tree crowns): their bounding box stands in
+        if (!b.ghost && !(opt && opt.pass)) { g.computeBoundingBox(); var q = g.boundingBox, gw = q.max.x - q.min.x, gd = q.max.z - q.min.z, gh = q.max.y - q.min.y; if (gh >= .3 && gw < 16 && gd < 16 && q.min.y > -.2) coll((q.min.x + q.max.x) / 2, (q.min.z + q.max.z) / 2, gw * .85, gd * .85, gh, q.min.y); }
+        push(g, c, t || 'plain', opt); },
       // a box turned about the vertical axis. Its collision record keeps the box in its own frame (ox, oz, cos, sin).
       rbox: function (x, z, w, d, h, c, y0, ang, solid, t, soft) {
         y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.rotateY(ang); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null });
-        if (solid !== false) b.rsolid(x, z, w, d, h, y0, ang, soft);
+        if (solid !== false || real(w, d, h)) b.rsolid(x, z, w, d, h, y0, ang, soft);
       },
       rsolid: function (x, z, w, d, h, y0, ang, soft) { var q = { minx: -w / 2, maxx: w / 2, miny: y0 || 0, maxy: (y0 || 0) + h, minz: -d / 2, maxz: d / 2, rot: true, ox: x, oz: z, c: Math.cos(ang), s: Math.sin(ang) }; if (soft) q.soft = true; b.boxes.push(q); },
       solid: function (x, z, w, d, h, y0, soft) { coll(x, z, w, d, h, y0 || 0); if (soft) b.boxes[b.boxes.length - 1].soft = true; },   // soft: stops people, not bullets
       seg: function (x0, y0, z0, x1, y1, z1, w, c, t) {              // a beam between two points
         var a = new T.Vector3(x0, y0, z0), e = new T.Vector3(x1, y1, z1), dir = e.clone().sub(a), len = dir.length(), g = new T.BoxGeometry(w, len, w), m = new T.Matrix4();
+        if (!b.ghost && w >= .05 && len >= .3) { var hl = Math.hypot(x1 - x0, z1 - z0), ylo = Math.min(y0, y1) - w / 2, yh = Math.abs(y1 - y0) + w; if (hl < .05) coll(x0, z0, w, w, yh, ylo); else b.rsolid((x0 + x1) / 2, (z0 + z1) / 2, hl + w, w, yh, ylo, -Math.atan2(z1 - z0, x1 - x0)); }   // beams, rails, pipes: a slab under the run
         m.compose(a.add(e).multiplyScalar(.5), new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize()), new T.Vector3(1, 1, 1)); g.applyMatrix4(m); push(g, c, t || 'metal');
       },
       glow: function (x, y, z, w, h, d, c) { var g = new T.BoxGeometry(w, h, d); g.translate(x, y, z); push(g, c, 'glow', { flat: true }); },
@@ -324,8 +330,8 @@
     [-19, 19].forEach(function (x) { b.box(x, 0, .4, 26, 2.2, 0xb9b9b2, 0, true, 'block'); b.box(x, 0, .3, 26, h - 2.2, 0x8f9aa0, 2.2, false, 'panel'); });
     b.solid(0, -13, 38.4, .4, h); b.solid(0, 13, 38.4, .4, h); b.solid(-19, 0, .4, 26, h); b.solid(19, 0, .4, 26, h);
     for (i = -18; i <= 18; i += 6) { [-12.65, 12.65].forEach(function (z) { b.box(i, z, .28, .3, h, 0x4f585e, 0, false, 'metal'); });
-      b.box(i, 0, .2, 25.4, .22, 0x4f585e, h - .25, false, 'metal'); b.box(i, 0, .2, 25.4, .22, 0x4f585e, h - 1.5, false, 'metal');
-      for (k = -12; k < 12; k += 3) { b.seg(i, h - 1.4, k, i, h - .2, k + 1.5, .1, 0x4f585e); b.seg(i, h - .2, k + 1.5, i, h - 1.4, k + 3, .1, 0x4f585e); } }
+      b.box(i, 0, .2, 25.4, .22, 0x4f585e, h - .25, false, 'metal'); b.box(i, 1.2, .2, 23, .22, 0x4f585e, h - 1.5, false, 'metal');   /* the lower chord stops short of the catwalk so you can walk under the roof there */
+      for (k = -9; k < 12; k += 3) { b.seg(i, h - 1.4, k, i, h - .2, k + 1.5, .1, 0x4f585e); b.seg(i, h - .2, k + 1.5, i, h - 1.4, k + 3, .1, 0x4f585e); } }
     [-8, 8].forEach(function (z) { b.box(0, z, 38, .14, .14, 0x4f585e, h - 1.5, false, 'metal'); });
     var rf = new T.BoxGeometry(39, .3, 27); rf.translate(0, h + .15, 0); b.geo(rf, 0x5d666c, 'panel', {});
     for (i = -15; i <= 15; i += 6) { b.light(i, h - .5, -5, 0xd6e6f2, 1.35, 15); b.light(i, h - .5, 6, 0xd6e6f2, 1.35, 15); b.glow(i, h - .04, -5, 1.6, .06, 6, C.sky); b.glow(i, h - .04, 6, 1.6, .06, 6, C.sky); }
