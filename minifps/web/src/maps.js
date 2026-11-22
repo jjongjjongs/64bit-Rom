@@ -152,7 +152,7 @@
     function coll(x, z, w, d, h, y0) { b.boxes.push({ minx: x - w / 2, maxx: x + w / 2, miny: y0, maxy: y0 + h, minz: z - d / 2, maxz: z + d / 2 }); }
     // What you can see, you can bump into and hit: pieces drawn without their own collision still get one, unless they are
     // paint on the floor, a kerb you step over, or too thin to matter. `b.ghost` switches this off for scenery out of reach.
-    function real(w, d, h) { return !b.ghost && h >= .25 && Math.max(w, d) >= .2 && Math.min(w, d) >= .04; }
+    function real(w, d, h, y0) { return !b.ghost && (h >= .25 || (y0 > .5 && h >= .06)) && Math.max(w, d, h) >= .2 && Math.min(w, d) >= .04; }   // off the ground even a thin beam or sheet counts
     var b = {
       boxes: [], spawns: { A: [], B: [] }, lights: [], day: false, inst: {}, tier: 0, ghost: false,   // tier 1: small clutter and decals, tier 2: medium props; both are hidden with distance (see map.lod)
       has: function (id) { return !!(SV.assets && SV.assets.model[id]); },
@@ -168,7 +168,7 @@
       },
       // a lamp that really lights its surroundings; the game keeps the nearest few switched on
       light: function (x, y, z, c, i, d) { if (!b.day) b.lights.push({ x: x, y: y, z: z, c: new T.Color(c).convertSRGBToLinear(), i: i, d: d }); },
-      box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false || real(w, d, h)) coll(x, z, w, d, h, y0); },
+      box: function (x, z, w, d, h, c, y0, solid, t, fit) { y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null, fit: fit }); if (solid !== false || real(w, d, h, y0)) coll(x, z, w, d, h, y0); },
       cyl: function (x, z, r, h, c, y0, solid, t, r2, seg) { y0 = y0 || 0; var g = new T.CylinderGeometry(r2 == null ? r : r2, r, h, seg || 12); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null }); if (solid !== false || (!b.ghost && h >= .3 && r >= .05)) coll(x, z, Math.max(r, r2 == null ? r : r2) * 1.7, Math.max(r, r2 == null ? r : r2) * 1.7, h, y0); },
       geo: function (g, c, t, opt) {   // free-form pieces (pitched roofs, rocks, tree crowns): their bounding box stands in
         if (!b.ghost && !(opt && opt.pass)) { g.computeBoundingBox(); var q = g.boundingBox, gw = q.max.x - q.min.x, gd = q.max.z - q.min.z, gh = q.max.y - q.min.y; if (gh >= .3 && gw < 16 && gd < 16 && q.min.y > -.2) coll((q.min.x + q.max.x) / 2, (q.min.z + q.max.z) / 2, gw * .85, gd * .85, gh, q.min.y); }
@@ -176,7 +176,7 @@
       // a box turned about the vertical axis. Its collision record keeps the box in its own frame (ox, oz, cos, sin).
       rbox: function (x, z, w, d, h, c, y0, ang, solid, t, soft) {
         y0 = y0 || 0; var g = new T.BoxGeometry(w, h, d); g.rotateY(ang); g.translate(x, y0 + h / 2, z); push(g, c, t || 'plain', { y0: y0 < .05 ? y0 : null });
-        if (solid !== false || real(w, d, h)) b.rsolid(x, z, w, d, h, y0, ang, soft);
+        if (solid !== false || real(w, d, h, y0)) b.rsolid(x, z, w, d, h, y0, ang, soft);
       },
       rsolid: function (x, z, w, d, h, y0, ang, soft) { var q = { minx: -w / 2, maxx: w / 2, miny: y0 || 0, maxy: (y0 || 0) + h, minz: -d / 2, maxz: d / 2, rot: true, ox: x, oz: z, c: Math.cos(ang), s: Math.sin(ang) }; if (soft) q.soft = true; b.boxes.push(q); },
       solid: function (x, z, w, d, h, y0, soft) { coll(x, z, w, d, h, y0 || 0); if (soft) b.boxes[b.boxes.length - 1].soft = true; },   // soft: stops people, not bullets
@@ -195,17 +195,18 @@
       },
       cont: function (x, z, rot, c, level, len, deco) {
         len = len || 6.1; var y = (level || 0) * 2.5, w = rot ? 2.5 : len, d = rot ? len : 2.5, sx, sz;
-        b.box(x, z, w, d, 2.5, c, y, true, 'corr');
+        b.box(x, z, w, d, 2.5, c, y, true, 'corr'); var gh = b.ghost; b.ghost = true;
         for (sx = -1; sx <= 1; sx += 2) for (sz = -1; sz <= 1; sz += 2) b.box(x + sx * (w / 2 - .06), z + sz * (d / 2 - .06), .16, .16, 2.52, 0x33383c, y - .01, false, 'metal');
-        if (deco === false) return;
+        b.ghost = gh; if (deco === false) return;
         if (rot) b.quad('door', x, y + 1.25, z + len / 2 + .015, 2.4, 2.4, 0, { color: c }); else b.quad('door', x + len / 2 + .015, y + 1.25, z, 2.4, 2.4, PI / 2, { color: c });
       },
       mark: function (text, x, y, z, w, h, ry, fg, flat) { b.quad('m:' + text + fg, x, y, z, w, h, ry, { mode: 'alpha', make: label(text, fg || '#ecebe4'), flat: flat }); },
       crate: function (x, z, s, c, y0, h) {
         h = h || s; y0 = y0 || 0; b.box(x, z, s, s, h, c || C.wood, y0, !(y0 > .5), 'crate', true);
-        var t = Math.min(.09, s * .07), e = s / 2 + .012, q = 0x5c4526, i, j;   // battens proud of the faces: four uprights, top and bottom frames
+        var t = Math.min(.09, s * .07), e = s / 2 + .012, q = 0x5c4526, i, j, gh = b.ghost; b.ghost = true;   // the battens sit on the crate's own box: no records of their own   // battens proud of the faces: four uprights, top and bottom frames
         for (i = -1; i <= 1; i += 2) for (j = -1; j <= 1; j += 2) b.box(x + i * (e - t / 2), z + j * (e - t / 2), t, t, h + .02, q, y0 - .01, false, 'crate');
         [y0 + t / 2, y0 + h - t / 2].forEach(function (y) { for (i = -1; i <= 1; i += 2) { b.box(x + i * (e - t / 2), z, t, s, t, q, y - t / 2, false, 'crate'); b.box(x, z + i * (e - t / 2), s, t, t, q, y - t / 2, false, 'crate'); } });
+        b.ghost = gh;
       },
       barrel: function (x, z, c, y0) { y0 = y0 || 0; var id = c === C.red ? 'Barrel_01' : 'barrel_03'; if (b.model(id, x, y0, z, Math.random() * 6.28, id === 'barrel_03' ? .94 : 1)) { if (y0 < .5) coll(x, z, .58, .58, .88, y0); return; } b.cyl(x, z, .29, .88, c, y0, y0 < .5, 'metal', .29, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .28, false, 'plain', .305, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .58, false, 'plain', .305, 14); b.cyl(x, z, .25, .02, 0x1c1f22, y0 + .875, false, 'plain', .25, 14); },
       tires: function (x, z, n) { if (b.has('old_tyre')) { for (var j = 0; j < n; j++) b.model('old_tyre', x + rnd(-.04, .04), .11 + j * .215, z + rnd(-.04, .04), Math.random() * 6.28, 1.35, PI / 2); coll(x, z, .8, .8, n * .215, 0); return; } for (var i = 0; i < n; i++) { var g = new T.TorusGeometry(.3, .13, 6, 14); g.rotateX(PI / 2); g.translate(x + rnd(-.03, .03), .13 + i * .25, z + rnd(-.03, .03)); push(g, 0x17191b, 'plain', {}); } coll(x, z, .8, .8, n * .25, 0); },
