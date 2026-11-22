@@ -324,6 +324,11 @@ var SV = window.SV = window.SV || {};
       hz = top - 1.5 * .0205, B = new T.Matrix4().makeBasis(pn, wv.clone().multiplyScalar(-sg), ax.clone().negate()), Bi = new T.Matrix4().makeBasis(H.ex, H.ey, H.ez).transpose();
     // model -> grip: back of the hand to +pn, fingers-to-wrist to -sg*wv, index-to-little-finger down the handle
     var X = new T.Matrix4().makeTranslation(O.x + ax.x * hz, O.y + ax.y * hz, O.z + ax.z * hz).multiply(B).multiply(Bi).multiply(new T.Matrix4().makeTranslation(-G.x, -G.y, -G.z));
+    if (o.yaw) {   // turn the hand flat on its palm so it runs on in line with the forearm, as far as o.yaw allows
+      var Pc = O.clone().addScaledVector(pn, re), f0 = wv.clone().multiplyScalar(-sg), tg = new T.Vector3().subVectors(E, Pc); tg.addScaledVector(pn, -tg.dot(pn)).normalize();
+      var ya = Math.atan2(new T.Vector3().crossVectors(f0, tg).dot(pn), f0.dot(tg)); ya = Math.max(-o.yaw, Math.min(o.yaw, ya));
+      X.premultiply(new T.Matrix4().makeTranslation(-Pc.x, -Pc.y, -Pc.z)).premultiply(new T.Matrix4().makeRotationAxis(pn, ya)).premultiply(new T.Matrix4().makeTranslation(Pc.x, Pc.y, Pc.z));
+    }
     var Wr = H.pos[H.ix.wrist].clone().applyMatrix4(X), aimW = new T.Vector3().subVectors(E, Wr).normalize(), aim = aimW.clone().applyMatrix4(new T.Matrix4().extractRotation(X).transpose());
     var bk = handBake(curl, th, aim, o.spread), geo = bk.geo; geo.applyMatrix4(X);
     if (sg < 0) { var ix = geo.index.array, q; for (q = 0; q < ix.length; q += 3) { var s0 = ix[q]; ix[q] = ix[q + 1]; ix[q + 1] = s0; } geo.computeVertexNormals(); }   // mirrored into a left hand
@@ -387,12 +392,12 @@ var SV = window.SV = window.SV || {};
     if (id !== 'pistol' && id !== 'knife' && id !== 'shotgun') { g.updateMatrixWorld(true); g.children.forEach(function (c) { bx.setFromObject(c); if ((bx.min.x + bx.max.x) / 2 < -.2) cut.push(c); }); cut.forEach(function (c) { g.remove(c); }); }
     var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
     if (id === 'knife') {
-      // Held as in the reference picture: blade up and to the left with its flat toward the eye, the back of the hand and
-      // the knuckles facing the viewer, fingers wrapped round the far side, forearm coming up from the lower right.
+      // Held as in the reference picture: blade up and to the left, the palm on the right of the handle so the back of the
+      // hand shows on the right, fingers wrapped round to the left, forearm coming up from the lower right in line with the hand.
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
       var ax = V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
-      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.94, 0, .35), 1, .016, kc.clone().add(V(-.25, -.3, .25)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196] });
+      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.5, 0, .87), 1, .016, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
     else if (id === 'pistol') {
       var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
@@ -402,7 +407,7 @@ var SV = window.SV = window.SV || {};
       hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2, off: [.02, 0, 0], re: .024, sink: .008 });
       var cup = d.cup || (d.fore ? [d.fore[0], d.fore[1] + .028, .027] : null);   // [x, y of the part's axis, its radius]
       if (d.vgrip) hand(g, V(d.fore[0], d.fore[1] + .015, 0), V(.05, 1, 0), V(-.5, 0, -.87), -1, .017, V(d.fore[0] - .3, d.fore[1] - .22, -.3), sl, gl, { top: .028, pad: MAT.poly2, thumbWrap: true });   // a vertical foregrip is held like a second pistol grip
-      else if (cup) hand(g, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -1, -.35), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160], thumb: [-.3, .2, .2, .5] });
+      else if (cup) hand(g, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -.8, -.6), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160], yaw: .85 });
     }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
