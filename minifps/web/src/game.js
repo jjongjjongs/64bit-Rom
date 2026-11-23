@@ -518,25 +518,27 @@
     if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
   }
   /* while the throw button is held: the path the grenade would take from here, and a ring where it will go off */
-  var arc = null, ARC_N = 60, arcN = { pos: new T.Vector3(), vel: new T.Vector3() };
+  var arc = null, ARC_N = 60, arcN = { pos: new T.Vector3(), vel: new T.Vector3() }, arcP = new Float32Array(ARC_N * 3), aA = new T.Vector3(), aB = new T.Vector3(), aT = new T.Vector3(), aS = new T.Vector3();
+  /* The path is a flat band that always faces the camera and keeps the same width on screen: a light core inside a dark edge,
+     so it reads against a bright floor and a dark wall alike (a one-pixel line vanishes on a phone screen). */
+  function band(mat) { var g = new T.BufferGeometry(), ix = []; g.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(ARC_N * 6), 3)); for (var k = 0; k < ARC_N - 1; k++) ix.push(k * 2, k * 2 + 1, k * 2 + 2, k * 2 + 1, k * 2 + 3, k * 2 + 2); g.setIndex(ix); var m = new T.Mesh(g, mat); m.frustumCulled = false; return m; }
+  function bandSet(m, px) { var P = m.geometry.attributes.position, wk = 2 * Math.tan(cam.fov * PI / 360) / (canvas.clientHeight || 400) * px * .5;
+    for (var k = 0; k < ARC_N; k++) { aA.fromArray(arcP, k * 3); aB.fromArray(arcP, Math.min(k + 1, ARC_N - 1) * 3); if (k === ARC_N - 1) aT.fromArray(arcP, (k - 1) * 3).sub(aA).negate(); else aT.subVectors(aB, aA);
+      aS.subVectors(aA, cam.position); var d = aS.length(); aS.cross(aT).normalize().multiplyScalar(d * wk); P.setXYZ(k * 2, aA.x - aS.x, aA.y - aS.y, aA.z - aS.z); P.setXYZ(k * 2 + 1, aA.x + aS.x, aA.y + aS.y, aA.z + aS.z); }
+    P.needsUpdate = true; }
   function nadeArc(show, o, dir) {
-    if (!arc) { if (!show) return; var gm = new T.BufferGeometry(); gm.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(ARC_N * 3), 3));
-      arc = { line: new T.Line(gm, new T.LineBasicMaterial({ color: new T.Color(3, 1.9, .6), transparent: true, opacity: .55, depthTest: false })), dots: new T.Points(gm, new T.PointsMaterial({ color: new T.Color(3, 1.9, .6), size: 7, sizeAttenuation: false, transparent: true, opacity: .95, depthTest: false })), ring: new T.Mesh(new T.RingGeometry(.3, .4, 28), new T.MeshBasicMaterial({ color: new T.Color(3, 1.9, .6), transparent: true, opacity: .9, depthTest: false, side: T.DoubleSide })) };
-      arc.ring.rotation.x = -PI / 2; var g2 = new T.BufferGeometry(); g2.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(20 * 3), 3)); arc.dots.geometry = g2; arc.line.frustumCulled = arc.dots.frustumCulled = false; arc.line.renderOrder = arc.dots.renderOrder = arc.ring.renderOrder = 5; }
-    if (arc.line.parent !== scene) { scene.add(arc.line); scene.add(arc.dots); scene.add(arc.ring); }
-    arc.line.visible = arc.dots.visible = arc.ring.visible = show; if (!show) return;
-    var smoke = G.match.nade === 'smoke', T2 = smoke ? 1.7 : 2.6, dt = T2 / (ARC_N - 1), P = arc.line.geometry.attributes.position, n = arcN;
+    if (!arc) { if (!show) return; var mk = function (r, gb, op, ord) { var m = new T.MeshBasicMaterial({ color: new T.Color(r, gb, gb), transparent: true, opacity: op, depthTest: false, side: T.DoubleSide, fog: false }); m.userData.ord = ord; return m; };
+      arc = { dark: band(mk(.02, .02, .6, 5)), light: band(mk(.97, .97, .95, 6)), ringD: new T.Mesh(new T.RingGeometry(.2, .46, 32), mk(.02, .02, .55, 5)), ring: new T.Mesh(new T.RingGeometry(.27, .39, 32), mk(.97, .97, .95, 6)) };
+      arc.all = [arc.dark, arc.light, arc.ringD, arc.ring]; arc.all.forEach(function (m) { m.renderOrder = m.material.userData.ord; }); arc.ring.rotation.x = arc.ringD.rotation.x = -PI / 2; }
+    if (arc.dark.parent !== scene) arc.all.forEach(function (m) { scene.add(m); });
+    arc.all.forEach(function (m) { m.visible = show; }); if (!show) return;
+    var smoke = G.match.nade === 'smoke', T2 = smoke ? 1.7 : 2.6, dt = T2 / (ARC_N - 1), n = arcN;
     n.pos.copy(o).addScaledVector(dir, .5); n.vel.copy(dir).multiplyScalar(15); n.vel.y += 4;
     /* drawn as leaving the hand (a little right of and below the eye) and joining the true path, so it is not seen end-on */
     var rx = -dir.z, rz = dir.x, rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
-    for (var i = 0; i < ARC_N; i++) { var f = Math.max(0, 1 - i / 14); f *= f; P.setXYZ(i, n.pos.x + rx * .26 * f, n.pos.y - .2 * f, n.pos.z + rz * .26 * f); if (i < ARC_N - 1) { nadeStep(n, dt * .5); nadeStep(n, dt * .5); } }
-    var P2 = arc.dots.geometry.attributes.position; for (var j = 0; j < 20; j++) P2.setXYZ(j, P.getX(j * 3 + 1), P.getY(j * 3 + 1), P.getZ(j * 3 + 1)); P2.needsUpdate = true;
-    P.needsUpdate = true; arc.ring.position.set(n.pos.x, n.pos.y + .02, n.pos.z); arc.ring.scale.setScalar(smoke ? 2.2 : 1.6);
-    /* looks to choose between (tests set window.ARCV): 1 thin pale line, 2 small sparse dots, 3 faint line and the ring only */
-    var V = window.ARCV || 1, lm = arc.line.material, dm = arc.dots.material, rm = arc.ring.material;
-    if (arc.v !== V) { arc.v = V; lm.color.setRGB(.92, .9, .85); dm.color.setRGB(.92, .9, .85); rm.color.setRGB(.95, .7, .3);
-      lm.opacity = V === 1 ? .6 : V === 3 ? .28 : 0; dm.size = 3.5; dm.opacity = V === 2 ? .8 : 0; rm.opacity = V === 3 ? .85 : .6; }
-    arc.ring.scale.setScalar((smoke ? 2.2 : 1.6) * (V === 3 ? 1 : .7));
+    for (var i = 0; i < ARC_N; i++) { var f = Math.max(0, 1 - i / 14); f *= f; arcP[i * 3] = n.pos.x + rx * .26 * f; arcP[i * 3 + 1] = n.pos.y - .2 * f; arcP[i * 3 + 2] = n.pos.z + rz * .26 * f; if (i < ARC_N - 1) { nadeStep(n, dt * .5); nadeStep(n, dt * .5); } }
+    bandSet(arc.dark, 5); bandSet(arc.light, 2.2);
+    var sc = (smoke ? 2.2 : 1.6) * .7; arc.ring.position.set(n.pos.x, n.pos.y + .03, n.pos.z); arc.ringD.position.set(n.pos.x, n.pos.y + .02, n.pos.z); arc.ring.scale.setScalar(sc); arc.ringD.scale.setScalar(sc);
   }
   function updNades(dt) {
     for (var i = G.nades.length - 1; i >= 0; i--) {

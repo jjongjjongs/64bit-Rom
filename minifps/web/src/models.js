@@ -774,6 +774,14 @@ var SV = window.SV = window.SV || {};
     if (d.scan) { sg = new T.Group(); d.scan.rotation.y = -PI / 2; d.scan.position.set(gx, gy, gz); sg.add(d.scan); }
     return gunCache[gunId] = { scan: sg, geo: merge(gg), grip: new T.Vector3(gx, gy + d.grip[1] + .03, gz + d.grip[0]), fore: d.fore ? new T.Vector3(gx + .02, gy + d.fore[1], gz + d.fore[0]) : null, muzzle: new T.Vector3(gx, gy + d.muzzle[1], gz + d.muzzle[0]), pistol: /^pistol/.test(gunId), vgrip: gunId === 'smg' };
   }
+  /* Soldiers stay readable in dark places, the way shooters do it: a little light of their own so they never go black, and
+     a thin edge glow in the team's colour that shows the outline against a dark wall. Neither changes how they look in daylight much. */
+  function readable(mat, team) {
+    if (window.NORIM) return; var rim = team === 'A' ? new T.Color(1, .62, .2) : new T.Color(.25, .7, 1);
+    mat.onBeforeCompile = function (sh) { sh.uniforms.uRim = { value: rim }; sh.uniforms.uFill = { value: .07 };
+      sh.fragmentShader = 'uniform vec3 uRim; uniform float uFill;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n float rimK = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), 2.6);\n totalEmissiveRadiance += uRim * rimK * 0.27 + diffuseColor.rgb * uFill;'); };
+    mat.needsUpdate = true;
+  }
   function skinned(team, gunId) {
     var src = SV.assets.soldier, model = T.SkeletonUtils.clone(src.scene), root = new T.Group(), up = new T.Group(), bones = {}, tm = teamMats[team] || (teamMats[team] = {});
     model.rotation.y = PI; up.add(model); root.add(up);   // the file faces -Z, the game's rig faces +Z
@@ -781,7 +789,7 @@ var SV = window.SV = window.SV || {};
       if (o.isBone) bones[o.name.replace('mixamorig', '')] = o;
       if (o.isMesh) { var k = o.material.name; if (!tm[k]) { tm[k] = o.material.clone(); var skin = SV.assets.art['soldier_' + team], nm = SV.assets.art.soldier_nrm;
         if (skin) { tm[k].map = skin; tm[k].color.set(k.indexOf('Visor') < 0 ? 0xffffff : 0x8a8f94); if (nm) { tm[k].normalMap = nm; tm[k].normalScale.set(1, 1); } tm[k].roughness = .82; tm[k].envMapIntensity = .6; }
-        else { if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } } o.material = tm[k]; o.frustumCulled = false; }
+        else { if (k.indexOf('Visor') < 0) tm[k].color.set(team === 'A' ? 0xd2ad74 : 0x56708f); tm[k].roughness = Math.max(tm[k].roughness, .6); } readable(tm[k], team); } o.material = tm[k]; o.frustumCulled = false; }
     });
     var hands0 = { Left: handAxes({ bones: bones }, 'Left'), Right: handAxes({ bones: bones }, 'Right') };   /* read the hands in their rest pose, before any motion plays */
     var held = SV.assets.tpAnim && !window.OLDHANDS && !window.NOTP ? tpClips() : null;
