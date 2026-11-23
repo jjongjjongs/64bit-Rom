@@ -412,7 +412,9 @@ var SV = window.SV = window.SV || {};
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
-    if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip }; return out;
+    if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
+    if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.02), ax.clone().multiplyScalar(.215)];   /* base and tip of the blade, for the swing trail */
+    return out;
   };
   // where each weapon sits on screen at the hip: [x, y, z, pitch, yaw, roll] — low right, muzzle turned in toward the crosshair
   // Framing after Call of Duty 4: a wide view-model lens, the gun big in the lower right and held almost parallel to the

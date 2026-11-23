@@ -13,7 +13,7 @@
     shotgun: { name: 'SG-01 하운드', short: '산탄총', dmg: 14, head: 1.4, interval: .85, mag: 6, res: 30, reload: 2.4, spread: .075, ads: .06, bloom: 0, recoil: .04, auto: false, range: 40, fall: 7, pellets: 8, fov: 50, snd: .7 },
     pistol2: { name: 'HG-02 스펙터', short: '권총', side: true, dmg: 34, head: 2.1, interval: .2, mag: 9, res: 45, reload: 1.5, spread: .013, ads: .0045, bloom: .008, recoil: .019, auto: false, range: 75, fall: 20, pellets: 1, fov: 50, snd: 1.05 },
     pistol:  { name: 'HG-01 세이버', short: '권총', side: true, dmg: 26, head: 2, interval: .15, mag: 12, res: 60, reload: 1.4, spread: .016, ads: .006, bloom: .006, recoil: .014, auto: false, range: 70, fall: 16, pellets: 1, fov: 50, snd: 1.15 },
-    knife:   { name: 'KN-01 스톰', short: '칼', dmg: 55, head: 1, interval: .5, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
+    knife:   { name: 'KN-01 스톰', short: '칼', dmg: 55, head: 1, interval: .4, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
   };
   var DIFF = [{ err: .05, react: .62, turn: 5 }, { err: .032, react: .42, turn: 7 }, { err: .02, react: .28, turn: 9.5 }, { err: .011, react: .17, turn: 13 }];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니', '삵'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비', '수리'] };
@@ -502,9 +502,26 @@
     if (!vms[id + p.team]) { vms[id + p.team] = SV.viewModel(id, p.team); if (!vms[id + p.team].userData.art) vms[id + p.team].rotation.y = PI / 2; vmRoot.add(vms[id + p.team]); }
     vmCur = vms[id + p.team]; vmCur.visible = true; vmSwap = .3; var mz = vmCur.userData.muzzle; flash.position.set(0, mz[1], -mz[0] - .04);
   }
+  /* the pale fan a fast blade leaves behind: a ribbon through the last few places the blade was, fading out */
+  var TRN = 10, trPts = [], trGeo = new T.BufferGeometry(), trPos = new Float32Array(TRN * 18), trCol = new Float32Array(TRN * 18), trMesh;
+  trGeo.setAttribute('position', new T.BufferAttribute(trPos, 3)); trGeo.setAttribute('color', new T.BufferAttribute(trCol, 3));
+  trMesh = new T.Mesh(trGeo, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false, side: T.DoubleSide, fog: false, toneMapped: false }));
+  trMesh.frustumCulled = false; trMesh.renderOrder = 6; trMesh.visible = false; vmScene.add(trMesh);
+  function updTrail(dt, on) {
+    var bl = vmCur && vmCur.userData.blade, i, k;
+    for (i = trPts.length - 1; i >= 0; i--) { trPts[i].life -= dt / .14; if (trPts[i].life <= 0) trPts.splice(i, 1); }
+    if (on && bl) { vmRoot.updateMatrixWorld(true); trPts.push({ a: vmCur.localToWorld(bl[0].clone()), b: vmCur.localToWorld(bl[1].clone()), life: 1 }); if (trPts.length > TRN + 1) trPts.shift(); }
+    if (trPts.length < 2) { trMesh.visible = false; return; }
+    for (i = 0; i < TRN; i++) {
+      var p0 = trPts[i], p1 = trPts[i + 1], o = i * 18, v = [], c0 = p0 && p1 ? p0.life * .11 : 0, c1 = p0 && p1 ? p1.life * .11 : 0;
+      if (p0 && p1) v = [p0.a, p0.b, p1.b, p0.a, p1.b, p1.a];
+      for (k = 0; k < 6; k++) { var q2 = v[k]; trPos[o + k * 3] = q2 ? q2.x : 0; trPos[o + k * 3 + 1] = q2 ? q2.y : 0; trPos[o + k * 3 + 2] = q2 ? q2.z : 0; var cc = ((k === 0 || k === 1 || k === 3) ? c0 : c1) * ((k === 0 || k === 3 || k === 5) ? .25 : 1);   /* fainter toward the hand */ trCol[o + k * 3] = cc; trCol[o + k * 3 + 1] = cc; trCol[o + k * 3 + 2] = cc * .95; }
+    }
+    trGeo.attributes.position.needsUpdate = true; trGeo.attributes.color.needsUpdate = true; trMesh.visible = true;
+  }
   function updVm(dt, p) {
     var id = p.guns[p.slot].id, w = W[id], s = vmCur.userData.sight, ads = p.ads && !w.melee ? 1 : 0;
-    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .34);
+    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .4);
     if (p.moving && p.ground) bobT += dt * 9;
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
     var art = vmCur.userData.art;
@@ -524,11 +541,17 @@
     vmRoot.rotation.order = 'YXZ';
     vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
     vmRoot.rotation.set(ps[3] * h + (w.melee ? 0 : vmKick * .05) - vmSwap * 1.2, ps[4] * h, ps[5] * h);
-    if (w.melee && vmSwing > 0) {   // a slash: a short draw back to the right, a fast cut across to the lower left, then back to rest
-      var q = 1 - vmSwing, u = q < .12 ? -.35 * (q / .12) : q < .45 ? -.35 + 1.35 * (1 - Math.pow(1 - (q - .12) / .33, 2)) : 1 - (q - .45) / .55; if (q >= .45) u = u * u * (3 - 2 * u);
-      vmRoot.position.x -= .3 * u; vmRoot.position.y -= .07 * u - .03 * Math.sin(Math.max(0, u) * PI); vmRoot.position.z -= .1 * Math.max(0, u);
-      vmRoot.rotation.y += .75 * u; vmRoot.rotation.z += .65 * u; vmRoot.rotation.x -= .25 * Math.max(0, u);
+    if (w.melee && vmSwing > 0) {
+      /* Left-click slash, after the reference clip (mirrored to the right hand): the blade is laid over from upright to
+         flat across the view in about an eighth of a second, carries on down out of sight, then comes back up at rest. */
+      var q = 1 - vmSwing, roll, dx2, dy2, dz2, e;
+      if (q < .08) { e = q / .08; roll = -.18 * e; dx2 = .01 * e; dy2 = .015 * e; dz2 = 0; }
+      else if (q < .4) { e = (q - .08) / .32; e = e * e * (3 - 2 * e); roll = -.18 + 1.5 * e; dx2 = .01 - .13 * e; dy2 = .015 - .05 * e; dz2 = -.07 * e; }
+      else if (q < .58) { e = (q - .4) / .18; roll = 1.32 + .45 * e; dx2 = -.12 - .04 * e; dy2 = -.035 - .3 * e; dz2 = -.07; }
+      else { e = (q - .58) / .42; e = 1 - (1 - e) * (1 - e); roll = 0; dx2 = .05 * (1 - e); dy2 = -.3 * (1 - e); dz2 = 0; }
+      vmRoot.position.x += dx2; vmRoot.position.y += dy2; vmRoot.position.z += dz2; vmRoot.rotation.z += roll; vmRoot.rotation.y += .35 * Math.sin(Math.min(1, q / .4) * PI);
     }
+    updTrail(dt, w.melee && vmSwing > 0 && 1 - vmSwing > .06 && 1 - vmSwing < .46);
     vmRoot.visible = !(w.scope && vmAds > .8);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
