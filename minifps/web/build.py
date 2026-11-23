@@ -21,6 +21,7 @@ FONTS = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=
 def page(three, fonts):
     head = src('head.html').replace('<!--FONTS-->', fonts)
     extra = ''.join('<script src="a/%s"></script>\n' % n for n in ('GLTFLoader.js', 'SkeletonUtils.js', 'RGBELoader.js')) if (ASSETS / 'GLTFLoader.js').exists() and three == 'three.min.js' else ''
+    if three == 'three.min.js' and (here / 'vendor' / 'meshopt_decoder.js').exists(): extra += '<script src="meshopt_decoder.js"></script>\n'
     return head + '\n<script src="%s"></script>\n' % three + extra + ''.join('<script>\n%s</script>\n' % src(n) for n in SCRIPTS)
 
 
@@ -37,6 +38,7 @@ else:
              '<style>body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>')
     (assets / 'index.html').write_text(shell + page('three.min.js', '') + '</body></html>', encoding='utf-8')
     shutil.copyfile(here / 'vendor' / 'three.min.js', assets / 'three.min.js')
+    if (here / 'vendor' / 'meshopt_decoder.js').exists(): shutil.copyfile(here / 'vendor' / 'meshopt_decoder.js', assets / 'meshopt_decoder.js')
     if ASSETS.exists():
         shutil.rmtree(assets / 'a', ignore_errors=True)
         shutil.copytree(ASSETS, assets / 'a')

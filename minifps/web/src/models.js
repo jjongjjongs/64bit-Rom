@@ -64,7 +64,8 @@ var SV = window.SV = window.SV || {};
       k.cz(.0055, .004, m.dark, -.075, -.006, zz, 10); k.b(.022, .005, .003, m.dark, -.066, -.004, zz + sd * .002, 0, 0, sd * .5);                 // selector
       if (sd < 0) k.b(.012, .026, .003, m.dark, .058, -.002, zz - .001); else k.cz(.0045, .004, m.dark, .03, -.012, zz, 10);                    // bolt release / magazine button
     });
-    k.b(.022, .007, .038, m.dark, -.134, .058, 0); k.b(.012, .01, .016, m.dark, -.14, .058, 0);                                                    // charging handle
+    k.b(.022, .007, .038, m.dark, -.134, .058, 0); k.b(.012, .01, .016, m.dark, -.14, .058, 0);
+    k.b(.075, .007, .002, m.rubber, .07, .047, -z - .0006); k.cz(.0055, .02, m.dark, .1, .047, -z - .009, 10).userData.part = 'chg';   // cocking handle on the left side, in its slot
   }
   // a slotted flash hider on the muzzle
   function hider(k, x, y, r, len, m) { lx(k, [[x, 0], [x, r * .8], [x + .006, r], [x + len - .004, r], [x + len, r * .8], [x + len, 0]], m.dark, y, 0, 12); k.b(len * .6, .0035, r * 2 + .0012, m.rubber, x + len * .55, y, 0); k.b(len * .6, r * 2 + .0012, .0035, m.rubber, x + len * .55, y, 0); }
@@ -116,7 +117,7 @@ var SV = window.SV = window.SV || {};
     ex(k, [[.028, -.014], [.062, -.014], [.06, -.235], [.026, -.235]], -.011, .011, m.dark, .002).userData.mag = true; k.b(.04, .012, .025, m.yel, .043, -.215, 0).userData.mag = true; k.b(.04, .008, .026, m.poly2, .043, -.238, 0).userData.mag = true;
     ex(k, [[.15, -.014], [.19, -.014], [.186, -.1], [.154, -.1]], -.014, .014, m.poly2, .005); for (i = 0; i < 4; i++) k.b(.04, .004, .03, m.rubber, .17, -.03 - i * .017, 0);
     k.cx(.005, .21, m.steel, -.25, .045, .017, 8); k.cx(.005, .21, m.steel, -.25, .045, -.017, 8); ex(k, [[-.345, .066], [-.362, .066], [-.362, -.06], [-.345, -.06]], -.024, .024, m.rubber, .003);
-    k.cz(.0065, .02, m.dark, .13, .052, -.032, 10); k.b(.03, .004, .003, m.rubber, .13, .052, -.0252); for (i = 0; i < 3; i++) k.b(.03, .003, .0235, m.rubber, .044, -.06 - i * .045, 0).userData.mag = true; k.b(.02, .03, .05, m.dark, -.155, .04, 0); k.b(.008, .012, .012, m.dark, -.12, .074, 0);
+    k.cz(.0065, .02, m.dark, .13, .052, -.032, 10).userData.part = 'chg'; k.b(.03, .004, .003, m.rubber, .13, .052, -.0252); for (i = 0; i < 3; i++) k.b(.03, .003, .0235, m.rubber, .044, -.06 - i * .045, 0).userData.mag = true; k.b(.02, .03, .05, m.dark, -.155, .04, 0); k.b(.008, .012, .012, m.dark, -.12, .074, 0);
     [-1, 1].forEach(function (sd) { k.b(.03, .006, .0008, m.yel, .06, .054, sd * .0246); k.b(.012, .006, .0008, m.yel, .1, .054, sd * .0246); }); wear(k, -.13, .19, .0665, .0228, m); stamp(k, -.11, .03, .0246, m);
     return { g: g, grip: [-.075, -.085], fore: [.17, -.07], vgrip: true, muzzle: [.312, .03], sight: .098 };
   };
@@ -125,7 +126,7 @@ var SV = window.SV = window.SV || {};
     var g = new T.Group(), k = kit(g), m = MAT, i;
     ex(k, [[-.2, -.03], [.5, -.03], [.5, 0], [.2, .012], [.2, .03], [-.2, .03]], -.024, .024, m.sand, .004, [0, 1, 2, 3, 4].map(function (n) { return [[.235 + n * .052, -.024], [.27 + n * .052, -.024], [.27 + n * .052, -.006], [.235 + n * .052, -.006]]; }));                                                    // chassis and fore-end
     k.cx(.021, .3, m.steel, .03, .045, 0, 14); k.b(.07, .014, .004, m.rubber, .05, .05, -.019); k.cx(.022, .02, m.dark, -.125, .045, 0, 14);                     // action, port, bolt shroud
-    k.cz(.006, .05, m.bright, -.1, .04, -.045, 8); k.s(.013, m.dark, -.1, .036, -.075);                                                                         // bolt handle
+    k.cz(.006, .05, m.bright, -.1, .04, -.045, 8).userData.part = 'bolt'; k.s(.013, m.dark, -.1, .036, -.075).userData.part = 'bolt';                                                                         // bolt handle
     lx(k, [[.18, 0], [.18, .016], [.3, .0135], [.82, .0105], [.82, 0]], m.steel, .045, 0, 14);                                                                 // tapered barrel
     lx(k, [[.82, 0], [.82, .0125], [.83, .0175], [.893, .0175], [.9, .0135], [.9, 0]], m.dark, .045, 0, 14); for (i = 0; i < 3; i++) k.b(.011, .013, .037, m.rubber, .845 + i * .018, .045, 0);   // brake with side ports
     k.b(.4, .0026, .0262, m.dark, .52, .045, 0); k.b(.4, .0262, .0026, m.dark, .52, .045, 0);                                                                   // barrel flutes
@@ -475,6 +476,180 @@ var SV = window.SV = window.SV || {};
     var m = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, fog: false })), g = new T.Group();
     m.renderOrder = 5; g.add(m); g.userData = { art: a, muzzle: [0, 0], sight: 0 }; return g;
   }
+  // First-person arms from a rigged, animated model: every finger has joints and the reload is hand-animated, so the hands close
+  // on the gun instead of being posed by numbers. The gun rides on the right hand's bone; a spare magazine rides on the left.
+  SV.armsVM = function (id0, team) {
+    var A = SV.assets.arms, root = new T.Group(), sc = T.SkeletonUtils.clone(A.scene), bones = {}, d = GUN[id0](), cfg = window.AV || {}, V = function (a) { return new T.Vector3(a[0], a[1], a[2]); };
+    sc.traverse(function (o) {
+      if (o.isBone) bones[o.name.replace(/[^A-Za-z0-9]/g, '')] = o;
+      if (o.isSkinnedMesh) {   /* gloves on the hands, sleeve colour up the arm: decided per vertex from the bone it follows most */
+        var g = o.geometry.clone(), si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, col = new Float32Array(n * 3), names = o.skeleton.bones.map(function (b) { return b.name; }), gl = new T.Color(0x1b1c1e).convertSRGBToLinear(), sl = new T.Color(team === 'A' ? 0x5c5a3e : 0x3d444b).convertSRGBToLinear(), i, k, best, bw;
+        for (i = 0; i < n; i++) { best = 0; bw = -1; for (k = 0; k < 4; k++) if (sw.array[i * 4 + k] > bw) { bw = sw.array[i * 4 + k]; best = si.array[i * 4 + k]; } var hand = /hand|palm|f_|thumb/.test(names[best]), c = hand ? gl : sl; col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+        g.setAttribute('color', new T.BufferAttribute(col, 3)); o.geometry = g; o.material = new T.MeshStandardMaterial({ vertexColors: true, roughness: .85, metalness: 0, skinning: true, envMapIntensity: .3 }); o.frustumCulled = false; if (cfg.xray) { o.material.transparent = true; o.material.opacity = .35; o.material.depthWrite = false; o.renderOrder = 5; }
+      }
+    });
+    var gg = d.g, PG = new T.Group(); gg.children.slice().forEach(function (c) { if (c.userData.mag) PG.add(c); });
+    function mh(grp) { var o2 = new T.Group(); o2.add(new T.Mesh(merge(grp, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); o2.add(new T.Mesh(merge(grp, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); return o2; }
+    var gun = mh(gg), mag = mh(PG), mag2 = mh(PG), hold = new T.Group(), hold2 = new T.Group(), BB = cfg.b || [[0, 1, 0], [0, 0, 1], [1, 0, 0]], B = new T.Matrix4().makeBasis(V(BB[0]), V(BB[1]), V(BB[2])), gs = cfg.gs || 1.05;
+    /* Where the gun goes: the arms were animated holding their own pistol, so ours is laid exactly where that one's grip was:
+       same barrel line, same upright, grip centre on grip centre. (Chain of offsets copied from the asset's scene.) */
+    var Mref = new T.Matrix4().makeTranslation(-.026, .145, .044).multiply(new T.Matrix4().set(-1.10002, 0, 0, 0, 0, 0, 1.09996, 0, 0, 1.10002, 0, -.078, 0, 0, 0, 1)).multiply(new T.Matrix4().makeTranslation(-.0053, .0698, -.00145));
+    var rp = [], gcR = new T.Vector3(), ng = 0, zmin = 1e9, zmax = -1e9; SV.assets.refgun.scene.updateMatrixWorld(true);
+    SV.assets.refgun.scene.traverse(function (o) { if (!o.isMesh) return; var pa = o.geometry.attributes.position, q = new T.Vector3(); for (var i = 0; i < pa.count; i++) { q.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld); zmin = Math.min(zmin, q.z); zmax = Math.max(zmax, q.z); if (q.y < -.02) { gcR.add(q); ng++; } } });
+    gcR.multiplyScalar(1 / ng); var bz = (zmax - gcR.z) > (gcR.z - zmin) ? 1 : -1, bdir = new T.Vector3(0, 0, bz).transformDirection(Mref), udir = new T.Vector3(0, 1, 0).transformDirection(Mref), zdir = new T.Vector3().crossVectors(bdir, udir).normalize(); udir.crossVectors(zdir, bdir).normalize();
+    var gcB = gcR.clone().applyMatrix4(Mref), go = cfg.go || [0, 0, 0], ourG = new T.Vector3(d.grip[0] + go[0], d.grip[1] + go[1], go[2]);
+    /* High grip, as in every reference: the top rear of our grip (the tang, right under the back of the slide) goes into the
+       web between thumb and forefinger, so the hand sits directly under the slide and the forefinger lies level with the trigger. */
+    sc.updateMatrixWorld(true);
+    var hbI = new T.Matrix4().copy(bones.DEFhandR.matrixWorld).invert(), wA = new T.Vector3().setFromMatrixPosition(bones.DEFthumb01R.matrixWorld), wB = new T.Vector3().setFromMatrixPosition(bones.DEFfindex01R.matrixWorld), web = wA.clone().lerp(wB, cfg.wl == null ? .5 : cfg.wl).applyMatrix4(hbI);
+    var tang = cfg.tang || [-.094, .006, 0], gof = cfg.go || [0, 0, 0], ourT = new T.Vector3(tang[0] - gof[0], tang[1] - gof[1], tang[2] - gof[2]);
+    hold.matrixAutoUpdate = false; hold.matrix.makeBasis(bdir, udir, zdir); hold.matrix.setPosition((cfg.oldpos ? gcB.clone().sub(ourG.applyMatrix4(new T.Matrix4().extractRotation(hold.matrix))) : web.clone().sub(ourT.applyMatrix4(new T.Matrix4().extractRotation(hold.matrix))))); gs = 1;
+    hold.add(gun); hold.add(mag); bones.DEFhandR.add(hold);
+    if (cfg.ref) { var rg = SV.assets.refgun.scene.clone(true), rh = new T.Group(); rh.matrixAutoUpdate = false; rh.matrix.copy(Mref); rh.add(rg); bones.DEFhandR.add(rh); gun.visible = mag.visible = false; }
+    var e = cfg.mr || [0, 0, 0]; hold2.rotation.set(e[0], e[1], e[2]); hold2.scale.setScalar(gs); hold2.position.copy(V(cfg.m || [.06, .12, .02])); mag2.position.copy(V(cfg.mo || [.07, .09, 0])); hold2.add(mag2); bones.DEFhandL.add(hold2); hold2.visible = false;
+    sc.rotation.y = PI; sc.position.copy(V(cfg.p || [.03, -.24, -.3])); root.add(sc);
+    var mixer = new T.AnimationMixer(sc), acts = {}; A.animations.forEach(function (c) { acts[c.name] = mixer.clipAction(c); acts[c.name].play(); acts[c.name].setEffectiveWeight(0); });
+    /* The gun as a solid: each finger is opened, then closed joint by joint until its skin touches the gun, and stops there.
+       Nothing is simulated while playing; the fitted joint angles are worked out once here and held. */
+    var solids = [], tri = new T.Vector3(), fitInfo = { before: 0, after: 0 };
+    gg.children.concat(PG.children).forEach(function (c) { if (!c.isMesh) return; var g2 = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone(); c.updateMatrix(); g2.applyMatrix4(c.matrix); g2.computeBoundingBox(); solids.push({ p: g2.attributes.position.array, b: g2.boundingBox }); });
+    function inside(x, y, z) {   /* is the point inside any closed part? count crossings of a ray */
+      for (var q = 0; q < solids.length; q++) { var bx = solids[q].b; if (x < bx.min.x || x > bx.max.x || y < bx.min.y || y > bx.max.y || z < bx.min.z || z > bx.max.z) continue;
+        var P = solids[q].p, n = 0, dx = 1, dy = .0137, dz = .0071;
+        for (var t = 0; t < P.length; t += 9) { var ax = P[t], ay = P[t + 1], az = P[t + 2], e1x = P[t + 3] - ax, e1y = P[t + 4] - ay, e1z = P[t + 5] - az, e2x = P[t + 6] - ax, e2y = P[t + 7] - ay, e2z = P[t + 8] - az,
+          px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x, det = e1x * px + e1y * py + e1z * pz; if (det > -1e-12 && det < 1e-12) continue;
+          var inv = 1 / det, tx = x - ax, ty = y - ay, tz = z - az, u = (tx * px + ty * py + tz * pz) * inv; if (u < 0 || u > 1) continue;
+          var qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x, v = (dx * qx + dy * qy + dz * qz) * inv; if (v < 0 || u + v > 1) continue;
+          if ((e2x * qx + e2y * qy + e2z * qz) * inv > 0) n++; }
+        if (n & 1) return true; }
+      return false;
+    }
+    var sm = null; sc.traverse(function (o) { if (o.isSkinnedMesh) sm = o; });
+    var names = sm.skeleton.bones.map(function (b) { return b.name; }), SI = sm.geometry.attributes.skinIndex.array, SW = sm.geometry.attributes.skinWeight.array, NV = sm.geometry.attributes.position.count, dom = new Int16Array(NV), invH = new T.Matrix4(), vv = new T.Vector3(), i2, k2;
+    for (i2 = 0; i2 < NV; i2++) { var bw2 = -1; for (k2 = 0; k2 < 4; k2++) if (SW[i2 * 4 + k2] > bw2) { bw2 = SW[i2 * 4 + k2]; dom[i2] = SI[i2 * 4 + k2]; } }
+    var one = !cfg.twohand;
+    function refresh() { if (one) bones.DEFshoulderL.scale.setScalar(0); sc.updateMatrixWorld(true); sm.skeleton.update(); invH.copy(hold.matrixWorld).invert(); }
+    function vin(i) { sm.boneTransform(i, vv); vv.applyMatrix4(sm.matrixWorld).applyMatrix4(invH); return inside(vv.x, vv.y, vv.z); }
+    function count(list) { var n = 0; for (var q = 0; q < list.length; q++) if (vin(list[q])) n++; return n; }
+    function hit(list) { for (var q = 0; q < list.length; q++) if (vin(list[q])) return true; return false; }
+    acts.Idle.setEffectiveWeight(1); acts.Idle.time = 0; mixer.update(0); refresh();
+    if (!cfg.oldpos) {
+      /* The grip is laid in the hand by the hand's own landmarks, the way a pistol is actually held:
+         - its length runs along the line of the knuckles (forefinger root to little-finger root), so the fingers cross it squarely;
+         - the barrel keeps the direction the arms were animated to point;
+         - the tang goes into the web between thumb and forefinger (high grip);
+         - sideways it sits in the hollow between the palm and the curled fingertips. */
+      var hI = new T.Matrix4().copy(bones.DEFhandR.matrixWorld).invert(), lp = function (b) { return new T.Vector3().setFromMatrixPosition(b.matrixWorld).applyMatrix4(hI); },
+        kI = lp(bones.DEFfindex01R), kP = lp(bones.DEFfpinky01R), th1 = lp(bones.DEFthumb01R), kn = kP.clone().sub(kI).normalize(), rake = cfg.rake == null ? .12 : cfg.rake,
+        Xp = bdir.clone().addScaledVector(kn, -bdir.dot(kn)).normalize(), Yp = kn.clone().negate().addScaledVector(Xp, -rake).normalize(); Xp.addScaledVector(Yp, -Xp.dot(Yp)).normalize(); var Zp = new T.Vector3().crossVectors(Xp, Yp).normalize();
+      var pc3 = new T.Vector3(), tc3 = new T.Vector3(), np = 0, nt = 0;
+      for (i2 = 0; i2 < NV; i2++) { var n5 = names[dom[i2]]; if (n5.charAt(n5.length - 1) !== 'R') continue; var isP = /palm/.test(n5), isT = /f_(middle|ring).*03/.test(n5.replace(/\./g, '')); if (!isP && !isT) continue; sm.boneTransform(i2, vv); vv.applyMatrix4(sm.matrixWorld).applyMatrix4(hI); if (isP) { pc3.add(vv); np++; } else { tc3.add(vv); nt++; } }
+      pc3.multiplyScalar(1 / np); tc3.multiplyScalar(1 / nt); var hollow = pc3.clone().lerp(tc3, cfg.hl == null ? .5 : cfg.hl), webP = th1.clone().lerp(kI, cfg.wl == null ? .5 : cfg.wl);
+      var tg = cfg.tang || [-.094, .004, 0], go2 = cfg.go || [0, 0, 0], Rm = new T.Matrix4().makeBasis(Xp, Yp, Zp), tv = webP.clone().sub(new T.Vector3(tg[0] - go2[0], tg[1] - go2[1], 0).applyMatrix4(Rm));
+      tv.addScaledVector(Zp, hollow.clone().sub(tv).dot(Zp) + go2[2]); hold.matrix.copy(Rm).setPosition(tv); bdir.copy(Xp); udir.copy(Yp); zdir.copy(Zp); refresh();
+    }
+    var handV = []; for (i2 = 0; i2 < NV; i2++) if (/hand|palm|f_|thumb/.test(names[dom[i2]])) handV.push(i2); fitInfo.before = count(handV); fitInfo.verts = handV.length;
+    if (!cfg.nofit && !cfg.noseat) {   /* the palm is solid too: slide the gun straight out of it, a millimetre at a time, until no part of the palm is inside the gun */
+      var seatV = [], bp = new T.Vector3().setFromMatrixPosition(hold.matrix), st2 = 0;
+      for (i2 = 0; i2 < NV; i2++) { var n3 = names[dom[i2]]; if (n3.charAt(n3.length - 1) === 'R' && /palm|hand/.test(n3)) seatV.push(i2); }
+      var outD = typeof hollow !== 'undefined' ? hollow.clone().sub(pc3).normalize() : zdir.clone();
+      while (st2 < 16 && count(seatV) > 0) { st2++; hold.matrix.setPosition(bp.x + outD.x * st2 * .001, bp.y + outD.y * st2 * .001, bp.z + outD.z * st2 * .001); refresh(); }
+      fitInfo.seat = st2; fitInfo.seatN = count(seatV);
+    }
+    var fits = [], RX = new T.Quaternion(), XA = new T.Vector3(1, 0, 0), gc = new T.Vector3(d.grip[0], d.grip[1], 0), OPEN = [1.0, .7, .5];
+    if (cfg.search) {   /* find where the gun sits in the hand: its grip as deep in the closed fist as it goes without entering the palm */
+      var palmV = [], cavV = [], base = V(cfg.g || [-.012, .2, .03]), Tg = new T.Vector3(), bestO = null, bestD = 1e9, ox, oy, oz, st = cfg.search;
+      for (i2 = 0; i2 < NV; i2++) { var nm2 = names[dom[i2]]; if (nm2.charAt(nm2.length - 1) !== 'R') continue; if (/hand|palm/.test(nm2)) palmV.push(i2); if (/f_(index|middle|ring).*0?2/.test(nm2) || /palm/.test(nm2)) cavV.push(i2); }
+      var cw = new T.Vector3(); cavV.forEach(function (i) { sm.boneTransform(i, vv); cw.add(vv.applyMatrix4(sm.matrixWorld)); }); cw.multiplyScalar(1 / cavV.length);
+      for (ox = -6; ox <= 6; ox++) for (oy = -6; oy <= 6; oy++) for (oz = -6; oz <= 6; oz++) {
+        hold.matrix.setPosition(base.x + ox * st, base.y + oy * st, base.z + oz * st); refresh(); Tg.copy(cw).applyMatrix4(invH); var dd = Tg.distanceTo(gc); if (dd >= bestD) continue; if (count(palmV) > 2) continue; bestD = dd; bestO = [base.x + ox * st, base.y + oy * st, base.z + oz * st]; }
+      if (bestO) hold.matrix.setPosition(bestO[0], bestO[1], bestO[2]); refresh(); fitInfo.best = bestO && bestO.map(function (x) { return +x.toFixed(4); }); fitInfo.bestD = +bestD.toFixed(4); fitInfo.palm = count(palmV);
+    }
+    if (!cfg.nofit) ['R', 'L'].forEach(function (side) { ['f_index', 'f_middle', 'f_ring', 'f_pinky', 'thumb'].forEach(function (fn) {
+      var js = [1, 2, 3].map(function (n) { return bones[('DEF-' + fn + '.0' + n + '.' + side).replace(/[^A-Za-z0-9]/g, '')]; }), q0 = js.map(function (b) { return b.quaternion.clone(); }), seg = [[], [], []], all = [];
+      for (var i = 0; i < NV; i++) { var nm = names[dom[i]], m = nm.indexOf('DEF-' + fn.replace('.', '')) === 0 || nm.replace(/[^A-Za-z0-9_]/g, '').indexOf('DEF' + fn) === 0; if (!m || nm.charAt(nm.length - 1) !== side) continue; var sgi = +nm.replace(/[^0-9]/g, '').slice(-1) - 1; if (sgi >= 0 && sgi < 3) { seg[sgi].push(i); all.push(i); } }
+      if (!all.length) return;
+      var AX = new T.Vector3(1, 0, 0);
+      function set(j, a) { js[j].quaternion.copy(q0[j]).multiply(RX.setFromAxisAngle(AX, a)); }
+      /* which joint axis curls this finger, and which way opens it: the turn that carries the fingertip furthest from the palm */
+      var pc = new T.Vector3(), pn = 0; for (i = 0; i < NV; i++) { var pm2 = names[dom[i]]; if (/palm|hand/.test(pm2) && pm2.charAt(pm2.length - 1) === side) { sm.boneTransform(i, vv); pc.add(vv.applyMatrix4(sm.matrixWorld)); pn++; } } pc.multiplyScalar(1 / pn);
+      function tipD() { refresh(); var c = new T.Vector3(), l = seg[2].length ? seg[2] : all; l.forEach(function (i) { sm.boneTransform(i, vv); c.add(vv.applyMatrix4(sm.matrixWorld)); }); return c.multiplyScalar(1 / l.length).distanceTo(pc); }
+      var d0 = tipD(), bestG = 0, sg = 1, bestAx = AX.clone(); [[1, 0, 0], [0, 0, 1]].forEach(function (ax) { [1, -1].forEach(function (sn) { AX.set(ax[0], ax[1], ax[2]); set(0, sn * .35); set(1, sn * .35); var g = tipD() - d0; set(0, 0); set(1, 0); if (g > bestG) { bestG = g; sg = sn; bestAx.copy(AX); } }); }); AX.copy(bestAx);
+      /* some skin at the root of a finger may sit in the gun whatever the finger does; only count what bending adds to that */
+      if (side === 'R' && fn !== 'f_index' && fn !== 'thumb') {
+        for (var j = 0; j < 3; j++) set(j, sg * OPEN[j]); refresh();
+        for (j = 0; j < 3; j++) { var rest = seg[j].concat(seg[j + 1] || [], seg[j + 2] || []), a = OPEN[j], last = a, c0 = count(rest); for (; a >= -.8; a -= .04) { set(j, sg * a); refresh(); if (count(rest) > c0) break; last = a; } set(j, sg * last); refresh(); }
+      } else if (fn === 'thumb') {
+        /* Thumbs-forward grip: both thumbs lie along the side of the slide pointing at the muzzle, the firing hand's on top.
+           The thumb is straightened a little and its base turned until it points down the barrel; small sideways and upward
+           leans are tried and the one that keeps it out of the gun with the least lean is kept. */
+        var hbm = bones.DEFhandR.matrixWorld, bW = bdir.clone().transformDirection(hbm), uW = udir.clone().transformDirection(hbm), zW = zdir.clone().transformDirection(hbm), tipL = seg[2].length ? seg[2] : all, qa = new T.Quaternion(), qb = new T.Quaternion(), RR = new T.Quaternion(), bp2 = new T.Vector3(), tp2 = new T.Vector3(), dv = new T.Vector3();
+        set(1, sg * .3); set(2, sg * .3);
+        function aimAt(d) { for (var it = 0; it < 3; it++) { refresh(); bp2.setFromMatrixPosition(js[0].matrixWorld); tp2.set(0, 0, 0); tipL.forEach(function (i) { sm.boneTransform(i, vv); tp2.add(vv.applyMatrix4(sm.matrixWorld)); }); tp2.multiplyScalar(1 / tipL.length).sub(bp2).normalize(); RR.setFromUnitVectors(tp2, d); js[0].parent.getWorldQuaternion(qa); js[0].getWorldQuaternion(qb); js[0].quaternion.copy(qa.invert()).multiply(RR).multiply(qb); } refresh(); }
+        var tbest = null, tcost = 1e9; [-.45, -.3, -.15, 0, .15, .3, .45].forEach(function (al) { [-.2, -.1, 0, .1].forEach(function (be) {   /* may lean sideways off the slide, but stays level with the barrel: a thumb never lies across the slide */ dv.copy(bW).addScaledVector(zW, al).addScaledVector(uW, be).normalize(); aimAt(dv); var c = count(all) + 2 * (Math.abs(al) + Math.abs(be)); if (c < tcost) { tcost = c; tbest = dv.clone(); } }); });
+        aimAt(tbest);
+      } else {   /* trigger finger and the left hand keep their animated pose and are only eased open, and only as far as it helps */
+        var bestF = 0, bestC = count(all); for (var f = .05; f <= .5001 && bestC > 0; f += .05) { for (j = 0; j < 3; j++) set(j, sg * f * OPEN[j]); refresh(); var cN = count(all); if (cN < bestC) { bestC = cN; bestF = f; } }
+        for (j = 0; j < 3; j++) set(j, sg * bestF * OPEN[j]);
+      }
+      js.forEach(function (b) { fits.push({ b: b, q: b.quaternion.clone(), left: side === 'L' }); });
+    }); });
+    if (!cfg.nofit) { var hl = bones.DEFhandL, hp0 = hl.position.clone(), lv = handV.filter(function (i) { var n4 = names[dom[i]]; return n4.charAt(n4.length - 1) === 'L'; }), bL = null, bLn = 1e9, lx2, ly2, lz2; refresh();
+      if (!cfg.noleft && count(lv) > 0) {   /* the supporting hand presses on the side of the grip: ease it straight outward, never up or down, until it rests on the surface */
+        var zw = zdir.clone().transformDirection(bones.DEFhandR.matrixWorld).transformDirection(new T.Matrix4().copy(hl.parent.matrixWorld).invert()), bLs = 0; bLn = 1e9;
+        for (lx2 = -4; lx2 <= 4; lx2++) { hl.position.copy(hp0).addScaledVector(zw, lx2 * .003); refresh(); var cl = count(lv) + Math.abs(lx2) * .5; if (cl < bLn) { bLn = cl; bLs = lx2; } }
+        hl.position.copy(hp0).addScaledVector(zw, bLs * .003); fitInfo.left = bLs; fits.push({ b: hl, p: hl.position.clone(), left: true }); } }
+    refresh(); fitInfo.after = count(handV); fitInfo.parts = {}; handV.forEach(function (i) { if (vin(i)) { var nm = names[dom[i]], k = (/thumb/.test(nm) ? 'thumb' : /f_/.test(nm) ? 'finger' : 'palm') + nm.charAt(nm.length - 1); fitInfo.parts[k] = (fitInfo.parts[k] || 0) + 1; } }); acts.Idle.setEffectiveWeight(0);
+    root.userData = { one: one, fitInfo: fitInfo, fit: function (wl) { if (one) bones.DEFshoulderL.scale.setScalar(0); for (var q = 0; q < fits.length; q++) { var f = fits[q]; if (f.p) { if (wl > 0) f.b.position.lerp(f.p, wl); } else if (!f.left) f.b.quaternion.copy(f.q); else if (wl > 0) f.b.quaternion.slerp(f.q, wl); } },
+      /* how many points of the hands' skin are inside the gun at a moment of a clip: the check used for the reports */
+      measure: function (clip, t, wl) { for (var k3 in acts) acts[k3].setEffectiveWeight(k3 === clip ? 1 : 0); acts[clip].time = t * acts[clip].getClip().duration * .999; mixer.update(0); this.fit(wl); refresh(); return count(handV); },
+      aim: (function () { var f = new T.Vector3(1, 0, 0).transformDirection(hold.matrixWorld), sp = new T.Vector3(0, d.sight, 0).applyMatrix4(hold.matrixWorld); return { q: new T.Quaternion().setFromUnitVectors(f, new T.Vector3(0, 0, -1)), p: sp }; })(), arms: true, mixer: mixer, acts: acts, mag: mag, mag2: hold2, muzzle: d.muzzle, sight: d.sight, grip: d.grip, cur: null };
+    return root;
+  };
+  // First-person view from an animated arms-and-gun model: the hands, the gun and every motion (fire, reload, reload from
+  // empty, idle) were made together by an animator, so nothing here poses a hand. The model is only turned, scaled and placed:
+  // barrel along the view, gun at its real length, muzzle at a set point in front of the eye.
+  var PACK = {
+    rifle: { f: 'carbine', len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
+    rifle2: { f: 'carbine', len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
+    smg: { f: 'hornet', len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
+    sniper: { f: 'sniper', len: 1.15, muzzle: [.12, -.15, -1.25], clips: { fire: [0, .4], pump: [.4, 1.6], reload: [1.6, 3.1], idle: [4.9, 6.0] } },
+    shotgun: { f: 'mauler', len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
+    pistol: { f: 'striker', len: .19, muzzle: [.09, -.088, -.42], clips: { fire: [0, .43], reload: [.43, 2.73], reloadEmpty: [3.1, 6.0], idle: [7.8, 8.83] } },
+    pistol2: { f: 'kestrel', len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
+  var PKC = {}, PKW = { rifle: [.31, .62], rifle2: [.31, .62], smg: [.36, .66], sniper: [.3, .52], shotgun: [.3, .62], pistol: [.14, 0], pistol2: [.14, 0] };
+  SV.packVM = function (id0) {
+    if (PKC[id0]) return PKC[id0];
+    var c = PACK[id0], G = c && SV.assets.fp && SV.assets.fp[c.f]; if (!G) return null;
+    var wrap = new T.Group(), inner = new T.Group(), root = id0 === 'rifle2' && T.SkeletonUtils ? T.SkeletonUtils.clone(G.scene) : G.scene; inner.add(root); wrap.add(inner);
+    var gunM = [], armM = [], v = new T.Vector3(); root.traverse(function (o) { if (!o.isMesh) return; o.frustumCulled = false; (o.isSkinnedMesh ? armM : gunM).push(o);
+      var pa = o.geometry.attributes.position; if (pa.normalized) { var den = pa.array instanceof Int16Array ? 32767 : pa.array instanceof Int8Array ? 127 : pa.array instanceof Uint16Array ? 65535 : 255, fa = new Float32Array(pa.count * 3); for (var i = 0; i < pa.count; i++) { fa[i * 3] = Math.max(pa.getX(i) / den, -1); fa[i * 3 + 1] = Math.max(pa.getY(i) / den, -1); fa[i * 3 + 2] = Math.max(pa.getZ(i) / den, -1); } o.geometry.setAttribute('position', new T.BufferAttribute(fa, 3)); }   /* the files store positions as packed integers; unpack once so sizes can be measured */
+      var sw = o.geometry.attributes.skinWeight; if (sw && sw.normalized) { var d2 = sw.array instanceof Uint16Array ? 65535 : 255, fw = new Float32Array(sw.count * 4); for (var k = 0; k < fw.length; k++) fw[k] = sw.array[k] / d2; o.geometry.setAttribute('skinWeight', new T.BufferAttribute(fw, 4)); }
+    });
+    var mixer = new T.AnimationMixer(root), act = mixer.clipAction(G.animations[0]); act.play(); mixer.setTime(c.clips.idle[0]); wrap.updateMatrixWorld(true); armM.forEach(function (o) { o.skeleton.update(); });
+    function verts(list, fn) { list.forEach(function (o) { var p = o.geometry.attributes.position, st = Math.max(1, Math.floor(p.count / 4000)); for (var i = 0; i < p.count; i += st) { if (o.isSkinnedMesh) o.boneTransform(i, v); else v.fromBufferAttribute(p, i); v.applyMatrix4(o.matrixWorld); fn(v); } }); }
+    var gb = new T.Box3(), ac = new T.Vector3(), an = 0; verts(gunM, function (q) { gb.expandByPoint(q); }); verts(armM, function (q) { ac.add(q); an++; }); if (an) ac.multiplyScalar(1 / an);
+    var sz = gb.getSize(new T.Vector3()), gc = gb.getCenter(new T.Vector3()), axis = sz.x > sz.z ? 'x' : 'z', sign = Math.sign(gc[axis] - ac[axis]) || 1;
+    inner.rotation.y = axis === 'x' ? (sign > 0 ? PI / 2 : -PI / 2) : sign > 0 ? PI : 0; inner.scale.setScalar(c.len / sz[axis]); wrap.updateMatrixWorld(true);
+    var mz = null; verts(gunM, function (q) { if (!mz || q.z < mz.z) mz = q.clone(); }); inner.position.add(new T.Vector3(c.muzzle[0], c.muzzle[1], c.muzzle[2]).sub(mz)); wrap.updateMatrixWorld(true);
+    var b2 = new T.Box3(); verts(gunM, function (q) { b2.expandByPoint(q); }); var L = b2.max.z - b2.min.z, cx = (b2.min.x + b2.max.x) / 2, top = -1e9; verts(gunM, function (q) { if (q.z > b2.min.z + .45 * L && q.z < b2.min.z + .95 * L && Math.abs(q.x - cx) < .02 && q.y > top) top = q.y; }); if (top < -1e8) top = b2.max.y;
+    var fit = { axis: axis, sign: sign, sz: sz.toArray().map(function (x) { return +x.toFixed(3); }), gc: gc.toArray().map(function (x) { return +x.toFixed(3); }), ac: ac.toArray().map(function (x) { return +x.toFixed(3); }), an: an, gun: gunM.length, arm: armM.length };
+    wrap.userData = { fit: fit, pack: c, mixer: mixer, ads: [-cx, -.018 - top, c.len < .3 ? .02 : -.04], muzzle: [-c.muzzle[2], c.muzzle[1]], sight: 0, t: 0, fireT: 9, pumpT: 9 };
+    /* the same gun, without the arms, for the soldiers seen from outside and for the menus: its parts as they sit in the idle
+       pose, turned into the game's gun space (+X muzzle, +Y up), with the hand positions measured from its shape */
+    var Mg = new T.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1), parts = [], bb = new T.Box3();
+    gunM.forEach(function (o) { var g = new T.BufferGeometry(), na = o.geometry.attributes.normal, nf = new Float32Array(na.count * 3), i; for (i = 0; i < na.count; i++) { nf[i * 3] = na.getX(i); nf[i * 3 + 1] = na.getY(i); nf[i * 3 + 2] = na.getZ(i); }
+      g.setAttribute('position', o.geometry.attributes.position.clone()); g.setAttribute('normal', new T.BufferAttribute(nf, 3)); if (o.geometry.index) g.setIndex(o.geometry.index.clone()); g.applyMatrix4(o.matrixWorld); g.applyMatrix4(Mg); g.normalizeNormals(); g.computeBoundingBox(); bb.union(g.boundingBox); parts.push(g); });
+    var long = c.len > .3, fr = PKW[id0], gx = bb.min.x + fr[0] * (bb.max.x - bb.min.x), fx = bb.min.x + fr[1] * (bb.max.x - bb.min.x), my = c.muzzle[1], low = function (x0) { var lo = 1e9; parts.forEach(function (g) { var p = g.attributes.position; for (var i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - x0) < .02 && p.getY(i) < lo) lo = p.getY(i); }); return lo; },
+      gyl = low(gx), fy = long ? low(fx) : 0, dx = (long ? -.105 : -.06) - gx, dy = .03 - my, dz = -(bb.min.z + bb.max.z) / 2;
+    parts.forEach(function (g) { g.translate(dx, dy, dz); });
+    var gy = (gyl + my - .03) / 2 + dy; wrap.userData.gun = { parts: parts, grip: [gx + dx, gy], fore: long ? [fx + dx, fy + dy] : [gx + dx + .015, gy - .025], muzzle: [bb.max.x + dx, .03], sight: top + dy };
+    return PKC[id0] = wrap;
+  };
+  /* once the animated models are loaded, every gun the game shows (in a soldier's hands, in the loadout) is the same one the player holds */
+  ['rifle', 'rifle2', 'smg', 'sniper', 'shotgun', 'pistol', 'pistol2'].forEach(function (id) { var old = GUN[id]; GUN[id] = function () {
+    var w = !window.NOPACK && SV.assets && SV.assets.fp && SV.packVM(id); if (!w) return old(); var d = w.userData.gun, g = new T.Group(); d.parts.forEach(function (q) { g.add(new T.Mesh(q, MAT.dark)); });
+    return { g: g, grip: d.grip.slice(), fore: d.fore.slice(), muzzle: d.muzzle.slice(), sight: d.sight }; }; });
   SV.viewModel = function (id0, team) {
     useScans();
     var id = id0.replace(/2$/, '');   // rifle2 and pistol2 are held like their kind
@@ -483,8 +658,15 @@ var SV = window.SV = window.SV || {};
     // the stock sits against the shoulder, beside and behind the eye: in first person it only shows up as a stray block, so leave it out
     if (id !== 'pistol' && id !== 'knife' && id !== 'shotgun') { g.updateMatrixWorld(true); g.children.forEach(function (c) { bx.setFromObject(c); if ((bx.min.x + bx.max.x) / 2 < -.2) cut.push(c); }); cut.forEach(function (c) { g.remove(c); }); }
     var stG = new T.Group(); cut.forEach(function (c) { stG.add(c); });   /* kept aside: shown while the gun is turned over for a reload, when its back end comes into view */
-    var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 }, oh = new T.Group(), mgG = new T.Group();
-    g.children.filter(function (c) { return c.userData.mag; }).forEach(function (c) { mgG.add(c); });   /* reloading moves the magazine and the supporting hand apart from the gun */
+    var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 }, oh = new T.Group(), PG = {}, pb = new T.Box3(), pc = V(0, 0, 0), ps = V(0, 0, 0);
+    /* parts that move on their own in a reload: magazine, cocking handle, bolt, pump (fore-end), pistol slide */
+    g.updateMatrixWorld(true);
+    g.children.slice().forEach(function (c) {
+      var n = c.userData.part || (c.userData.mag ? 'mag' : null); pb.setFromObject(c); pb.getCenter(pc); pb.getSize(ps);
+      if (!n && id === 'shotgun' && Math.abs(pc.y + .014) < .004 && ps.y > .05 && pc.x > .15 && pc.x < .36) n = 'pump';
+      if (!n && id === 'pistol' && pc.y > .02 && !(ps.x > .15 && ps.y < .013)) n = 'slide';
+      if (n) (PG[n] = PG[n] || new T.Group()).add(c);
+    });
     if (id === 'knife' || id === 'kit') {
       // Held as in the reference picture: blade up and to the left, the palm on the right of the handle so the back of the
       // hand shows on the right, fingers wrapped round to the left, forearm coming up from the lower right in line with the hand.
@@ -507,18 +689,23 @@ var SV = window.SV = window.SV || {};
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
-    if (oh.children.length) { var og = new T.Group(); og.add(new T.Mesh(merge(oh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); og.add(new T.Mesh(mergeUV(oh, function (m) { return !!m.userData.sleeve; }), sl)); out.add(og); out.userData.off = og; }
-    /* Reloading uses a second left hand, modelled already holding what it carries: closed round the magazine, or round a shell
-       for the shotgun. The fingers are fitted to that object once, here, because nothing stops them passing through things:
-       hands are posed by numbers, not by contact. */
-    var rhG = new T.Group();
-    if (id === 'shotgun') { var sh0 = V(.0, -.085, -.01), kk = kit(rhG); kk.cx(.0098, .05, MAT.red, sh0.x + .03, sh0.y, sh0.z, 10); kk.cx(.0102, .014, MAT.brass, sh0.x - .002, sh0.y, sh0.z, 10);
-      hand(rhG, sh0, V(1, 0, 0), V(0, -1, -.25), -1, .0105, sh0.clone().add(V(-.22, -.26, -.2)), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .6 }); }
-    else if (mgG.children.length && id !== 'pistol') { var mb = new T.Box3().setFromObject(mgG), mc = V((mb.min.x + mb.max.x) / 2, mb.min.y + Math.min(.045, (mb.max.y - mb.min.y) * .4), 0);
-      hand(rhG, mc, V(.12, 1, 0), V(-.35, 0, -.94), -1, .019, mc.clone().add(V(-.2, -.3, -.2)), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .5 }); }
-    if (rhG.children.length) { var rg = new T.Group(); rg.add(new T.Mesh(merge(rhG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); rg.add(new T.Mesh(merge(rhG, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); rg.add(new T.Mesh(mergeUV(rhG, function (m) { return !!m.userData.sleeve; }), sl)); rg.visible = false; out.add(rg); out.userData.rh = rg; }
+    /* Hands are posed by numbers, not by contact, so each one is fitted once to the thing it holds: the supporting hand to the
+       fore-end, a second hand to the magazine (or a shell), a third to the cocking handle or bolt knob. A reload shows one at a time. */
+    function mh(grp) { var o2 = new T.Group(); o2.add(new T.Mesh(merge(grp, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); o2.add(new T.Mesh(merge(grp, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); var su = mergeUV(grp, function (m) { return !!m.userData.sleeve; }); if (su.attributes.position.count) o2.add(new T.Mesh(su, sl)); return o2; }
+    var H = {}, P = {}, away = V(-.1, -.5, -.12), rhG = new T.Group(), phG = new T.Group(), hopt = { pad: MAT.poly2, thumbWrap: true, yaw: .5 }, mb, mc, kb, kc;
+    Object.keys(PG).forEach(function (n) { P[n] = mh(PG[n]); out.add(P[n]); });
+    if (oh.children.length) { H.off = mh(oh); out.add(H.off); }
+    if (id === 'shotgun') { var sh0 = V(.0, -.085, -.01), shG = new T.Group(), kk = kit(shG); kk.cx(.0098, .05, MAT.red, sh0.x + .03, sh0.y, sh0.z, 10); kk.cx(.0102, .014, MAT.brass, sh0.x - .002, sh0.y, sh0.z, 10); P.shell = mh(shG); P.shell.visible = false; out.add(P.shell);
+      hand(rhG, sh0, V(1, 0, 0), V(0, -1, -.25), -1, .0105, sh0.clone().add(away), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .6 }); }
+    else if (PG.mag && id === 'pistol') { mb = new T.Box3().setFromObject(PG.mag); mc = V((mb.min.x + mb.max.x) / 2, mb.min.y - .013, 0); hand(rhG, mc, V(1, 0, 0), V(0, -1, -.25), -1, .012, mc.clone().add(away), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .6 }); }   /* cupped under the magazine's floor plate */
+    else if (PG.mag) { mb = new T.Box3().setFromObject(PG.mag); mc = V((mb.min.x + mb.max.x) / 2, mb.min.y + Math.min(.045, (mb.max.y - mb.min.y) * .4), 0); hand(rhG, mc, V(.12, 1, 0), V(-.35, 0, -.94), -1, .019, mc.clone().add(away), sl, gl, hopt); }
+    if (rhG.children.length) { H.rh = mh(rhG); H.rh.visible = false; out.add(H.rh); }
+    if (PG.chg || PG.bolt) { kb = new T.Box3().setFromObject(PG.chg || PG.bolt); kc = V((kb.min.x + kb.max.x) / 2, PG.bolt ? .036 : (kb.min.y + kb.max.y) / 2, kb.min.z + (PG.bolt ? .013 : .006));
+      hand(phG, kc, V(0, 1, 0), V(-.87, 0, -.5), -1, PG.bolt ? .012 : .007, kc.clone().add(away), sl, gl, hopt); H.ph = mh(phG); H.ph.visible = false;
+      if (PG.bolt) { var pv = new T.Group(); out.remove(P.bolt); pv.position.set(0, .045, 0); pv.userData.py = .045; P.bolt.position.set(0, -.045, 0); pv.add(P.bolt); out.add(pv); P.bolt = pv; }   /* turns about the barrel's axis */
+      out.add(H.ph); }
+    out.userData.H = H; out.userData.P = P;
     if (stG.children.length) { var sg3 = new T.Group(); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); sg3.visible = false; out.add(sg3); out.userData.stock = sg3; }
-    if (mgG.children.length) { var mg = new T.Group(); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); out.add(mg); out.userData.mag = mg; }
     if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.012), ax.clone().multiplyScalar(.198)];   /* base and tip of the blade, for the swing trail */
     return out;
   };
