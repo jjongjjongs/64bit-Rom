@@ -400,6 +400,9 @@
   }
   function feed(k, v, head) { G.feed.unshift({ k: k, v: v, head: head, t: 5 }); if (G.feed.length > 4) G.feed.pop(); G.feedDirty = true; }
   function hurt(v, dmg, by, head, wid) {
+    if (G.net && v.remote) {   /* someone else's soldier: tell its owner; they decide and announce the result */
+      if (!v.alive || G.state !== 'play' || by.remote) return false; G.net.send({ t: 'h', v: v.nid, by: by.nid, d: Math.round(dmg), h: head ? 1 : 0 });
+      if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); } return true; }
     if (!v.alive || v.prot > 0 || G.state !== 'play') return false;
     v.hp -= dmg; v.ai.hurtBy = by;
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
@@ -411,6 +414,7 @@
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
+      if (G.net) G.net.send({ t: 'k', v: v.nid, by: by.nid, h: head ? 1 : 0 });
       if (!G.bomb && G.score[by.team] >= G.match.target) endMatch();
     }
     return true;
@@ -470,6 +474,7 @@
       else if (res.world) impact(vH, hitNrm);
     }
     a.bloom = Math.min(a.bloom + w.bloom, .04);
+    if (G.net && !a.remote) G.net.send({ t: 'f', by: a.nid, g: g.id, o: [+muzzle.x.toFixed(2), +muzzle.y.toFixed(2), +muzzle.z.toFixed(2)], e: [+vH.x.toFixed(2), +vH.y.toFixed(2), +vH.z.toFixed(2)] });
     if (a.isPlayer) { G.stats.shots++; a.pitch = clamp(a.pitch + w.recoil * rnd(.7, 1.2), -1.5, 1.5); a.yaw += w.recoil * rnd(-.35, .35); vmKick = 1; flash.visible = true; G.flashT = .05; flash.rotation.z = Math.random() * 6.28; flash.scale.setScalar((FLSIZE[g.id] || 1) * rnd(.8, 1.25)); muzzleFx(muzzle, dir, FLSIZE[g.id] || 1, true);
       gunSnd(g.id, 1, 0); tick(.035, 3400, .12); if (g.id === 'sniper') { tick(.45, 2200, .2); tick(.62, 1500, .24, 2); tick(.8, 2600, .2); } else if (g.id === 'shotgun') { tick(.3, 1200, .28, 2); tick(.44, 1700, .26, 2); }
       vP.copy(o).addScaledVector(dir, .35).addScaledVector(vR, -.14); vP.y -= .08; shell(vP, -vR.x * 2 + dir.x * .4 + rnd(-.3, .3), 1.6 + rnd(0, .6), -vR.z * 2 + dir.z * .4 + rnd(-.3, .3), a.pos.y);   // spent case, thrown to the right
@@ -932,14 +937,19 @@
     G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
     function gun(n) { if (window.TESTGUN) return window.TESTGUN;   /* tests: give every bot one gun */
       var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
+    G.net = match.net || null;
+    if (G.net) {   /* multiplayer: everyone builds the same list from the host's roster. Each phone runs its own soldier; the host also runs the bots; the rest are shown from what their owners send */
+      G.net.acc = 0; G.net.roster.forEach(function (r) { var mine = r.id === G.net.me, a = actor(r.team, mine ? '나' : r.name, mine, mine ? match.primary : r.primary); a.nid = r.id; a.remote = !mine && !(r.bot && G.net.host); a.net = null; if (mine) G.player = a; G.actors.push(a); });
+    } else {
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
     for (i = 0; i < (match.enemies != null ? match.enemies : match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
+    }
     var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
     G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
     G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
   };
-  SV.end = function () {
+  SV.end = function () { G.net = null;
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); G.map = null; }
     G.actors.forEach(function (a) { if (a.model) scene.remove(a.model.root); }); G.actors = [];
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
@@ -1008,16 +1018,46 @@
   };
   SV.board = function () { return G.actors.slice().sort(function (a, b) { return b.kills - a.kills || a.deaths - b.deaths; }); };
 
+  // ---------- multiplayer ----------
+  function byNid(id) { for (var i = 0; i < G.actors.length; i++) if (G.actors[i].nid === id) return G.actors[i]; return null; }
+  /* a soldier run on another phone: glide toward the last position its owner sent */
+  function updRemote(dt, a) {
+    var s = a.net; if (!s) return;
+    if (s.alive && !a.alive) { spawn(a); a.pos.set(s.x, s.y, s.z); a.yaw = s.yaw; }
+    if (!s.alive && a.alive) { a.alive = false; a.dead = .001; }
+    if (!a.alive) return;
+    var k = Math.min(1, dt * 14), dx = s.x - a.pos.x, dy = s.y - a.pos.y, dz = s.z - a.pos.z; if (dx * dx + dy * dy + dz * dz > 25) k = 1;
+    a.pos.x += dx * k; a.pos.y += dy * k; a.pos.z += dz * k; a.yaw += angd(s.yaw, a.yaw) * k; a.pitch = s.pitch; a.crouch = s.crouch; a.moving = s.moving; a.hp = s.hp; a.prot = 0;
+  }
+  function netTick(dt) {
+    var N = G.net; N.acc += dt; if (N.acc < 1 / 15) return; N.acc = 0; var out = [];
+    G.actors.forEach(function (a) { if (a.remote) return; out.push([a.nid, +a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2), +a.yaw.toFixed(3), +a.pitch.toFixed(2), (a.alive ? 1 : 0) | (a.crouch ? 2 : 0) | (a.moving ? 4 : 0), Math.max(0, Math.round(a.hp))]); });
+    var m = { t: 's', a: out }; if (N.host) m.tm = Math.round(G.time); N.send(m);
+  }
+  SV.netMsg = function (m) {
+    if (!G.net || G.state !== 'play') return; var a, v, by;
+    if (m.t === 's') { m.a.forEach(function (r) { a = byNid(r[0]); if (a && a.remote) a.net = { x: r[1], y: r[2], z: r[3], yaw: r[4], pitch: r[5], alive: !!(r[6] & 1), crouch: !!(r[6] & 2), moving: !!(r[6] & 4), hp: r[7] }; }); if (m.tm != null && !G.net.host) G.time = m.tm; }
+    else if (m.t === 'h') { v = byNid(m.v); by = byNid(m.by); if (v && !v.remote) hurt(v, m.d, by || v, !!m.h); }
+    else if (m.t === 'k') { v = byNid(m.v); by = byNid(m.by) || v; if (!v || !v.remote) return; var head = !!m.h;
+      v.alive = false; v.dead = .001; v.deaths++; if (v.net) v.net.alive = false; if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; } feed(by, v, head);
+      if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); }
+      if (!G.bomb && G.score[by.team] >= G.match.target) endMatch(); }
+    else if (m.t === 'f') { a = byNid(m.by); if (!a || !a.remote) return; a.fireK = 1; vP.fromArray(m.o); vH.fromArray(m.e); tracer(vP, vH); var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); gunSnd(m.g, clamp(1 - dd / 95, 0, 1) * .8, dd); }
+    else if (m.t === 'left') { a = byNid(m.id); if (a) { a.net = { alive: false }; a.remote = true; a.alive = false; a.gone = true; if (a.model) a.model.root.visible = false; } }
+  };
+
   // ---------- main loop ----------
   function step(dt) {
     var i, a, p = G.player; G.elapsed += dt;
     if (G.bomb) { updBomb(dt); if (G.state !== 'play') return; } else { G.time -= dt; if (G.time <= 0) { endMatch(); return; } }
     for (i = 0; i < G.actors.length; i++) {
       a = G.actors[i]; a.prot = Math.max(0, a.prot - dt); a.spot = Math.max(0, a.spot - dt); a.bloom = Math.max(0, a.bloom - dt * .05);
-      if (!a.alive) { if (!G.bomb) { a.respawn -= dt; if (a.respawn <= 0) spawn(a); } continue; }
+      if (a.remote) { updRemote(dt, a); if (!a.alive) continue; }
+      else if (!a.alive) { if (!G.bomb) { a.respawn -= dt; if (a.respawn <= 0) spawn(a); } continue; }
       for (var k = 0; k < 3; k++) { var g = a.guns[k]; if (g.cool > 0) g.cool -= dt; if (k === a.slot && g.reload > 0) { g.reload -= dt; if (g.reload <= 0) { var n = Math.min(W[g.id].mag - g.mag, g.res); g.mag += n; g.res -= n; } } }
-      if (a.isPlayer) updPlayer(dt, a); else updBot(dt, a);
+      if (a.isPlayer) updPlayer(dt, a); else if (!a.remote) updBot(dt, a);
     }
+    if (G.net) netTick(dt);
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt); updSmokes(dt);
     if (!p.alive) { G.eyeH = null; inp.nadeHold = false; nadeArc(false); }

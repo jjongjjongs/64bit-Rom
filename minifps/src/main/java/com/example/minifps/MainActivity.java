@@ -27,6 +27,7 @@ public final class MainActivity extends Activity {
 
     private WebView web;
     private Updater updater;
+    private MiniNet net;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -73,6 +74,8 @@ public final class MainActivity extends Activity {
         });
         updater = new Updater(this, web);
         web.addJavascriptInterface(updater, "MiniUpdate");
+        net = new MiniNet(web);
+        web.addJavascriptInterface(net, "MiniNet");
         setContentView(web);
         if (savedInstanceState == null) {
             web.loadUrl(ORIGIN + "index.html");
@@ -155,6 +158,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (net != null) {
+            net.destroy();
+        }
         web.destroy();
         super.onDestroy();
     }

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 게임 전체가 assets 에 들어 있어 오프라인으로 돈다. 아래 권한은 앱 안 업데이트(Updater)만 쓴다:
-         새 버전 확인·내려받기, 받은 APK 설치 요청, 그리고 이 앱이 설치한 버전을 확인 창 없이 올리기. -->
+         새 버전 확인·내려받기, 받은 APK 설치 요청, 그리고 이 앱이 설치한 버전을 확인 창 없이 올리기.
+         INTERNET 은 멀티플레이도 쓴다: 방장 폰이 포트 8770 을 열고 다른 폰이 그 주소로 접속한다(같은 와이파이·Tailscale). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
