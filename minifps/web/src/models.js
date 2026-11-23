@@ -612,7 +612,8 @@ var SV = window.SV = window.SV || {};
   /* ax, ay: how far to shift the gun when aiming so its sight sits on the aim point (set by eye against the screen centre) */
   var PACK = {
     rifle: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
-    rifle2: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
+    /* a different author's pack: the gun is skinned too (told apart by its material's name) and each motion is its own clip, joined into one track on load */
+    rifle2: { f: 'kodiak', ax: .0035, ay: .016, az: .22, arot: [.004, -.0047], gunRe: /^Material/, multi: { fire: 'AK_Fire', reload: 'AK_Reload', idle: 'AK_Idle', aim: 'AK_Idle_Aim', aimFire: 'Aim_Fire' }, len: .87, muzzle: [.12, -.13, -.8], clips: {} },
     smg: { f: 'hornet', ax: -.006, ay: .0187, len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
     sniper: { f: 'sniper', len: 1.15, muzzle: [.12, -.15, -1.25], clips: { fire: [0, .4], pump: [.4, 1.6], reload: [1.6, 3.1], idle: [4.9, 6.0] } },
     shotgun: { f: 'mauler', ay: .0265, len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
@@ -623,25 +624,37 @@ var SV = window.SV = window.SV || {};
     if (PKC[id0]) return PKC[id0];
     var c = PACK[id0], G = c && SV.assets.fp && SV.assets.fp[c.f]; if (!G) return null;
     var wrap = new T.Group(), inner = new T.Group(), root = id0 === 'rifle2' && T.SkeletonUtils ? T.SkeletonUtils.clone(G.scene) : G.scene; inner.add(root); wrap.add(inner);
-    var gunM = [], armM = [], v = new T.Vector3(); root.traverse(function (o) { if (!o.isMesh) return; o.frustumCulled = false; (o.isSkinnedMesh ? armM : gunM).push(o);
+    var gunM = [], armM = [], v = new T.Vector3(); root.traverse(function (o) { if (!o.isMesh) return; o.frustumCulled = false; ((c.gunRe ? !c.gunRe.test(o.material.name) : o.isSkinnedMesh) ? armM : gunM).push(o);
       var pa = o.geometry.attributes.position; if (pa.normalized) { var den = pa.array instanceof Int16Array ? 32767 : pa.array instanceof Int8Array ? 127 : pa.array instanceof Uint16Array ? 65535 : 255, fa = new Float32Array(pa.count * 3); for (var i = 0; i < pa.count; i++) { fa[i * 3] = Math.max(pa.getX(i) / den, -1); fa[i * 3 + 1] = Math.max(pa.getY(i) / den, -1); fa[i * 3 + 2] = Math.max(pa.getZ(i) / den, -1); } o.geometry.setAttribute('position', new T.BufferAttribute(fa, 3)); }   /* the files store positions as packed integers; unpack once so sizes can be measured */
       var sw = o.geometry.attributes.skinWeight; if (sw && sw.normalized) { var d2 = sw.array instanceof Uint16Array ? 65535 : 255, fw = new Float32Array(sw.count * 4); for (var k = 0; k < fw.length; k++) fw[k] = sw.array[k] / d2; o.geometry.setAttribute('skinWeight', new T.BufferAttribute(fw, 4)); }
     });
-    var mixer = new T.AnimationMixer(root), act = mixer.clipAction(G.animations[0]); act.play(); mixer.setTime(c.clips.idle[0]); var rest = []; root.traverse(function (o) { rest.push({ o: o, p: o.position.clone(), q: o.quaternion.clone() }); });   /* the still pose the idle motion is blended toward */
-    wrap.updateMatrixWorld(true); armM.forEach(function (o) { o.skeleton.update(); });
+    var clipA = G.animations[0];
+    if (c.multi && !c.clips.idle) { var tr = {}, off = 0; Object.keys(c.multi).forEach(function (key) { var a = G.animations.filter(function (q) { return q.name.slice(-c.multi[key].length) === c.multi[key]; })[0]; if (!a) return;
+        a.tracks.forEach(function (t) { var e = tr[t.name] || (tr[t.name] = { t: [], v: [], C: t.constructor }), i; for (i = 0; i < t.times.length; i++) e.t.push(t.times[i] + off); for (i = 0; i < t.values.length; i++) e.v.push(t.values[i]); });
+        c.clips[key] = [off, off + a.duration]; off += a.duration + .1; });
+      c.clip = new T.AnimationClip('all', off, Object.keys(tr).map(function (n) { return new tr[n].C(n, tr[n].t, tr[n].v); })); }
+    if (c.clip) clipA = c.clip;
+    var mixer = new T.AnimationMixer(root), act = mixer.clipAction(clipA); act.play(); mixer.setTime(c.clips.idle[0]); var rest = []; root.traverse(function (o) { rest.push({ o: o, p: o.position.clone(), q: o.quaternion.clone() }); });   /* the still pose the idle motion is blended toward */
+    var skel = function () { wrap.updateMatrixWorld(true); armM.concat(gunM).forEach(function (o) { if (o.isSkinnedMesh) o.skeleton.update(); }); }; skel();
     function verts(list, fn) { list.forEach(function (o) { var p = o.geometry.attributes.position, st = Math.max(1, Math.floor(p.count / 4000)); for (var i = 0; i < p.count; i += st) { if (o.isSkinnedMesh) o.boneTransform(i, v); else v.fromBufferAttribute(p, i); v.applyMatrix4(o.matrixWorld); fn(v); } }); }
     var gb = new T.Box3(), ac = new T.Vector3(), an = 0; verts(gunM, function (q) { gb.expandByPoint(q); }); verts(armM, function (q) { ac.add(q); an++; }); if (an) ac.multiplyScalar(1 / an);
     var sz = gb.getSize(new T.Vector3()), gc = gb.getCenter(new T.Vector3()), axis = sz.x > sz.z ? 'x' : 'z', sign = Math.sign(gc[axis] - ac[axis]) || 1;
     inner.rotation.y = axis === 'x' ? (sign > 0 ? PI / 2 : -PI / 2) : sign > 0 ? PI : 0; inner.scale.setScalar(c.len / sz[axis]); wrap.updateMatrixWorld(true);
     var mz = null; verts(gunM, function (q) { if (!mz || q.z < mz.z) mz = q.clone(); }); inner.position.add(new T.Vector3(c.muzzle[0], c.muzzle[1], c.muzzle[2]).sub(mz)); wrap.updateMatrixWorld(true);
     var b2 = new T.Box3(); verts(gunM, function (q) { b2.expandByPoint(q); }); var L = b2.max.z - b2.min.z, cx = (b2.min.x + b2.max.x) / 2, top = -1e9; verts(gunM, function (q) { if (q.z > b2.min.z + .45 * L && q.z < b2.min.z + .95 * L && Math.abs(q.x - cx) < .02 && q.y > top) top = q.y; }); if (top < -1e8) top = b2.max.y;
+    var aimRest = null;
+    if (c.clips.aim) {   /* this pack has its own aiming pose: measure the sight there, and keep the pose to blend toward while aiming */
+      mixer.setTime(c.clips.aim[0]); skel(); aimRest = []; root.traverse(function (o) { aimRest.push({ o: o, p: o.position.clone(), q: o.quaternion.clone() }); });
+      b2.makeEmpty(); verts(gunM, function (q) { b2.expandByPoint(q); }); L = b2.max.z - b2.min.z; cx = (b2.min.x + b2.max.x) / 2; top = -1e9; verts(gunM, function (q) { if (q.z > b2.min.z + .45 * L && q.z < b2.min.z + .95 * L && Math.abs(q.x - cx) < .02 && q.y > top) top = q.y; }); if (top < -1e8) top = b2.max.y;
+      mixer.setTime(c.clips.idle[0]); skel(); }
     var fit = { axis: axis, sign: sign, sz: sz.toArray().map(function (x) { return +x.toFixed(3); }), gc: gc.toArray().map(function (x) { return +x.toFixed(3); }), ac: ac.toArray().map(function (x) { return +x.toFixed(3); }), an: an, gun: gunM.length, arm: armM.length };
-    wrap.userData = { fit: fit, pack: c, mixer: mixer, rest: rest, ads: [-cx + (c.ax || 0), -.018 - top + (c.ay || 0), c.len < .3 ? .02 : -.04], muzzle: [-c.muzzle[2], c.muzzle[1]], sight: 0, t: 0, fireT: 9, pumpT: 9 };
+    wrap.userData = { fit: fit, pack: c, mixer: mixer, rest: rest, aimRest: aimRest, ads: [-cx + (c.ax || 0), -.018 - top + (c.ay || 0), c.az != null ? c.az : c.len < .3 ? .02 : -.04], muzzle: [-c.muzzle[2], c.muzzle[1]], sight: 0, t: 0, fireT: 9, pumpT: 9 };
     /* the same gun, without the arms, for the soldiers seen from outside and for the menus: its parts as they sit in the idle
        pose, turned into the game's gun space (+X muzzle, +Y up), with the hand positions measured from its shape */
     var Mg = new T.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1), parts = [], bb = new T.Box3();
     gunM.forEach(function (o) { var g = new T.BufferGeometry(), na = o.geometry.attributes.normal, nf = new Float32Array(na.count * 3), i; for (i = 0; i < na.count; i++) { nf[i * 3] = na.getX(i); nf[i * 3 + 1] = na.getY(i); nf[i * 3 + 2] = na.getZ(i); }
-      g.setAttribute('position', o.geometry.attributes.position.clone()); g.setAttribute('normal', new T.BufferAttribute(nf, 3)); if (o.geometry.index) g.setIndex(o.geometry.index.clone()); g.applyMatrix4(o.matrixWorld); g.applyMatrix4(Mg); g.normalizeNormals(); g.computeBoundingBox(); bb.union(g.boundingBox); parts.push(g); });
+      g.setAttribute('position', o.geometry.attributes.position.clone()); g.setAttribute('normal', new T.BufferAttribute(nf, 3)); if (o.geometry.index) g.setIndex(o.geometry.index.clone());
+      if (o.isSkinnedMesh) { var gp = g.attributes.position; for (i = 0; i < gp.count; i++) { o.boneTransform(i, v); gp.setXYZ(i, v.x, v.y, v.z); } g.computeVertexNormals(); }   /* a skinned gun: freeze it as it sits in the idle pose */ g.applyMatrix4(o.matrixWorld); g.applyMatrix4(Mg); g.normalizeNormals(); g.computeBoundingBox(); bb.union(g.boundingBox); parts.push(g); });
     var long = c.len > .3, fr = PKW[id0], gx = bb.min.x + fr[0] * (bb.max.x - bb.min.x), fx = bb.min.x + fr[1] * (bb.max.x - bb.min.x), my = c.muzzle[1], low = function (x0) { var lo = 1e9; parts.forEach(function (g) { var p = g.attributes.position; for (var i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - x0) < .02 && p.getY(i) < lo) lo = p.getY(i); }); return lo; },
       gyl = low(gx), fy = long ? low(fx) : 0, dx = (long ? -.105 : -.06) - gx, dy = .03 - my, dz = -(bb.min.z + bb.max.z) / 2;
     parts.forEach(function (g) { g.translate(dx, dy, dz); });

@@ -4,3 +4,7 @@ soldier_*.jpg — repainted skins for the three.js example soldier.
 fp/*.glb — first-person arms and guns with their animations: the "fps animated ..." models by DJMaesen
            (https://sketchfab.com/bumstrum), CC BY 4.0, in the compressed form prepared for the Bayou Protocol project
            (https://github.com/houstoncardinal/bayou-protocol).
+
+fp/kodiak.glb — "FPS Character Animation Pack Ak-47" by Cristian David Duque Camacho (https://sketchfab.com/DuqueCD7), CC BY 4.0.
+  https://sketchfab.com/3d-models/fps-character-animation-pack-ak-47-b95778a564094fc3a49d1d6a3b6a30ab
+  Compressed copy (meshopt, WebP textures) taken from the Bayou Protocol project (public/game/models/rig-kodiak-arms.glb).

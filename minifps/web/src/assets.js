@@ -19,7 +19,7 @@
       ['soldier_A', 'soldier_B', 'soldier_nrm'].forEach(function (n) { total++; var t = tl.load(A.base + 'art/' + n + '.jpg', function () { A.art[n] = t; step(); }, undefined, step); t.flipY = false; t.anisotropy = 4; if (n !== 'soldier_nrm') t.encoding = T.sRGBEncoding; });
       total++; gl.load(A.base + 'soldier.glb', function (g) { A.soldier = g; step(); }, undefined, step);
       /* first-person arms and gun in one animated model each ("fps animated ..." packs by DJMaesen, CC BY 4.0, as prepared for Bayou Protocol) */
-      A.fp = {}; if (window.MeshoptDecoder) { gl.setMeshoptDecoder(MeshoptDecoder); ['carbine', 'hornet', 'sniper', 'mauler', 'striker', 'kestrel'].forEach(function (n) { total++; gl.load(A.base + 'art/fp/' + n + '.glb', function (g) { A.fp[n] = g; step(); }, undefined, step); }); }
+      A.fp = {}; if (window.MeshoptDecoder) { gl.setMeshoptDecoder(MeshoptDecoder); ['carbine', 'hornet', 'sniper', 'mauler', 'striker', 'kestrel', 'kodiak'].forEach(function (n) { total++; gl.load(A.base + 'art/fp/' + n + '.glb', function (g) { A.fp[n] = g; step(); }, undefined, step); }); }
       total++; gl.load(A.base + 'art/hand.glb', function (g) { A.hand = g; step(); }, undefined, step);   // a real hand mesh for the first-person gloves
       step();
     }, undefined, function () { A.ready = true; done(); });

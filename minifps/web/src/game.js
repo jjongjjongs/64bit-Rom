@@ -598,17 +598,19 @@
       if (rr >= 0) {
         if (C.shellIn) { var n = clamp(g1.rlNeed || 1, 1, 8), a0 = .14, a1 = .82; tt = rr < a0 ? C.shellStart[0] + (C.shellStart[1] - C.shellStart[0]) * rr / a0 : rr > a1 ? C.shellEnd[0] + (C.shellEnd[1] - C.shellEnd[0]) * (rr - a1) / (1 - a1) : C.shellIn[0] + (C.shellIn[1] - C.shellIn[0]) * (((rr - a0) / (a1 - a0) * n) % 1); }
         else { seg = g1.rlEmpty && C.reloadEmpty ? C.reloadEmpty : C.reload; tt = seg[0] + (seg[1] - seg[0]) * rr; }
-      } else if (PU.fireT < C.fire[1] - C.fire[0]) tt = C.fire[0] + PU.fireT;
+      } else if (PU.fireT < C.fire[1] - C.fire[0]) { var FC = C.aimFire && vmAds > .5 ? C.aimFire : C.fire; tt = FC[0] + Math.min(PU.fireT, FC[1] - FC[0]); var firing = true; }
       else if (C.pump && PU.pumpT < (C.fire[1] - C.fire[0]) + (C.pump[1] - C.pump[0])) tt = C.pump[0] + PU.pumpT - (C.fire[1] - C.fire[0]);
       else { tt = C.idle[0] + PU.t % (C.idle[1] - C.idle[0]); var idleK = 1 - clamp((SV.cfg.sway == null ? 30 : SV.cfg.sway) / 100, 0, 1) * (1 - vmAds); }   /* aiming holds the gun still so the sight stays on the aim point */
       PU.mixer.setTime(Math.min(tt, PU.mixer._actions[0].getClip().duration - .001));
-      if (idleK > 0) for (var ri = 0, rs = PU.rest; ri < rs.length; ri++) { rs[ri].o.position.lerp(rs[ri].p, idleK); rs[ri].o.quaternion.slerp(rs[ri].q, idleK); }   /* settings slider: 0 holds the gun still, 100 plays the idle motion as authored */
+      if (PU.aimRest && vmAds > 0 && rr < 0 && !(firing && vmAds > .5)) for (var ai = 0, as = PU.aimRest; ai < as.length; ai++) { as[ai].o.position.lerp(as[ai].p, vmAds); as[ai].o.quaternion.slerp(as[ai].q, vmAds); }
+      else if (idleK > 0) for (var ri = 0, rs = PU.rest; ri < rs.length; ri++) { rs[ri].o.position.lerp(rs[ri].p, idleK); rs[ri].o.quaternion.slerp(rs[ri].q, idleK); }   /* settings slider: 0 holds the gun still, 100 plays the idle motion as authored */
       vmSwap = Math.max(0, vmSwap - dt); vmAds += ((p.ads && rr < 0 ? 1 : 0) - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9);
       if (p.moving && p.ground) bobT += dt * 9; var kb2 = 1 - vmAds, A2 = PU.ads;
       if (vmCam.fov !== 60) { vmCam.fov = 60; vmCam.updateProjectionMatrix(); }
       var RO = (window.PK && window.PK.rl) || PU.pack.rl || [0, 0, 0], rk = rr < 0 ? 0 : sm(0, .12, rr) - sm(.88, 1, rr), HO = (window.PK && window.PK.hip) || PU.pack.hip || [0, 0, 0];   /* hip: where the gun rests; rl: eased in while reloading so a raised gun does not fill the view */
       if (window.PK && window.PK.ads) A2 = window.PK.ads;
-      vmRoot.rotation.set(-vmSwap * 1.2, 0, 0); vmRoot.position.set(A2[0] * vmAds + HO[0] * kb2 + RO[0] * rk + Math.cos(bobT * .5) * .004 * kb2, A2[1] * vmAds + HO[1] * kb2 + RO[1] * rk + Math.sin(bobT) * .004 * kb2 - vmSwap * .4, A2[2] * vmAds + HO[2] * kb2 + RO[2] * rk); vmRoot.visible = !(w.scope && vmAds > .8); flash.scale.setScalar(1);
+      var AR = (window.PK && window.PK.arot) || PU.pack.arot || [0, 0];   /* a small turn while aiming, for a pack whose aiming pose does not line both sights up with the eye */
+      vmRoot.rotation.set(-vmSwap * 1.2 + AR[0] * vmAds, AR[1] * vmAds, 0); vmRoot.position.set(A2[0] * vmAds + HO[0] * kb2 + RO[0] * rk + Math.cos(bobT * .5) * .004 * kb2, A2[1] * vmAds + HO[1] * kb2 + RO[1] * rk + Math.sin(bobT) * .004 * kb2 - vmSwap * .4, A2[2] * vmAds + HO[2] * kb2 + RO[2] * rk); vmRoot.visible = !(w.scope && vmAds > .8); flash.scale.setScalar(1);
       var fv2 = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fv2) > .05) { cam.fov = fv2; cam.updateProjectionMatrix(); } $('scope').hidden = !(w.scope && vmAds > .8); return;
     }
     if (vmCur.userData.arms && !act) {   /* animated arms: pick the clip and its time, and let the skeleton do the rest */
@@ -893,7 +895,8 @@
     buildNav(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
     HOT = map.hot || [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
     G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
-    function gun(n) { var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
+    function gun(n) { if (window.TESTGUN) return window.TESTGUN;   /* tests: give every bot one gun */
+      var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
     for (i = 0; i < (match.enemies != null ? match.enemies : match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
