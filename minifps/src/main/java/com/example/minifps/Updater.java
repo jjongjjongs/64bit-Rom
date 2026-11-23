@@ -36,7 +36,7 @@ import java.util.Locale;
  */
 final class Updater {
     static final String ACTION_STATUS = "com.example.minifps.INSTALL_STATUS";
-    private static final String BASE = "https://github.com/jjongjjongs/64bit-Rom/releases/download/latest/";
+    private static final String BASE = "https://github.com/jjongjjongs/Mini-fps/releases/download/latest/";
 
     private final MainActivity activity;
     private final WebView web;

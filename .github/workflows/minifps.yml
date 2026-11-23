@@ -14,6 +14,12 @@ on:
 permissions:
   contents: write
 
+# 같은 커밋을 작업 브랜치와 main 에 함께 올리면 빌드가 둘 돈다. 둘이 같은 릴리스 파일을 동시에 갈아 끼우면
+# 한쪽 올리기가 실패하고 파일이 빠진 채 남는다. 한 번에 하나씩만 돌게 줄을 세운다.
+concurrency:
+  group: minifps-release
+  cancel-in-progress: false
+
 jobs:
   assemble:
     runs-on: ubuntu-latest
