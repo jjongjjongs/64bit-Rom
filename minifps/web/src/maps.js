@@ -103,7 +103,7 @@
   };
   var texCache = {}, WHITE = new T.Color(1, 1, 1);
   // real-world size of one repeat of each photographed texture, and how much of the painted-in tint to keep on it
-  var PHT = { conc: [3, 3], floor: [3, 3], block: [2.4, 2.4], corr: [2, 2], panel: [2, 2], metal: [2, 2], paint: [2, 2], canvas: [1, 1], crate: [1, 1] }, KEEP = { conc: .5, floor: .5, block: .3, corr: .9, panel: .75, metal: .7, paint: .92, crate: .8 }, GAIN = { block: 1.9, conc: 1.2, floor: 1.15, crate: .95, corr: 1.3, panel: 1.3, metal: 1.2, paint: 1.3 };
+  var PHT = { plaster: [2.5, 2.5], roof: [1.6, 1.6], conc: [3, 3], floor: [3, 3], block: [2.4, 2.4], corr: [2, 2], panel: [2, 2], metal: [2, 2], paint: [2, 2], canvas: [1, 1], crate: [1, 1] }, KEEP = { plaster: .45, roof: .75, conc: .5, floor: .5, block: .3, corr: .9, panel: .75, metal: .7, paint: .92, crate: .8 }, GAIN = { block: 1.9, conc: 1.2, floor: 1.15, crate: .95, corr: 1.3, panel: 1.3, metal: 1.2, paint: 1.3 };
   // scans whose own colours are wrong for where they are used are tinted: the cement sacks become plain burlap
   var TINT = { cement_bag: 0x9a8a68 };
   function photo(key) { var a = key !== 'canvas' && SV.assets && SV.assets.tex[key]; return a && a.diff ? a : null; }
@@ -1220,11 +1220,381 @@
     return { name: '사격 연습장', b: b, bounds: { minx: -41, maxx: 41, minz: -31, maxz: 31 }, bg: 0x93a7b8, fog: [60, 240], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.7, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1, lod: [40, 80], targets: tg };
   }
 
-  var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon, range];
-  SV.RANGE = 7;   // the practice range: not in the match list, opened from the lobby's practice button
+  // 08–11 세관 야적장 · 고갯길 검문소 · 폐공장 · 시장 골목 — drawn from the approved plan sheets (the 3D draft).
+  // A plan is a list of entries on a 90 x 56 m sheet, x to the right and y down (world x = x - 45, z = y - 28):
+  //   ['room', x, y, w, h, name, twoStorey, open]   name '' is an outline that only holds rooms; open: posts and a roof, no walls
+  //   ['door', x, y, onHorizontalWall, width]      ['cover', x, y, w, h]      ['spawn', x, y, w, h, team]      ['site', x, y, n]
+  // planned() builds it the way the other maps are built: merged walls with door gaps and lintels, floors, roofs, lamps, a
+  // walkway with stairs in each two-storey hall (the players' upper floor, like the warehouse catwalk: bots keep to the ground),
+  // cover from the plan, and the rooms furnished by their kind with the same rules as the draft.
+  var FK = { wood: 0x8a6a45, dark: 0x3d3a36, metal: 0x7d858c, steel: 0x58606a, blue: 0x3f5f86, red: 0x8c3b2f, fab: 0x56677a, paper: 0xd8d2c0, orange: 0xc97a2b, screen: 0x14191f, sand: 0xa58d63, white: 0xd9dcdf,
+    desk: 0xd9d5cb, leg: 0x6d737a, rail: 0xaab2ba, chair: 0x24272b, carpet: 0x55606c, leaf: 0x3f7a3a, pot: 0x8a5a3a, cork: 0xb08a5a, board: 0xeef0f0, bind: [0x2f5d8a, 0x8c3b2f, 0x3f6b3f, 0xc9a227, 0x4a4a4a, 0x6a4a8a] };
+  // a frame turned by `a` about the vertical; pieces are given in its own coordinates (x across, z toward the front)
+  function Fr(b, x, z, a) {
+    var c = Math.cos(a), s = Math.sin(a), q = Math.abs(s) > .5, f = { ang: a,
+      at: function (lx, lz) { return [x + lx * c + lz * s, z - lx * s + lz * c]; },
+      sub: function (lx, lz, a2) { var p = f.at(lx, lz); return Fr(b, p[0], p[1], a + a2); },
+      B: function (lx, ly, lz, w, h, d, col, t) { var p = f.at(lx, lz); b.rbox(p[0], p[1], w, d, h, col, ly, a, false, t); },
+      Cy: function (lx, ly, lz, r, h, col, t) { var p = f.at(lx, lz); b.cyl(p[0], p[1], r, h, col, ly, false, t || 'plain', r, 10); },
+      Ball: function (lx, ly, lz, r, col) { var p = f.at(lx, lz), g = new T.IcosahedronGeometry(r, 1); g.translate(p[0], ly, p[1]); b.geo(g, col, 'plain', { pass: true }); },
+      G: function (lx, ly, lz, w, h, d, col) { var p = f.at(lx, lz); b.glow(p[0], ly + h / 2, p[1], q ? d : w, h, q ? w : d, col); },
+      Seg: function (x0, y0, z0, x1, y1, z1, r, col) { var p = f.at(x0, z0), e = f.at(x1, z1); b.seg(p[0], y0, p[1], e[0], y1, e[1], r, col, 'metal'); }
+    }; return f;
+  }
+  function chairF(f) { f.B(0, .42, 0, .5, .07, .48, FK.chair); f.B(0, .5, -.22, .48, .55, .06, FK.chair); f.Cy(0, .08, 0, .03, .34, FK.leg); f.B(0, .03, 0, .56, .04, .07, FK.leg); f.B(0, .03, 0, .07, .04, .56, FK.leg); f.B(-.27, .55, 0, .04, .04, .32, FK.chair); f.B(.27, .55, 0, .04, .04, .32, FK.chair); }
+  function deskF(d, w, k) {
+    d.B(0, .72, 0, w, .04, .75, FK.desk); d.B(-w / 2 + .03, 0, 0, .04, .72, .72, FK.leg); d.B(w / 2 - .03, 0, 0, .04, .72, .72, FK.leg); d.B(0, .28, .34, w - .1, .42, .03, FK.leg);
+    d.B(0, .76, .2, .22, .02, .16, FK.leg); d.B(0, .78, .22, .04, .16, .04, FK.leg); d.B(0, .92, .22, .58, .34, .03, FK.screen); d.G(0, .95, .205, .52, .28, .005, 0x6d93b8); d.B(0, .76, -.1, .45, .02, .15, FK.leg);
+    if (k % 3 !== 1) d.B(w / 2 - .28, .76, -.02, .24, .03 + (k % 2) * .05, .32, 0xf1eee6); if (k % 2 === 0) d.Cy(-w / 2 + .22, .76, .04, .04, .1, [0xc8452f, 0x2f5d8a, 0xeeeeee][k % 3]);
+    d.B(w / 2 - .25, 0, .08, .4, .58, .55, FK.leg);
+  }
+  function bookF(f) {
+    [-.88, .88].forEach(function (x) { f.B(x, 0, 0, .04, 2.05, .4, 0x8a6a45); }); f.B(0, 0, -.18, 1.8, 2.05, .02, 0x6e5538);
+    for (var i = 0; i < 5; i++) { f.B(0, .02 + i * .5, 0, 1.76, .03, .38, 0x8a6a45); if (i < 4) for (var k = 0; k < 3; k++) f.B(-.56 + k * .57, .05 + i * .5, 0, .5 - ((i + k) % 3) * .07, .27 + ((i * k) % 2) * .05, .3, FK.bind[(i * 3 + k) % 6]); }
+  }
+  // furniture: [width, depth, collision height (0: none, or the piece makes its own), draw(frame, builder)]. Centred; the front faces +z.
+  var FURN = {
+    shelf: [2.2, .5, 2.2, function (f) { f.B(0, 0, 0, 2.2, .05, .5, FK.steel, 'metal'); for (var i = 0; i < 4; i++) f.B(0, .05 + i * .55, 0, 2.2, .04, .5, FK.steel, 'metal'); [-1.08, 1.08].forEach(function (x) { f.B(x, 0, 0, .05, 2.2, .5, FK.steel, 'metal'); }); for (var j = 0; j < 5; j++) f.B(-.86 + j * .42, .09 + ((j * 7) % 4) * .55, 0, .3, .3, .35, [FK.wood, FK.paper, FK.blue][j % 3], j % 3 ? 'plain' : 'crate'); }],
+    rack: [3, 1.1, 3.4, function (f) { [-1.45, 1.45].forEach(function (x) { f.B(x, 0, 0, .1, 3.4, 1.1, FK.orange, 'metal'); }); [1.1, 2.3, 3.3].forEach(function (y) { f.B(0, y, 0, 3, .08, 1.1, FK.blue, 'metal'); }); f.B(-.7, 1.18, 0, 1.2, .9, 1, 0xb39a72, 'crate'); f.B(.7, 2.38, 0, 1.2, .85, 1, 0x9c8a62, 'crate'); f.B(.6, 0, 0, 1.3, .15, 1, FK.wood, 'crate'); f.B(.6, .15, 0, 1.1, .8, .9, FK.sand, 'crate'); }],
+    locker: [1.6, .5, 1.9, function (f) { for (var i = 0; i < 3; i++) { f.B(-.53 + i * .53, 0, 0, .5, 1.9, .5, FK.steel, 'paint'); f.B(-.53 + i * .53, 1.4, .25, .3, .05, .01, FK.dark); } }],
+    cabinet: [1, .6, 1.3, function (f) { f.B(0, 0, 0, .9, 1.3, .6, 0x9aa1a6, 'paint'); for (var i = 0; i < 3; i++) f.B(0, .2 + i * .38, .31, .4, .04, .02, FK.dark); }],
+    counter: [3, .7, 1.1, function (f) { f.B(0, 0, 0, 3, 1.05, .7, FK.wood, 'crate'); f.B(0, 1.05, 0, 3.1, .05, .8, FK.dark); f.B(-.8, 1.1, -.05, .5, .35, .08, FK.screen); }],
+    bench: [2.4, .8, 1, function (f) { f.B(0, .85, 0, 2.4, .08, .8, FK.steel, 'metal'); [-1.1, 1.1].forEach(function (x) { f.B(x, 0, 0, .08, .85, .75, FK.dark); }); f.B(-.6, .93, 0, .5, .2, .35, FK.red); f.B(.5, .93, -.1, .3, .4, .3, FK.metal, 'metal'); }],
+    bunk: [2, .9, 2, function (f) { [0, 1].forEach(function (k) { f.B(0, .35 + k * 1.1, 0, 2, .12, .9, FK.steel, 'metal'); f.B(0, .47 + k * 1.1, 0, 1.9, .15, .85, 0x5a6448, 'canvas'); }); [-.95, .95].forEach(function (x) { [-.4, .4].forEach(function (z) { f.B(x, 0, z, .06, 1.9, .06, FK.steel); }); }); }],
+    console: [2.6, .8, 1.35, function (f) { f.B(0, 0, 0, 2.6, .9, .8, 0x6a737b, 'paint'); for (var i = 0; i < 3; i++) { f.B(-.85 + i * .85, .9, -.15, .7, .45, .06, FK.screen); f.G(-.85 + i * .85, .95, -.115, .62, .36, .01, [0x1c3a34, 0x1e3046, 0x1c3a34][i]); } }],
+    pipes: [4, .4, 0, function (f) { f.Seg(-2, 2.85, -.05, 2, 2.85, -.05, .18, FK.metal); f.Seg(-2, 3.05, .1, 2, 3.05, .1, .14, FK.red); }],
+    sandbag: [2.4, .7, 1, function (f) { for (var r = 0; r < 3; r++) for (var i = 0; i < 4; i++) f.B(-.9 + i * .6 + (r % 2) * .3 - .15, r * .3, 0, .58, .3, .7, FK.sand, 'canvas'); }],
+    tires: [1.2, 1.2, 0, function (f, b) { var p = f.at(0, 0); b.tires(p[0], p[1], 3); }],
+    barrels: [1.3, .7, 0, function (f, b) { var p = f.at(-.33, 0), q = f.at(.33, 0); b.barrel(p[0], p[1], C.blue); b.barrel(q[0], q[1], C.red); }],
+    bookcase: [1.8, .4, 2.05, bookF],
+    copier: [.9, .7, 1.05, function (f) { f.B(0, 0, 0, .85, .9, .65, FK.board); f.B(0, .9, 0, .85, .12, .6, 0xcfd3d6); f.B(.2, .9, .27, .35, .06, .12, 0x333a40); f.B(0, .2, .33, .7, .05, .04, FK.leg); f.B(-.45, .75, 0, .1, .03, .4, FK.board); }],
+    water: [.5, .4, 1.45, function (f) { f.B(0, 0, 0, .34, 1, .34, FK.board); f.Cy(0, 1, 0, .15, .45, 0x7fb6e0); f.B(0, .62, .18, .1, .04, .04, 0xc8452f); }],
+    plant: [.7, .7, 1.4, function (f) { f.Cy(0, 0, 0, .24, .42, FK.pot); f.Cy(0, .42, 0, .06, .3, 0x5a4632); f.Ball(0, .95, 0, .38, FK.leaf); f.Ball(.12, 1.25, -.05, .28, 0x4a8a42); f.Ball(-.15, 1.15, .1, .24, FK.leaf); }],
+    whiteboard: [2, .12, 0, function (f) { f.B(0, .9, -.03, 1.9, 1.15, .03, 0xb9bec2); f.B(0, .93, -.005, 1.82, 1.08, .01, FK.board); f.B(0, .88, .04, 1.6, .03, .08, 0xb9bec2); [[-.5, 1.45, .5], [.1, 1.3, .7], [.4, 1.6, .3]].forEach(function (l, i) { f.B(l[0], l[1], .007, l[2], .02, .005, [0x2f5d8a, 0xc8452f, 0x222222][i]); }); }],
+    notice: [1.3, .1, 0, function (f) { f.B(0, 1.05, -.02, 1.2, .85, .03, FK.cork); [[-.35, 1.6, 0xffffff], [.1, 1.5, 0xf3e27a], [.38, 1.7, 0xffffff], [-.2, 1.25, 0xa8d8f0], [.3, 1.25, 0xffffff]].forEach(function (n) { f.B(n[0], n[1] - .12, .0, .2, .26, .005, n[2]); }); }],
+    sofa: [2, .85, .9, function (f) { f.B(0, 0, .02, 2, .42, .8, 0x3d4f63, 'canvas'); f.B(0, .42, -.3, 2, .45, .2, 0x3d4f63, 'canvas'); [-.95, .95].forEach(function (x) { f.B(x, 0, .02, .12, .62, .8, 0x34465a, 'canvas'); }); f.B(-.5, .42, .07, .85, .1, .6, 0x4a5f76, 'canvas'); f.B(.5, .42, .07, .85, .1, .6, 0x4a5f76, 'canvas'); }],
+    printer: [1, .6, 1.1, function (f) { f.B(0, .7, 0, 1, .04, .6, FK.desk); [-.46, .46].forEach(function (x) { f.B(x, 0, 0, .04, .7, .56, FK.leg); }); f.B(-.1, .74, 0, .5, .3, .42, 0x2a2e33); f.B(-.1, 1.04, 0, .36, .02, .2, 0xf1eee6); f.B(.33, .74, 0, .22, .12, .3, 0xf1eee6); }],
+    coat: [.6, .5, 1.8, function (f) { f.Cy(0, 0, 0, .2, .03, FK.leg); f.Cy(0, 0, 0, .025, 1.8, FK.leg); f.B(0, 1.15, 0, .3, .65, .12, 0x3a3f45, 'canvas'); }],
+    // free-standing pieces for the middle of a room
+    pod: [3.3, 2.9, 1.25, function (f) {
+      [-1, 1].forEach(function (sd, a) { [-.78, .78].forEach(function (xx, k) { var n = a * 2 + k; deskF(f.sub(xx, sd * .42, sd > 0 ? PI : 0), 1.5, n); chairF(f.sub(xx + (n - 1.5) * .06, sd * 1.12, (sd > 0 ? PI : 0) + (n % 3 - 1) * .25)); }); });
+      f.B(0, 0, 0, 3.15, 1.25, .05, FK.fab, 'canvas'); f.B(0, 1.25, 0, 3.2, .04, .08, FK.rail); [-1, 1].forEach(function (sd) { f.B(0, 0, sd * .42, .05, 1.1, .75, FK.fab, 'canvas'); f.B(sd * 1.58, 0, 0, .05, 1.1, 1.6, FK.fab, 'canvas'); f.B(sd * 1.58, 1.1, 0, .08, .04, 1.64, FK.rail); }); }],
+    meeting: [3.2, 2.4, .8, function (f) { f.B(0, .74, 0, 3, .05, 1.2, 0x6e5538, 'crate'); [-1.1, 1.1].forEach(function (x) { f.B(x, 0, 0, .1, .74, .8, FK.leg); }); [-1, 0, 1].forEach(function (i) { chairF(f.sub(i * .95, -.95, 0)); chairF(f.sub(i * .95, .95, PI)); }); f.B(.4, .79, 0, .4, .03, .3, 0xf1eee6); f.B(-.6, .79, .1, .32, .02, .22, 0x2a2e33); }],
+    lone: [1.5, 1.9, 1.2, function (f) { deskF(f.sub(0, -.1, PI), 1.5, 1); chairF(f.sub(.05, .65, PI)); f.B(0, 0, -.62, 1.6, 1.2, .05, FK.fab, 'canvas'); }],
+    archive: [3.4, .8, 2.05, function (f) { [-.86, .86].forEach(function (x) { bookF(f.sub(x, .2, 0)); bookF(f.sub(x, -.2, PI)); }); }],
+    waiting: [2.4, .7, .95, function (f) { f.B(0, 0, 0, 2.4, .08, .5, FK.leg); for (var i = 0; i < 4; i++) { f.B(-.9 + i * .6, .42, 0, .5, .06, .48, 0x3d4f63, 'canvas'); f.B(-.9 + i * .6, .48, -.22, .5, .45, .05, 0x3d4f63, 'canvas'); f.B(-.9 + i * .6, 0, 0, .04, .42, .04, FK.leg); } }],
+    reception: [3.4, 2.1, 1.15, function (f) { f.B(0, 0, -.45, 3.2, 1.1, .25, 0x6e5538, 'crate'); f.B(0, 1.1, -.5, 3.3, .05, .4, 0xd9d5cb); f.B(0, 0, -.1, 3.2, .72, .6, FK.desk); f.B(-.6, .76, -.1, .55, .34, .03, FK.screen); chairF(f.sub(-.6, .6, PI)); f.B(.8, .76, -.05, .3, .05, .22, 0xf1eee6); }],
+    desk: [1.6, 1.4, 1.1, function (f) { f.B(0, .72, -.3, 1.6, .05, .8, FK.wood, 'crate'); f.B(0, 0, -.65, 1.6, .72, .05, FK.wood, 'crate'); [-.75, .75].forEach(function (x) { f.B(x, 0, -.3, .05, .72, .8, FK.dark); }); f.B(.3, .77, -.5, .55, .38, .05, FK.screen); f.B(-.4, .77, -.25, .4, .05, .3, FK.paper); chairF(f.sub(0, .35, PI)); }],
+    table: [2.2, 2.2, .8, function (f) { f.B(0, .76, 0, 2.2, .06, 1.1, FK.wood, 'crate'); [-1, 1].forEach(function (x) { [-.45, .45].forEach(function (z) { f.B(x, 0, z, .07, .76, .07, FK.dark); }); }); [-.6, .6].forEach(function (x) { f.B(x, 0, .85, .45, .45, .45, FK.wood, 'crate'); f.B(x, 0, -.85, .45, .45, .45, FK.wood, 'crate'); }); f.B(.4, .82, 0, .3, .25, .3, FK.white); }],
+    crates: [2.3, 1.2, 0, function (f, b) { var p = f.at(-.55, 0), q = f.at(.62, 0); b.crate(p[0], p[1], 1.1, 0xb39058); b.crate(q[0], q[1], .95, 0xc9a66e); b.crate(p[0], p[1], .9, 0x9c8a62, 1.1); }],
+    pallet: [1.4, 1.2, 1.05, function (f, b) { var p = f.at(0, 0); b.pallet(p[0], p[1], 0, Math.abs(Math.sin(f.ang)) > .5); f.B(0, .14, 0, 1.1, .9, .95, 0xb39a72, 'crate'); f.B(0, 1.04, 0, .7, .3, .6, 0x8f8468, 'crate'); }],
+    xray: [2.8, 1.2, 1.85, function (f) { f.B(0, 0, 0, 2.8, .75, .9, FK.dark, 'metal'); f.B(-.2, .75, 0, 1, 1.1, 1.1, FK.white, 'paint'); f.B(-.2, .95, .56, .6, .5, .02, FK.screen); f.B(1.1, .75, 0, .6, .15, .7, FK.paper); f.B(-1.25, .75, 0, .3, .02, .9, 0x1c1f22); }],
+    car: [4.6, 2.2, 0, function (f, b) { var p = f.at(0, 0); if (!b.prop('covered_car', p[0], p[1], f.ang + PI / 2, 1)) { f.B(0, .25, 0, 4, .75, 1.8, FK.blue, 'paint'); f.B(-.3, 1, 0, 2.2, .6, 1.6, FK.blue, 'paint'); b.solid(p[0], p[1], 4, 4, 1.6); } }],
+    forklift: [2.4, 1.3, 2.2, function (f) { f.B(0, .2, 0, 1.6, 1, 1.2, C.yellow, 'metal'); f.B(-.3, 1.2, 0, .9, 1, 1.1, FK.dark); f.B(1, 0, -.35, .08, 2.2, .08, FK.dark); f.B(1, 0, .35, .08, 2.2, .08, FK.dark); f.B(1.4, .1, 0, .9, .06, .9, FK.steel, 'metal'); [[-.55, -.6], [.55, -.6], [-.55, .6], [.55, .6]].forEach(function (q) { f.Cy(q[0], 0, q[1], .28, .2, 0x17191b); }); }],
+    stall: [2.2, 1.2, 1, function (f) { f.B(0, 0, 0, 2.2, .9, 1.1, FK.wood, 'crate'); f.B(0, .9, 0, 2, .25, 1, FK.orange); f.B(0, 2.6, 0, 2.6, .06, 1.6, FK.red, 'canvas'); [-1.05, 1.05].forEach(function (x) { f.B(x, .9, -.5, .06, 1.7, .06, FK.dark); }); [-.6, 0, .6].forEach(function (x, i) { f.Ball(x, 1.25, .1, .16, [0xc8452f, 0xd9a52f, 0x5a8a3a][i]); }); }],
+    sandbagM: [2.4, .8, 1, function (f) { FURN.sandbag[3](f); }],
+    machine: [3.4, 1.8, 2.4, function (f) { f.B(0, 0, 0, 3.4, 1.15, 1.8, 0x5c6b5e, 'paint'); f.B(-.5, 1.15, 0, 1.9, .9, 1.25, 0x77808a, 'metal'); f.Cy(1.05, 1.15, 0, .55, 1.3, 0xb7b0a0, 'metal'); f.Cy(1.05, 2.45, 0, .08, 1.2, 0x8c3b2f); f.B(-1.2, .5, .91, .5, .35, .02, 0x2a2e31); f.G(-1.2, .78, .92, .12, .05, .01, 0x8fe0a8); }]
+  };
+  // which pieces furnish which kind of room (by its name), as in the draft
+  function roomKit(name) {
+    if (/사무/.test(name)) return { carpet: 1, gap: .3, wall: ['plant', 'cabinet', 'cabinet', 'bookcase', 'copier', 'water', 'whiteboard', 'bookcase', 'cabinet', 'printer', 'notice', 'coat', 'plant'], grid: [['pod', 6, 1.6], ['meeting', 1, 1.5], ['lone', 2, 1.4]] };
+    if (/복도/.test(name)) return { carpet: 1, gap: .5, wall: ['plant', 'sofa', 'water', 'notice', 'sofa', 'plant', 'cabinet'], grid: [['reception', 1, 1.4], ['waiting', 2, 1.4]] };
+    if (/보관/.test(name)) return { gap: .15, wall: ['bookcase', 'bookcase', 'bookcase', 'cabinet', 'bookcase', 'bookcase'], grid: [['archive', 6, 1.4], ['lone', 1, 1.2]] };
+    if (/검사/.test(name)) return { gap: .35, wall: ['counter', 'cabinet', 'bookcase', 'water', 'notice', 'cabinet'], grid: [['xray', 1, 1.6], ['lone', 2, 1.2], ['waiting', 1, 1.3]] };
+    if (/제어/.test(name)) return { carpet: 1, gap: .3, wall: ['console', 'console', 'cabinet', 'bookcase', 'whiteboard', 'plant'], grid: [['meeting', 1, 1.3], ['lone', 2, 1.2]] };
+    if (/약국|이발/.test(name)) return { gap: .4, wall: ['counter', 'shelf', 'shelf', 'plant', 'cabinet'], mid: ['table'] };
+    if (/빈 가게/.test(name)) return { wall: ['shelf'], mid: ['crates', 'pallet'] };
+    if (/공장/.test(name)) return { wall: ['rack', 'barrels', 'bench', 'rack'], mid: ['forklift', 'crates', 'pallet'] };
+    if (/창고|하역|공방/.test(name)) return { wall: ['rack', 'rack', 'barrels', 'rack'], mid: ['crates', 'pallet', 'forklift', 'crates', 'pallet'] };
+    if (/막사|여관/.test(name)) return { wall: ['bunk', 'locker', 'bunk', 'locker'], mid: ['table'] };
+    if (/정비|차고/.test(name)) return { wall: ['bench', 'tires', 'locker', 'bench'], mid: ['car', 'barrels'] };
+    if (/찻집|식당|잡화/.test(name)) return { wall: ['counter', 'shelf', 'shelf'], mid: ['table', 'table', 'stall'] };
+    if (/검문|초소/.test(name)) return { wall: ['sandbag', 'counter', 'locker'], mid: ['sandbagM', 'desk'] };
+    if (/배수/.test(name)) return { wall: ['pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes'], mid: [] };
+    return { wall: ['shelf', 'cabinet'], mid: ['crates'] };
+  }
+  function planned(D, th) {
+    var b = Builder(), OX = 45, OZ = 28, i;
+    b.day = false;
+    // the sheet in world coordinates
+    var rooms = [], doors = [], covers = [], spawns = [], sites = [], walks = [], stairs = [];
+    D.forEach(function (e) {
+      if (e[0] === 'room') rooms.push({ x: e[1] - OX, z: e[2] - OZ, w: e[3], d: e[4], name: e[5], two: !!e[6], open: /지붕만/.test(e[5]) });
+      else if (e[0] === 'door') doors.push({ x: e[1] - OX, z: e[2] - OZ, hz: !!e[3], w: e[4] });
+      else if (e[0] === 'cover') covers.push({ x: e[1] - OX, z: e[2] - OZ, w: e[3], d: e[4] });
+      else if (e[0] === 'spawn') spawns.push({ x: e[1] - OX + e[3] / 2, z: e[2] - OZ + e[4] / 2, team: e[5] });
+      else if (e[0] === 'site') sites.push({ x: e[1] - OX, z: e[2] - OZ, id: e[3] === '1' ? 'A' : 'B' });
+    });
+    function inside(o, r, m) { m = m || 0; return o.x >= r.x - .01 - m && o.z >= r.z - .01 - m && o.x + (o.w || 0) <= r.x + r.w + .01 + m && o.z + (o.d || 0) <= r.z + r.d + .01 + m; }
+    function roomOf(x, z) { var best = null; rooms.forEach(function (r) { if (r.name && x > r.x && x < r.x + r.w && z > r.z && z < r.z + r.d && (!best || r.w * r.d < best.w * best.d)) best = r; }); return best; }
+    rooms.forEach(function (r) { r.ht = r.two ? 6.4 : (th.ht || 3.3); r.top = !rooms.some(function (o) { return o !== r && o.w * o.d > r.w * r.d && inside(r, o); }); r.leaf = !!r.name && !rooms.some(function (o) { return o !== r && o.name && inside(o, r); }); });
+    function hit(a, c, m) { m = m || 0; return a.x < c.x + c.w + m && a.x + a.w > c.x - m && a.z < c.z + c.d + m && a.z + a.d > c.z - m; }
+    function siteBox(s, m) { return { x: s.x - 3 - m, z: s.z - 3 - m, w: 6 + 2 * m, d: 6 + 2 * m }; }
+
+    // ---- ground, the outer wall, the land beyond ----
+    b.ghost = true; b.box(0, 0, 220, 180, .3, th.far, -.62, false, th.farT || 'plain'); b.ghost = false;
+    b.box(0, 0, 92, 58, .4, th.ground, -.4, false, th.groundT);
+    [[0, -28.2, 91, .4], [0, 28.2, 91, .4], [-45.2, 0, .4, 56.8], [45.2, 0, .4, 56.8]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], th.outerH || 4.2, th.outer, 0, true, th.outerT || 'conc'); });
+    [[0, -28.2, 91.2, .7], [0, 28.2, 91.2, .7], [-45.2, 0, .7, 57]].concat([[45.2, 0, .7, 57]]).forEach(function (q) { b.box(q[0], q[1], q[2], q[3], .14, 0x6f7270, th.outerH || 4.2, false, 'conc'); });
+
+    // ---- walkway and stairs in each two-storey hall: along the longest wall whose strip keeps clear of the bomb sites ----
+    rooms.forEach(function (r) {
+      if (!r.two) return; var best = null;
+      [['n', r.x, r.z, r.w, 3.1, 1], ['s', r.x, r.z + r.d - 3.1, r.w, 3.1, 1], ['w', r.x, r.z, 3.1, r.d, 0], ['e', r.x + r.w - 3.1, r.z, 3.1, r.d, 0]].forEach(function (c) {
+        var band = { x: c[1], z: c[2], w: c[3], d: c[4] }, len = c[5] ? c[3] : c[4]; if (sites.some(function (s) { return hit(band, siteBox(s, 0)); })) return;
+        // stairs at one or both ends, running along the wall; an end is refused when a door opens there
+        var ends = [0, 1].filter(function (k) { var st = c[5] ? { x: k ? c[1] + c[3] - 4.6 : c[1], z: c[2], w: 4.6, d: c[4] } : { x: c[1], z: k ? c[2] + c[4] - 4.6 : c[2], w: c[3], d: 4.6 };
+          return !doors.some(function (dd) { var dr = dd.hz ? { x: dd.x - dd.w / 2, z: dd.z - .2, w: dd.w, d: .4 } : { x: dd.x - .2, z: dd.z - dd.w / 2, w: .4, d: dd.w }; return hit(st, dr, .6); }); });
+        if (!ends.length || len < 10) return; var sc = len + ends.length * 3; if (!best || sc > best.sc) best = { c: c, ends: len >= 15 ? ends : ends.slice(0, 1), sc: sc };
+      });
+      if (!best) return; var c = best.c, along = c[5], wall = { n: -1, s: 1, w: -1, e: 1 }[c[0]], a0 = along ? r.x + .15 : r.z + .15, a1 = along ? r.x + r.w - .15 : r.z + r.d - .15;
+      var lineOut = along ? (wall < 0 ? r.z + .15 : r.z + r.d - .15) : (wall < 0 ? r.x + .15 : r.x + r.w - .15), inner = lineOut - wall * 3, sw = 2.2, d0 = a0, d1 = a1;
+      function P(a, o) { return along ? [a, o] : [o, a]; }                          // (along, across) to world x, z
+      best.ends.forEach(function (k) {
+        var dir = k ? -1 : 1, start = k ? a1 : a0, n;                                  // the foot of the stairs is at the hall's end wall
+        for (n = 0; n < 7; n++) { var am = start + dir * (.3 + n * .6), om = lineOut - wall * sw / 2, p = P(am, om), top = .4 * (n + 1); b.box(p[0], p[1], along ? .6 : sw, along ? sw : .6, top, th.stairC || 0x6b7075, 0, true, 'metal'); b.box(p[0], p[1], along ? .62 : sw + .02, along ? sw + .02 : .62, .05, C.yellow, top - .05, false); }
+        var rs = P(start + dir * 2.1, lineOut - wall * (sw + .03)); b.box(rs[0], rs[1], along ? 4.2 : .05, along ? .05 : 4.2, .05, C.yellow, 3.4, false);
+        if (k) d1 = a1 - 4.2; else d0 = a0 + 4.2;
+        stairs.push(along ? { x: Math.min(start, start + dir * 4.2), z: Math.min(lineOut, lineOut - wall * sw), w: 4.2, d: sw } : { x: Math.min(lineOut, lineOut - wall * sw), z: Math.min(start, start + dir * 4.2), w: sw, d: 4.2 });
+      });
+      var mid = (d0 + d1) / 2, L = d1 - d0, oc = (lineOut + inner) / 2, p = P(mid, oc);
+      b.box(p[0], p[1], along ? L : 3, along ? 3 : L, .14, 0x5b656c, 2.86, true, 'metal');
+      var rail = P(mid, inner + wall * .05); b.box(rail[0], rail[1], along ? L : .05, along ? .05 : L, .05, C.yellow, 3.95, false); b.box(rail[0], rail[1], along ? L : .05, along ? .05 : L, .05, C.yellow, 3.5, false); b.solid(rail[0], rail[1], along ? L : .1, along ? .1 : L, 1, 3, true);
+      for (var t = d0 + .2; t <= d1 + .01; t += Math.max(2, L / Math.round(L / 2.5))) { var pp = P(t, inner + wall * .1); b.box(pp[0], pp[1], .16, .16, 2.86, 0x4f585e, 0, true, 'metal'); b.box(pp[0], pp[1], .05, .05, 1, C.yellow, 3, false); }
+      walks.push(along ? { x: d0, z: Math.min(lineOut, inner), w: L, d: 3 } : { x: Math.min(lineOut, inner), z: d0, w: 3, d: L });
+      // a little cover up there
+      var c1 = P(d0 + L * .3, oc + wall * .5), c2 = P(d0 + L * .72, oc + wall * .5); b.crate(c1[0], c1[1], 1.1, 0xb39058, 3); b.crate(c2[0], c2[1], 1, 0x9c8a62, 3);
+      // windows high on the outer wall of the upper floor
+      b.ghost = true; for (t = d0 + 2; t < d1 - 1; t += 5) { var wq = P(t, lineOut + wall * .15); b.box(wq[0], wq[1], along ? 1.6 : .36, along ? .36 : 1.6, 1, 0x9bb4c4, 4.2, false, 'glass'); } b.ghost = false;
+    });
+
+    // ---- walls: every room edge, merged per line so shared walls are drawn once, cut at doors with a lintel above ----
+    var lines = {};
+    rooms.forEach(function (r) {
+      if (r.open) return;
+      [[1, r.z, r.x, r.x + r.w], [1, r.z + r.d, r.x, r.x + r.w], [0, r.x, r.z, r.z + r.d], [0, r.x + r.w, r.z, r.z + r.d]].forEach(function (s) { var k = s[0] + ':' + s[1].toFixed(2); (lines[k] = lines[k] || { hz: s[0], at: s[1], segs: [] }).segs.push([s[2], s[3], r.ht]); });
+    });
+    Object.keys(lines).forEach(function (k) {
+      var ln = lines[k], gaps = doors.filter(function (dd) { return dd.hz === !!ln.hz && Math.abs((ln.hz ? dd.z : dd.x) - ln.at) < .25; }).map(function (dd) { var c = ln.hz ? dd.x : dd.z; return [c - dd.w / 2, c + dd.w / 2]; });
+      var pts = []; ln.segs.forEach(function (s) { pts.push(s[0], s[1]); }); gaps.forEach(function (g) { pts.push(g[0], g[1]); }); pts.sort(function (p, q) { return p - q; });
+      var runs = [];
+      for (var j = 0; j < pts.length - 1; j++) {
+        var p = pts[j], q = pts[j + 1]; if (q - p < .01) continue; var m = (p + q) / 2, h = 0, g = gaps.some(function (gg) { return m > gg[0] && m < gg[1]; });
+        ln.segs.forEach(function (s) { if (m > s[0] && m < s[1]) h = Math.max(h, s[2]); }); if (!h) continue;
+        var last = runs[runs.length - 1]; if (last && last.h === h && last.g === g && Math.abs(last.q - p) < .01) last.q = q; else runs.push({ p: p, q: q, h: h, g: g });
+      }
+      runs.forEach(function (rn, n) {
+        var prev = runs[n - 1], next = runs[n + 1], p = rn.p, q = rn.q;
+        if (!rn.g) { if (ln.hz) { if (!(prev && prev.g && Math.abs(prev.q - p) < .01)) p -= .15; if (!(next && next.g && Math.abs(next.p - q) < .01)) q += .15; } }
+        var c = (p + q) / 2, L = q - p, y0 = rn.g ? 2.3 : 0, h1 = rn.h > 4 ? 3.3 : rn.h;
+        function W(ya, yb, col, t) { if (yb - ya < .02) return; if (ln.hz) b.box(c, ln.at, L, .3, yb - ya, col, ya, true, t); else b.box(ln.at, c, .3, L, yb - ya, col, ya, true, t); }
+        W(y0, Math.max(y0, h1), th.wall, th.wallT); if (rn.h > 4) W(Math.max(y0, 3.3), rn.h, th.wall2 || th.wall, th.wall2T || th.wallT);
+        if (!rn.g) { var g0 = b.ghost; b.ghost = true; if (ln.hz) b.box(c, ln.at, L, .36, .25, th.base || 0x5d6163, 0, false, 'conc'); else b.box(ln.at, c, .36, L, .25, th.base || 0x5d6163, 0, false, 'conc'); b.ghost = g0; }   // a darker footing
+        else { var gh = b.ghost; b.ghost = true; [p, q].forEach(function (e) { if (ln.hz) b.box(e, ln.at, .12, .38, 2.3, 0x3f4447, 0, false, 'metal'); else b.box(ln.at, e, .38, .12, 2.3, 0x3f4447, 0, false, 'metal'); });   // door frame
+          if (ln.hz) b.box(c, ln.at, L + .12, .38, .12, 0x3f4447, 2.25, false, 'metal'); else b.box(ln.at, c, .38, L + .12, .12, 0x3f4447, 2.25, false, 'metal'); b.ghost = gh; }
+      });
+    });
+
+    // ---- floors, roofs, lamps ----
+    rooms.forEach(function (r) {
+      var cx = r.x + r.w / 2, cz = r.z + r.d / 2, kit = r.name ? roomKit(r.name) : {};
+      if (r.leaf) { b.box(cx, cz, r.w - .3, r.d - .3, .03, kit.carpet ? FK.carpet : (th.floor || 0x9a9c97), 0, false, kit.carpet ? 'canvas' : 'floor'); }
+      if (r.open) {                                                               // posts and a roof only
+        for (var px = r.x + .3; px <= r.x + r.w - .29; px += (r.w - .6) / Math.max(1, Math.round((r.w - .6) / 5))) [r.z + .3, r.z + r.d - .3].forEach(function (pz) { b.box(px, pz, .3, .3, 4.2, 0x4f585e, 0, true, 'metal'); });
+        b.box(cx, cz, r.w + .8, r.d + .8, .2, th.roofC || 0x5d666c, 4.2, true, 'corr');
+        for (px = r.x + 3; px < r.x + r.w - 2; px += 6) { b.glow(px, 4.15, cz, 1.4, .05, .25, C.lamp); b.light(px, 3.8, cz, 0xffe2b8, 1.1, 10); }
+        return;
+      }
+      if (r.top) { b.box(cx, cz, r.w + .5, r.d + .5, .25, th.roofC || 0x5d666c, r.ht, true, th.roofT || 'panel'); b.box(cx, cz, r.w - .3, r.d - .3, .04, th.ceil || 0xc9c6bd, r.ht - .05, false, 'plain'); }
+      if (!r.leaf) return;
+      var top = r.ht - .08, nx = Math.max(1, Math.round(r.w / 8)), nz = Math.max(1, Math.round(r.d / 8)), ix, iz;
+      for (ix = 0; ix < nx; ix++) for (iz = 0; iz < nz; iz++) { var lx = r.x + r.w * (ix + .5) / nx, lz = r.z + r.d * (iz + .5) / nz; b.box(lx, lz, .7, 1.3, .06, 0x3a3f44, top - .02, false, 'metal'); b.glow(lx, top - .05, lz, .6, .03, 1.2, 0xfff2d8); b.light(lx, top - .5, lz, kit.carpet ? 0xf2f0ea : 0xffe2b8, r.two ? 1.9 : 1.05, r.two ? 16 : 9); }
+    });
+
+    // ---- cover from the plan: racks or machines indoors, containers and theme pieces outside ----
+    covers.forEach(function (cv, n) {
+      var r = roomOf(cv.x + cv.w / 2, cv.z + cv.d / 2);
+      walks.forEach(function (wk) { if (r && hit(cv, wk) && (r.two)) { if (wk.w > wk.d) { if (cv.z < wk.z) cv.d = wk.z - cv.z - .3; else { var e = cv.z + cv.d; cv.z = wk.z + wk.d + .3; cv.d = e - cv.z; } } else { if (cv.x < wk.x) cv.w = wk.x - cv.x - .3; else { var e2 = cv.x + cv.w; cv.x = wk.x + wk.w + .3; cv.w = e2 - cv.x; } } } });
+      if (cv.w < .8 || cv.d < .8 || stairs.some(function (s) { return hit(cv, s, .8); })) return;
+      var cx = cv.x + cv.w / 2, cz = cv.z + cv.d / 2, lx = cv.w >= cv.d, L = lx ? cv.w : cv.d, Dp = lx ? cv.d : cv.w;
+      if (r && /공장/.test(r.name)) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2), gh = b.ghost; b.ghost = true; b.tier = 2; FURN.machine[3](f, b); f.B(0, 0, 0, L, .12, Dp, 0x3a3f44, 'metal'); b.tier = 0; b.ghost = gh; b.solid(cx, cz, cv.w, cv.d, 2.4); return; }
+      if (r) {                                                                   // pallet racking, as in the warehouse
+        var f2 = Fr(b, cx, cz, lx ? 0 : PI / 2), k, cnt = Math.max(1, Math.round(L / 3)), seg = L / cnt; b.solid(cx, cz, cv.w, cv.d, 3.4, 0, true); b.ghost = true; b.tier = 2;
+        for (k = 0; k <= cnt; k++) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(-L / 2 + k * seg, 0, oz, .09, 3.6, .09, FK.orange, 'metal'); });
+        [.1, 1.3, 2.5].forEach(function (y, li) { if (li) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(0, y - .12, oz, L, .1, .07, FK.blue, 'metal'); });
+          for (k = 0; k < cnt * 2; k++) { var ax = -L / 2 + seg * (k + .5) / 2, q = (k + li + n) % 4; if (q === 3) continue; f2.B(ax, y, 0, seg / 2 - .2, .12, Dp - .25, FK.wood, 'crate'); f2.B(ax, y + .12, 0, seg / 2 - .35, q === 1 ? .7 : .95, Dp - .4, [0xb39a72, 0x8f8468, 0xc9a66e][q], 'crate'); } });
+        b.tier = 0; b.ghost = false; return;
+      }
+      if (L > 5.2) { b.cont(cx, cz, !lx, th.cont[n % th.cont.length], 0, L); if (L < 9 && n % 3 === 0) b.cont(cx, cz, !lx, th.cont[(n + 1) % th.cont.length], 1, L); return; }
+      th.cover(b, cv, cx, cz, lx, L, Dp, n);
+    });
+
+    // ---- furnishing: wall pieces round the edge, then the middle (offices on a grid with aisles, other rooms a few loose pieces) ----
+    rooms.forEach(function (r) {
+      if (!r.leaf) return; var K = roomKit(r.name), taken = walks.map(function (w) { return [w.x + w.w / 2, w.z + w.d / 2, w.w / 2, w.d / 2]; }), x = r.x, z = r.z, w = r.w, h = r.d;
+      covers.forEach(function (c) { taken.push([c.x + c.w / 2, c.z + c.d / 2, c.w / 2 + .3, c.d / 2 + .3]); });
+      function free(cx, cz, hw, hd, pad, mg) {
+        mg = mg == null ? .35 : mg; if (cx - hw < x + mg || cx + hw > x + w - mg || cz - hd < z + mg || cz + hd > z + h - mg) return false; var i;
+        for (i = 0; i < doors.length; i++) { var dd = doors[i]; if (dd.hz ? (Math.abs(cx - dd.x) < hw + dd.w / 2 + 1 && Math.abs(cz - dd.z) < hd + 2.2) : (Math.abs(cz - dd.z) < hd + dd.w / 2 + 1 && Math.abs(cx - dd.x) < hw + 2.2)) return false; }
+        for (i = 0; i < sites.length; i++) if (Math.abs(cx - sites[i].x) < hw + 2.6 && Math.abs(cz - sites[i].z) < hd + 2.6) return false;
+        for (i = 0; i < stairs.length; i++) if (hit({ x: cx - hw, z: cz - hd, w: hw * 2, d: hd * 2 }, stairs[i], 1)) return false;
+        for (i = 0; i < taken.length; i++) { var t = taken[i]; if (Math.abs(cx - t[0]) < hw + t[2] + pad && Math.abs(cz - t[1]) < hd + t[3] + pad) return false; }
+        return true;
+      }
+      var placed = [];
+      function put(def, cx, cz, rot, hw, hd, wallPiece) { var t = [cx, cz, hw, hd]; taken.push(t); placed.push({ def: def, cx: cx, cz: cz, rot: rot, hw: hw, hd: hd, wall: wallPiece, t: t }); }
+      var walls = [[x, z, 1, 0, 0], [x + w, z + h, -1, 0, PI], [x, z + h, 0, -1, PI / 2], [x + w, z, 0, 1, -PI / 2]], k = 0, cnt = 0;
+      walls.forEach(function (wl) {
+        var len = wl[2] ? w : h, t = 1.2;
+        while (t < len - 1.2 && cnt < 16) {
+          var def = FURN[K.wall[k % K.wall.length]], pw = def[0], pd = def[1], along = t + pw / 2, nx = -wl[3], nz = wl[2];
+          var cx = wl[0] + wl[2] * along + nx * (pd / 2 + .17), cz = wl[1] + wl[3] * along + nz * (pd / 2 + .17), hw = wl[2] ? pw / 2 : pd / 2, hd = wl[2] ? pd / 2 : pw / 2;
+          if (along + pw / 2 < len - .4 && free(cx, cz, hw, hd, .15, .1)) { put(def, cx, cz, wl[4], hw, hd, true); k++; cnt++; t += pw + (def === FURN.pipes ? .2 : (K.gap != null ? K.gap : 1.4)); } else t += .8;
+        }
+      });
+      if (K.grid) {
+        K.grid.forEach(function (gd) { var def = FURN[gd[0]], c = 0, gx, gz; for (gz = z + .6; gz < z + h - .6 && c < gd[1]; gz += .5) for (gx = x + .6; gx < x + w - .6 && c < gd[1]; gx += .5) [0, PI / 2].forEach(function (rot) { if (c >= gd[1]) return; var hw = (rot ? def[1] : def[0]) / 2, hd = (rot ? def[0] : def[1]) / 2, cx = gx + hw, cz = gz + hd; if (free(cx, cz, hw, hd, gd[2], .9)) { put(def, cx, cz, rot, hw, hd); c++; } }); });
+      } else {
+      var cand = [], step = 1.2, gx, gz; for (gx = x + step / 2 + 1; gx < x + w - 1; gx += step) for (gz = z + step / 2 + 1; gz < z + h - 1; gz += step) cand.push([gx + ((Math.round(gx * 13 + gz * 7) % 3 + 3) % 3 - 1) * .6, gz + ((Math.round(gx * 5 + gz * 11) % 3 + 3) % 3 - 1) * .6]);
+      var m = 0, want = Math.min(K.mid && K.mid.length ? Math.round(w * h / 32) + 1 : 0, 8); function hs(p) { var v = Math.sin(p[0] * 12.9898 + p[1] * 78.233) * 43758.5453; return v - Math.floor(v); } cand.sort(function (p, q) { return hs(p) - hs(q); });
+      cand.forEach(function (c) { if (m >= want) return; var def = FURN[K.mid[m % K.mid.length]], rot = (Math.round(c[0] + c[1]) % 2) ? 0 : PI / 2, hw = (rot ? def[1] : def[0]) / 2, hd = (rot ? def[0] : def[1]) / 2; if (free(c[0], c[1], hw, hd, 1.7)) { put(def, c[0], c[1], rot, hw, hd); m++; } });
+      }
+      // keep every part of the room reachable: walk a half-metre grid in from the doors (stopping 0.45 m short of anything, as the
+      // bots' grid does) and take pieces away, middle ones first, while that frees a pocket of floor a person could stand in
+      var nx = Math.floor(w / .5), nz = Math.floor(h / .5), myDoors = doors.filter(function (dd) { return dd.hz ? (Math.abs(dd.z - z) < .3 || Math.abs(dd.z - z - h) < .3) && dd.x > x && dd.x < x + w : (Math.abs(dd.x - x) < .3 || Math.abs(dd.x - x - w) < .3) && dd.z > z && dd.z < z + h; });
+      function pockets(skip) {
+        var blk = new Uint8Array(nx * nz), seen = new Uint8Array(nx * nz), i, j, q = [], lost = 0;
+        for (i = 0; i < nx; i++) for (j = 0; j < nz; j++) {
+          var px = x + (i + .5) * .5, pz = z + (j + .5) * .5, bad = px < x + .6 || px > x + w - .6 || pz < z + .6 || pz > z + h - .6;
+          if (!bad) bad = placed.some(function (o) { return o !== skip && !o.gone && o.def[2] !== 0 && Math.abs(px - o.cx) < o.hw + .55 && Math.abs(pz - o.cz) < o.hd + .55; }) || covers.some(function (c) { return px > c.x - .55 && px < c.x + c.w + .55 && pz > c.z - .55 && pz < c.z + c.d + .55; }) || stairs.some(function (c) { return px > c.x - .45 && px < c.x + c.w + .45 && pz > c.z - .45 && pz < c.z + c.d + .45; });
+          blk[j * nx + i] = bad ? 1 : 0;
+        }
+        myDoors.forEach(function (dd) { var px = dd.hz ? dd.x : (Math.abs(dd.x - x) < .3 ? x + .7 : x + w - .7), pz = dd.hz ? (Math.abs(dd.z - z) < .3 ? z + .7 : z + h - .7) : dd.z, ii = Math.floor((px - x) / .5), jj = Math.floor((pz - z) / .5), c = jj * nx + ii; if (ii >= 0 && jj >= 0 && ii < nx && jj < nz && !blk[c] && !seen[c]) { seen[c] = 1; q.push(c); } });
+        while (q.length) { var c = q.pop(), ci = c % nx, cj = (c / nx) | 0; [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { var a = ci + d[0], e = cj + d[1], t = e * nx + a; if (a >= 0 && e >= 0 && a < nx && e < nz && !blk[t] && !seen[t]) { seen[t] = 1; q.push(t); } }); }
+        for (i = 0; i < nx * nz; i++) if (!blk[i] && !seen[i]) lost++;
+        return lost;
+      }
+      if (myDoors.length) { var lost = pockets(null), order = placed.filter(function (o) { return !o.wall; }).reverse().concat(placed.filter(function (o) { return o.wall; }).reverse());
+        for (var oi = 0; oi < order.length && lost > 3; oi++) { var l2 = pockets(order[oi]); if (l2 < lost) { order[oi].gone = true; lost = l2; } } }
+      placed.forEach(function (o) { if (o.gone) return; var f = Fr(b, o.cx, o.cz, o.rot); b.ghost = true; b.tier = 2; o.def[3](f, b); b.tier = 0; b.ghost = false; if (o.def[2]) b.solid(o.cx, o.cz, o.hw * 2, o.hd * 2, o.def[2]); });
+    });
+
+    // ---- bomb sites, spawns ----
+    sites.forEach(function (s) { plantZone(b, s.x, s.z, 0); b.mark(s.id, s.x, .04, s.z, 2.4, 2.4, 0, '#d6a233', true); });
+    spawns.forEach(function (s) { b.spawn(s.team, s.x, s.z); });
+    if (th.extra) th.extra(b, { rooms: rooms, doors: doors, sites: sites, spawns: spawns });
+    // approaches to each site: the doors of the room it sits in (a step outside them), or four points round it in the open
+    function via(s) {
+      var r = roomOf(s.x, s.z), out = [];
+      if (r) doors.forEach(function (dd) { var onR = dd.hz ? (Math.abs(dd.z - r.z) < .3 || Math.abs(dd.z - r.z - r.d) < .3) && dd.x > r.x && dd.x < r.x + r.w : (Math.abs(dd.x - r.x) < .3 || Math.abs(dd.x - r.x - r.w) < .3) && dd.z > r.z && dd.z < r.z + r.d;
+        if (!onR) return; var sx = dd.hz ? 0 : (dd.x < s.x ? -2 : 2), sz = dd.hz ? (dd.z < s.z ? -2 : 2) : 0; out.push([dd.x + sx, dd.z + sz, 0]); });
+      if (out.length < 2) [[-8, 0], [0, -7], [0, 7], [8, 0]].forEach(function (q) { out.push([s.x + q[0], s.z + q[1], 0]); });
+      return out;
+    }
+    function clear(x, z, m) {
+      if (Math.abs(x) > 43.5 || Math.abs(z) > 26.5) return false;
+      return !b.boxes.some(function (q) { if (q.maxy <= .5 || q.miny >= 1.6) return false; var lx = x, lz = z; if (q.rot) { var dx = x - q.ox, dz = z - q.oz; lx = dx * q.c - dz * q.s; lz = dx * q.s + dz * q.c; } return lx > q.minx - m && lx < q.maxx + m && lz > q.minz - m && lz < q.maxz + m; });
+    }
+    function settle(p, from) { for (var k = 0; k < 6; k++) { if (clear(p[0], p[1], 1)) return p; var dx = p[0] - from[0], dz = p[1] - from[1], l = Math.hypot(dx, dz) || 1; p = [p[0] + dx / l, p[1] + dz / l, 0]; } return null; }
+    var S = sites.map(function (s) { var d = siteDef(s.id, s.x, s.z, 0, 0, via(s).map(function (v) { return settle([Math.max(-43, Math.min(43, v[0])), Math.max(-26, Math.min(26, v[1])), 0], [s.x, s.z]); }).filter(Boolean));
+      d.spots = d.spots.filter(function (q, n) { return !n || clear(q.x, q.z, 1); }); return d; }), fw = [];
+    S.forEach(function (s) { s.via.forEach(function (v) { fw.push(v); }); });
+    return { name: th.name, b: b, bounds: { minx: -45, maxx: 45, minz: -28, maxz: 28 }, bg: th.bg, fog: th.fog, hemi: th.hemi, sun: th.sun, rain: !!th.rain, sky: th.sky, hdri: th.hdri, dim: th.dim, lod: [40, 80], sites: S, fwd: fw };
+  }
+  // small outdoor cover, filled from a rectangle on the plan
+  function crateRect(b, cv, n, cols) {
+    var nx = Math.max(1, Math.round(cv.w / 1.35)), nz = Math.max(1, Math.round(cv.d / 1.35)), sx = cv.w / nx, sz = cv.d / nz, s = Math.min(sx, sz) - .1, i, j;
+    for (i = 0; i < nx; i++) for (j = 0; j < nz; j++) { var x = cv.x + sx * (i + .5), z = cv.z + sz * (j + .5), k = (i * 3 + j * 5 + n) % 5; b.crate(x, z, s, cols[k % cols.length]); if (k < 2) b.crate(x + (k ? .08 : -.06), z, s * .85, cols[(k + 1) % cols.length], s); }
+  }
+  function bagWall(b, cx, cz, lx, L) {
+    var n = Math.max(2, Math.round(L / .6)), r, i, gh = b.ghost; b.ghost = true;
+    for (r = 0; r < 4; r++) for (i = 0; i < n - (r % 2); i++) { var o = -L / 2 + .3 + i * (L - .6) / (n - 1) + (r % 2) * (L - .6) / (n - 1) / 2; b.box(cx + (lx ? o : 0), cz + (lx ? 0 : o), lx ? .58 : .7, lx ? .7 : .58, .28, r % 2 ? 0xa08a62 : 0x9a8460, r * .27, false, 'canvas'); }
+    b.ghost = gh; b.solid(cx, cz, lx ? L : .75, lx ? .75 : L, 1.1);
+  }
+
+  // 08 세관 야적장 — 컨테이너 야적장(가운데) 위쪽에 세관 사무동·복도·검사실·보관실 한 동, 아래쪽에 2층 물류 창고
+  var PLAN_A = [['spawn', 1, 18, 9, 20, 'A'], ['spawn', 80, 18, 9, 20, 'B'], ['room', 16, 3, 58, 13, '', false], ['room', 16, 3, 18, 13, '세관 사무동', false], ['room', 34, 3, 10, 13, '복도', false], ['room', 44, 3, 14, 13, '검사실', false], ['room', 58, 3, 16, 13, '보관실', false],
+    ['door', 16, 9.5, false, 2.4], ['door', 74, 9.5, false, 2.4], ['door', 34, 9.5, false, 2.4], ['door', 44, 9.5, false, 2.4], ['door', 58, 9.5, false, 2.4], ['door', 26, 16, true, 2.4], ['door', 51, 16, true, 2.4], ['door', 66, 16, true, 2.4],
+    ['room', 20, 38, 50, 15, '물류 창고', true], ['door', 20, 45.5, false, 5], ['door', 70, 45.5, false, 5], ['door', 33, 38, true, 2.4], ['door', 57, 38, true, 2.4],
+    ['cover', 26, 42, 2, 6], ['cover', 32, 46, 6, 2], ['cover', 42, 41, 2, 7], ['cover', 50, 46, 6, 2], ['cover', 58, 44, 2, 6], ['cover', 14, 22, 6, 2.6], ['cover', 24, 28, 2.6, 6], ['cover', 32, 21, 6, 2.6], ['cover', 40, 27, 10, 2.6], ['cover', 41, 30.5, 6, 2.6], ['cover', 56, 22, 2.6, 6], ['cover', 62, 29, 6, 2.6], ['cover', 72, 24, 2.6, 6], ['cover', 30, 33, 3, 2], ['cover', 54, 33, 3, 2], ['cover', 46, 20, 2, 2],
+    ['site', 51, 6.5, '1'], ['site', 45, 50.5, '2']];
+  function customs() {
+    return planned(PLAN_A, { name: '세관 야적장', ground: 0x8d8f8a, groundT: 'conc', far: 0x6f6b5c, outer: 0x9a9b98, wall: 0xc9c4b6, wallT: 'plaster', wall2: 0x8f9aa0, wall2T: 'panel', roofC: 0x6a7074, floor: 0xa2a49f,
+      cont: [0x7a3f30, 0x3f5f7a, 0x596a4a, 0x8a7a52, 0x2f6a6a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (cv.w * cv.d <= 4.5) { b.pallet(cx, cz, 0); b.crate(cx, cz, 1.3, 0xb39058, .14, 1.2); b.solid(cx, cz, 1.4, 1.4, .2); } else crateRect(b, cv, n, [0xb39058, 0x9c8a62, 0xc9a66e]); },
+      extra: function (b) {
+        b.mark('CUSTOMS', 0, 3.2, -12.05, 5, 1.1, 0, '#2f4763'); b.mark('물류 창고', 0, 4.6, 9.83, 4.5, 1.1, PI, '#ecebe4');
+        [[-30, -8], [-10, -8], [10, -8], [30, -8], [-30, 8], [30, 8]].forEach(function (p) { b.lamp(p[0], p[1], 6, 0, p[1] < 0 ? 1 : -1); });
+        [[-38, -6], [-38, 6], [38, -6], [38, 6]].forEach(function (p) { b.jersey(p[0], p[1], 3, true); });
+        b.quad('hazard', -5, .02, -4, 8, .5, 0, { flat: true, rep: [8, .5] }); b.quad('hazard', 5, .02, 4, 8, .5, 0, { flat: true, rep: [8, .5] });
+      },
+      bg: 0x93a7b8, fog: [50, 200], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.6, [-26, 40, 18]], sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: .92 });
+  }
+  // 09 고갯길 검문소 — 길 한가운데 2층 검문소 건물, 경비 막사·초소·정비소, 아래쪽 배수로가 실내 우회로
+  var PLAN_B = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 38, 14, 14, 28, '검문소 건물', true], ['door', 38, 28, false, 5], ['door', 52, 28, false, 5], ['door', 45, 14, true, 2.4], ['door', 45, 42, true, 2.4],
+    ['room', 14, 6, 14, 9, '경비 막사', false], ['door', 21, 15, true, 2.4], ['door', 28, 10.5, false, 2.4], ['room', 62, 41, 14, 9, '차량 정비소', false], ['door', 69, 41, true, 2.4], ['door', 62, 45.5, false, 2.4],
+    ['room', 30, 46, 30, 5, '배수로 (좁은 실내 통로)', false], ['door', 30, 48.5, false, 2.4], ['door', 60, 48.5, false, 2.4], ['room', 58, 4, 18, 8, '초소', false], ['door', 58, 8, false, 2.4], ['door', 67, 12, true, 2.4],
+    ['cover', 18, 22, 5, 2], ['cover', 28, 32, 5, 2], ['cover', 32, 21, 2, 3], ['cover', 56, 32, 2, 3], ['cover', 60, 22, 5, 2], ['cover', 70, 32, 5, 2], ['cover', 22, 38, 3, 3], ['cover', 34, 8, 3, 3], ['cover', 46, 8, 2, 2], ['cover', 54, 18, 3, 2], ['cover', 66, 18, 2, 2], ['cover', 30, 40, 2, 2], ['cover', 16, 44, 4, 2], ['cover', 24, 18, 2, 2],
+    ['site', 71, 7, '1'], ['site', 45, 34, '2']];
+  function pass() {
+    return planned(PLAN_B, { name: '고갯길 검문소', ground: 0x8a7a5e, groundT: 'sand', far: 0x6b5a44, farT: 'sand', outer: 0x8a8070, outerT: 'rock', outerH: 5, wall: 0xa7a39a, wallT: 'block', wall2: 0x9c988e, roofC: 0x5d5a52, floor: 0x8f8c84,
+      cont: [0x596a4a, 0x6a5e44], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (Dp <= 2.1 && L >= 3) bagWall(b, cx, cz, lx, L); else if (n % 2) { crateRect(b, cv, n, [0x5f6a45, 0x6b6a4a, 0x8a7a52]); } else { b.jersey(cx, cz, Math.min(L, 3), !lx); b.barrel(cx + (lx ? 0 : .9), cz + (lx ? .9 : 0), 0x596a4a); } },
+      extra: function (b) {
+        b.box(0, 0, 92, 6, .03, 0x4a4a46, 0, false, 'conc'); for (var x = -42; x < 42; x += 4) b.box(x, 0, 2, .15, .02, 0xd8d2c0, .03, false);          // the road through the pass
+        [-12, 12].forEach(function (x) { b.box(x, -2.6, .3, .3, 1.1, 0xc23b2a, 0, true, 'paint'); b.box(x, 0, .12, 5, .12, 0xe8e2d0, 1, false, 'paint'); for (var i = -2; i <= 2; i++) b.box(x, i, .13, .5, .13, 0xc23b2a, .995, false); });   // boom barriers
+        b.mark('CHECKPOINT', 0, 5.2, -14.2, 6, 1.1, PI, '#ecebe4');
+        [[-20, -6], [20, 6], [-34, 9], [34, -9]].forEach(function (p) { b.lamp(p[0], p[1], 5.5, 0, p[1] < 0 ? 1 : -1); });
+        b.ghost = true; for (var k = 0; k < 18; k++) { var a = k / 18 * PI * 2, R = 100 + (k % 3) * 12, g = new T.DodecahedronGeometry(18 + (k % 4) * 6, 0); g.scale(1.4, .7 + (k % 3) * .25, 1); g.translate(Math.cos(a) * R, 2, Math.sin(a) * R * .75); b.geo(g, 0x6b5e4c, 'rock', {}); } b.ghost = false;   // mountains round the pass
+      },
+      bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], sky: [0x26313f, 0xb9885e], dim: .7, hdri: ['dusk', .42, .75, 6, .85] });
+  }
+  // 10 폐공장 — 가운데 2층 공장 본관(기계 사이 근접전), 위쪽 지붕만 있는 하역장, 아래쪽 제어실
+  var PLAN_C = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 24, 14, 42, 28, '공장 본관', true], ['door', 24, 22, false, 4], ['door', 24, 35, false, 3], ['door', 66, 22, false, 4], ['door', 66, 35, false, 3], ['door', 36, 14, true, 5], ['door', 55, 14, true, 3], ['door', 36, 42, true, 3], ['door', 55, 42, true, 5],
+    ['room', 30, 3, 20, 8, '하역장 (지붕만 있음)', false], ['room', 52, 46, 22, 7, '제어실', false], ['door', 52, 49.5, false, 2.4], ['door', 63, 46, true, 2.4], ['door', 74, 49.5, false, 2.4],
+    ['cover', 30, 20, 6, 3], ['cover', 40, 30, 3, 7], ['cover', 46, 18, 3, 6], ['cover', 52, 31, 6, 3], ['cover', 34, 34, 3, 3], ['cover', 56, 22, 3, 3], ['cover', 44, 27, 2, 2], ['cover', 14, 10, 4, 2], ['cover', 18, 44, 2, 4], ['cover', 14, 30, 2, 3], ['cover', 70, 12, 2, 4], ['cover', 74, 30, 2, 3], ['cover', 56, 6, 5, 2], ['cover', 64, 8, 2, 2], ['cover', 28, 46, 5, 2], ['cover', 38, 48, 2, 3], ['cover', 44, 45, 3, 2], ['cover', 20, 6, 3, 3], ['cover', 76, 42, 3, 2],
+    ['site', 45, 33, '1'], ['site', 40, 50, '2']];
+  function factory() {
+    return planned(PLAN_C, { name: '폐공장', ground: 0x7d7e78, groundT: 'conc', far: 0x5e5d52, outer: 0x8a8b86, wall: 0x9a9690, wallT: 'block', wall2: 0x7b6a5c, wall2T: 'rust', roofC: 0x6a5a4c, roofT: 'corr', floor: 0x8c8d88, stairC: 0x5c6166,
+      cont: [0x6a4a3a, 0x4f5a4a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (n % 3 === 0) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2); b.ghost = true; FURN.machine[3](f, b); b.ghost = false; b.solid(cx, cz, lx ? Math.max(L, 3.4) : Math.max(Dp, 1.8), lx ? Math.max(Dp, 1.8) : Math.max(L, 3.4), 2.4); } else if (n % 3 === 1) { b.jersey(cx, cz, L, !lx); b.barrel(cx + (lx ? -L / 2 + .3 : .9), cz + (lx ? .9 : -L / 2 + .3), 0x7a3f30); } else crateRect(b, cv, n, [0x8a6a45, 0x6a5a44, 0x9c8a62]); },
+      extra: function (b) {
+        b.ghost = true; b.cyl(30, -40, 2.4, 34, 0x8a6a58, 0, false, 'block', 1.8, 16); b.cyl(-26, -42, 2, 28, 0x7a6a5c, 0, false, 'block', 1.5, 16); b.ghost = false;   // chimneys beyond the wall
+        b.mark('공장 본관', 0, 4.8, -14.2, 4.5, 1.1, PI, '#ecebe4'); b.mark('제어실', 18, 2.7, 17.83, 2.4, .8, PI, '#ecebe4');
+        [[-30, 0], [30, 0], [0, -20], [0, 20]].forEach(function (p) { b.lamp(p[0], p[1], 6, p[1] ? 0 : (p[0] < 0 ? 1 : -1), p[1] ? (p[1] < 0 ? 1 : -1) : 0); });
+        [[-21.5, -8], [21.5, 8], [-8, 21.5]].forEach(function (p) { b.tires(p[0], p[1], 3); });
+      },
+      bg: 0x8a96a0, fog: [40, 180], hemi: [0xd0d6da, 0x5a5448, .95], sun: [0xf0e6d6, 1.15, [26, 36, -20]], sky: [0x5a6e84, 0xb9b4a6], hdri: ['day', .7, 1.2, 6, .9], dim: .85 });
+  }
+  // 11 시장 골목 — 큰길을 사이에 둔 두 줄 가게(찻집·식당·여관, 공방·이발소·차고 …). 밤, 가게 불빛
+  var PLAN_D = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 12, 10, 12, 13, '찻집', false], ['door', 18, 23, true, 2.4], ['door', 24, 16.5, false, 2.4], ['room', 24, 10, 12, 13, '잡화점', false], ['door', 30, 23, true, 2.4], ['door', 36, 16.5, false, 2.4],
+    ['room', 36, 10, 14, 13, '식당', true], ['door', 43, 23, true, 2.4], ['door', 50, 16.5, false, 2.4], ['room', 50, 10, 12, 13, '약국', false], ['door', 56, 23, true, 2.4], ['door', 62, 16.5, false, 2.4], ['room', 62, 10, 16, 13, '여관', true], ['door', 70, 23, true, 2.4], ['door', 18, 10, true, 2.4], ['door', 56, 10, true, 2.4],
+    ['room', 12, 33, 14, 12, '창고', false], ['door', 19, 33, true, 2.4], ['door', 26, 39, false, 2.4], ['room', 26, 33, 14, 12, '공방', true], ['door', 33, 33, true, 2.4], ['room', 40, 33, 14, 12, '빈 가게', false], ['door', 47, 33, true, 2.4], ['door', 54, 39, false, 2.4],
+    ['room', 54, 33, 12, 12, '이발소', false], ['door', 60, 33, true, 2.4], ['door', 66, 39, false, 2.4], ['room', 66, 33, 12, 12, '차고', false], ['door', 72, 33, true, 2.4], ['door', 33, 45, true, 2.4], ['door', 60, 45, true, 2.4],
+    ['cover', 16, 26, 4, 2], ['cover', 26, 30, 4, 2], ['cover', 34, 25, 2, 3], ['cover', 50, 29, 4, 2], ['cover', 58, 25, 4, 2], ['cover', 68, 30, 4, 2], ['cover', 22, 3, 3, 3], ['cover', 40, 4, 5, 2], ['cover', 60, 3, 3, 3], ['cover', 20, 48, 4, 2], ['cover', 44, 49, 3, 3], ['cover', 70, 48, 4, 2], ['cover', 30, 5, 2, 2], ['cover', 52, 50, 2, 2],
+    ['site', 43, 13.2, '1'], ['site', 48, 49.5, '2']];
+  function market() {
+    return planned(PLAN_D, { name: '시장 골목', ht: 3.6, ground: 0x6e6c66, groundT: 'conc', far: 0x3a3a36, outer: 0x8a8680, outerT: 'block', wall: 0xc8bba4, wallT: 'plaster', wall2: 0xb9ab92, wall2T: 'plaster', roofC: 0x7a4a38, roofT: 'roof', floor: 0x8a7a66,
+      cont: [0x3f5f7a, 0x7a3f30], cover: function (b, cv, cx, cz, lx, L, Dp, n) {
+        if (Dp <= 2.1 && L >= 3.5) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2); b.ghost = true; FURN.stall[3](L >= 4.4 ? f.sub(-1.1, 0, 0) : f, b); if (L >= 4.4) FURN.stall[3](f.sub(1.1, 0, 0), b); b.ghost = false; b.solid(cx, cz, cv.w, cv.d, 1); }
+        else if (cv.w * cv.d <= 4.5) { b.barrel(cx - .35, cz, 0x3f5f7a); b.barrel(cx + .35, cz + .2, 0x7a3f30); b.crate(cx, cz - .6, .8, 0x9c8a62); } else crateRect(b, cv, n, [0x9c8a62, 0x8a6a45, 0x6b8a5a]); },
+      extra: function (b, P) {
+        // awnings and shop signs over each front door, lamps and strings of bulbs along the street
+        var cols = [0x8c3b2f, 0x2f5d8a, 0x3f6b3f, 0xc97a2b, 0x6a4a8a];
+        P.doors.forEach(function (dd, i) { if (!dd.hz || Math.abs(Math.abs(dd.z) - 5) > .3) return; var out = dd.z < 0 ? 1 : -1, gh = b.ghost; b.ghost = true;
+          b.box(dd.x, dd.z + out * 1.1, 4, 2, .06, cols[i % cols.length], 2.6, false, 'canvas'); b.ghost = gh; b.glow(dd.x, 2.62, dd.z + out * .2, 1.6, .04, .1, 0xffd28a); b.light(dd.x, 2.3, dd.z + out * 1.2, 0xffc98a, 1.2, 8); });
+        [-36, -24, -12, 0, 12, 24, 36].forEach(function (x, i) { b.lamp(x, i % 2 ? -3.2 : 3.2, 5, 0, i % 2 ? 1 : -1); });
+        for (var x = -32; x < 34; x += 1.6) { b.cyl(x, Math.sin(x * .37) * .3, .06, .06, [0xffd28a, 0xffb070, 0xfff0c0][Math.round(x * 2) % 3 + (Math.round(x * 2) % 3 < 0 ? 3 : 0)], 4.3 + Math.cos(x * .4) * .15, false, 'glow', .06, 6); }
+        b.seg(-33, 4.45, 0, 34, 4.45, 0, .015, 0x222222, 'plain');
+        b.mark('MARKET', 0, 4.4, -27.95, 6, 1.4, 0, '#ffd27a');
+      },
+      bg: 0x1b2832, fog: [24, 120], hemi: [0x9fb6c8, 0x2e2a24, .8], sun: [0xbcd0ea, .55, [34, 58, 22]], sky: [0x05080c, 0x1b2832], hdri: ['night', .05, .08, 2, .6], dim: 1 });
+  }
+
+  var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon, customs, pass, factory, market, range];
+  SV.RANGE = 11;   // the practice range: not in the match list, opened from the lobby's practice button
   SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true },
     { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 좌우 대칭 세 갈래', bomb: true },
     { name: '설산 연구기지', info: '대형 · 실내', hint: '폭파 미션 가능 · 실내 근접전과 하역장', bomb: true },
-    { name: '사막 협곡', info: '대형 · 협곡', hint: '폭파 미션 가능 · 다리, 둑길, 지하 터널', bomb: true }];
+    { name: '사막 협곡', info: '대형 · 협곡', hint: '폭파 미션 가능 · 다리, 둑길, 지하 터널', bomb: true },
+    { name: '세관 야적장', info: '대형 · 실내외', hint: '폭파 미션 가능 · 사무동과 2층 창고', bomb: true }, { name: '고갯길 검문소', info: '대형 · 실내외', hint: '폭파 미션 가능 · 2층 검문소와 배수로', bomb: true },
+    { name: '폐공장', info: '대형 · 실내외', hint: '폭파 미션 가능 · 기계 사이 근접전', bomb: true }, { name: '시장 골목', info: '대형 · 야간', hint: '폭파 미션 가능 · 가게 안팎을 오가는 골목', bomb: true }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) { var sd = skyDome(m.sky[0], m.sky[1]); sd.userData.sky = 1; m.group.add(sd); } m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();
