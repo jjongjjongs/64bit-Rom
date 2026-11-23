@@ -80,7 +80,7 @@
   stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
   function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = inp.use = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
   function resume() { if (G.state !== 'pause') return; show(null); G.state = 'play'; }
-  $('b-pause').addEventListener('click', pause); $('b-score').addEventListener('click', pause); $('p-resume').addEventListener('click', resume);
+  ['b-pause', 'b-score'].forEach(function (id) { $(id).addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); pause(); }); }); $('p-resume').addEventListener('click', resume);
   $('p-quit').addEventListener('click', function () { SV.end(); show('s-lobby'); });
   document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); });
   SV.onEnd = function (r) {
@@ -173,7 +173,8 @@
   hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
   hold('b-use', function () { inp.use = true; }, function () { inp.use = false; }, false);
   hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nade = true; }, null, false);
-  [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('click', function () { inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
+  /* pointerdown, not click: a browser only makes a click from the first finger down, so with a thumb on the stick these would never fire */
+  [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
 
   // ---------- mouse and keyboard ----------
   var keys = {};
