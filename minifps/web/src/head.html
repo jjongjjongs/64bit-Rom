@@ -103,17 +103,17 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #zone { position: absolute; inset: 0; }
 .hb { position: absolute; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .6); background: rgba(11, 13, 15, .4); font-size: 12px; font-weight: 700; opacity: var(--ba); transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); display: flex; align-items: center; justify-content: center; touch-action: none; }
 .hb.on { background: rgba(232, 228, 218, .35); }
-#b-fire { right: calc(var(--sr) + 96px); bottom: calc(var(--sb) + 58px); width: 86px; height: 86px; border: 3px solid var(--alarm); background: rgba(255, 90, 64, .22); font-size: 16px; font-weight: 900; }
-#b-ads { right: calc(var(--sr) + 28px); bottom: calc(var(--sb) + 134px); width: 60px; height: 60px; }
-#b-jump { right: calc(var(--sr) + 18px); bottom: calc(var(--sb) + 58px); width: 62px; height: 62px; font-size: 13px; }
-#b-crouch { right: calc(var(--sr) + 98px); bottom: calc(var(--sb) + 4px); width: 50px; height: 50px; }
-#b-reload { right: calc(var(--sr) + 192px); bottom: calc(var(--sb) + 52px); width: 52px; height: 52px; }
-#b-nade { right: calc(var(--sr) + 178px); bottom: calc(var(--sb) + 116px); width: 48px; height: 48px; font-size: 11px; }
-#b-drop { right: calc(var(--sr) + 252px); bottom: calc(var(--sb) + 96px); width: 44px; height: 44px; }
+#b-fire { right: calc(var(--sr) + 65px); bottom: calc(var(--sb) + 49px); width: 86px; height: 86px; border: 3px solid var(--alarm); background: rgba(255, 90, 64, .22); font-size: 16px; font-weight: 900; }
+#b-ads { right: calc(var(--sr) + 9px); bottom: calc(var(--sb) + 118px); width: 60px; height: 60px; }
+#b-jump { right: calc(var(--sr) + 8px); bottom: calc(var(--sb) + 12px); width: 62px; height: 62px; font-size: 13px; }
+#b-crouch { right: calc(var(--sr) + 145px); bottom: calc(var(--sb) + 12px); width: 50px; height: 50px; }
+#b-reload { right: calc(var(--sr) + 168px); bottom: calc(var(--sb) + 73px); width: 52px; height: 52px; }
+#b-nade { right: calc(var(--sr) + 239px); bottom: calc(var(--sb) + 65px); width: 48px; height: 48px; font-size: 11px; }
+#b-drop { right: calc(var(--sr) + 8px); bottom: calc(var(--sb) + 222px); width: 44px; height: 44px; }
 #b-drop.off { opacity: calc(var(--ba) * .45); }
 .slot.empty { opacity: .45; }
-#b-lfire { left: calc(var(--sl) + 6px); top: 42%; width: 54px; height: 54px; border-color: rgba(255, 90, 64, .8); }
-#stick { position: absolute; left: calc(var(--sl) + 24px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); }
+#b-lfire { left: calc(var(--sl) + 171px); top: calc(var(--st) + 22px); width: 62px; height: 62px; border-color: rgba(255, 90, 64, .8); }
+#stick { position: absolute; left: calc(var(--sl) + 49px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); }
 #knob { position: absolute; left: 36px; top: 36px; width: 56px; height: 56px; border-radius: 50%; background: rgba(232, 228, 218, .5); }
 #score { position: absolute; left: 50%; top: calc(var(--st) + 8px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 3px 12px; background: rgba(11, 13, 15, .6); pointer-events: none; }
 #score b { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: 1; } #sc-t { font-family: var(--f-mono); font-size: 13px; }
@@ -241,7 +241,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   </div>
 
   <section class="scr" id="s-title">
-    <div class="eyebrow">v0.38 · 오프라인 봇전</div>
+    <div class="eyebrow">v0.39 · 오프라인 봇전</div>
     <h1>Mini-FPS</h1>
     <div class="tag"><i></i><span id="t-tag">팀 데스매치 · 폭파 미션</span></div>
     <div><button class="cta" data-go="s-lobby" id="go-start" disabled>불러오는 중…</button></div>

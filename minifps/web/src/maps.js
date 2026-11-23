@@ -1184,7 +1184,10 @@
     [[-36, -26], [36, -26], [-36, 26], [36, 26]].forEach(function (q) { tower(q[0], q[1]); });
     // 7 spawn and kit area: canopy, tables with crates, lockers
     [[-8, 21], [8, 21], [-8, 28], [8, 28]].forEach(function (q) { post(q[0], q[1], 3); }); B(-8.4, 20.6, 8.4, 28.4, .14, 0x4a545c, 'corr', 3, false);
-    B(-7, 27.2, -2, 28.2, .9, 0x6a5e4c, 'crate'); B(2, 27.2, 7, 28.2, .9, 0x6a5e4c, 'crate'); cr(-5.5, 27.7, .7, .5, OLV); [-3.5, 3, 5].forEach(function (x) { b.box(x, 27.7, .9, .4, .3, 0x33383c, .9, false, 'metal'); });
+    B(-7.7, 27.2, -1.3, 28.2, .9, 0x6a5e4c, 'crate'); B(1.3, 27.2, 7.7, 28.2, .9, 0x6a5e4c, 'crate');
+    // weapon tables: one of every gun, lying ready; taking one leaves it there (the game keeps these, see map.armory)
+    var armory = [['rifle', -6.9, 'AR-01'], ['rifle2', -5.4, 'AR-02'], ['smg', -4, 'SM-01'], ['sniper', -2.4, 'SR-01'], ['shotgun', 2.5, 'SG-01'], ['pistol', 4.1, 'HG-01'], ['pistol2', 5.4, 'HG-02']].map(function (q) {
+      b.mark(q[2], q[1], .62, 27.17, .9, .3, PI, '#ffd27a'); return { id: q[0], x: q[1], y: .9, z: 27.75, yaw: PI / 2, tilt: -.95 }; });   /* laid along the table, side turned up toward whoever stands in front */
     [-7.6, 7.6].forEach(function (x) { b.box(x, 24, .6, 2.4, 2, 0x4a5a6a, 0, true, 'paint'); }); b.cont(-16, 26.5, false, 0x7a3f30, 0, 6.1); b.cont(14, 27, false, 0x3f5f7a, 0, 6.1); sign('7', 0, 19.5, 0);
     // 1 firing lanes: roofed firing line with stalls, targets at 10 to 42 m, sand berm, fence toward the yard
     [-38, -24.5].forEach(function (x) { [16.2, 22.8].forEach(function (z) { post(x + (x < -30 ? .4 : -.4), z, 3); }); }); B(-38.4, 15.8, -24, 23.2, .14, 0x4a545c, 'corr', 3, false); B(-37.8, 16.2, -24.4, 16.8, 1, 0x6a5e4c, 'crate');
@@ -1217,7 +1220,7 @@
     // trees beyond the wall
     [[-46, -20], [-47, 4], [-45, 24], [46, -22], [47, 2], [45, 22], [-24, -37], [4, -38], [28, -37], [-28, 37], [26, 38]].forEach(function (q, n) { var k = 1.2 + (n % 3) * .25; b.cyl(q[0], q[1], .28 * k, 3.2 * k, 0x4a3a28, 0, false, 'plain', .2 * k, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (c, m) { var g = new T.IcosahedronGeometry(c[3] * k, 1); g.translate(q[0] + c[0] * k, c[1] * k, q[1] + c[2] * k); b.geo(g, m % 2 ? 0x3f5a2c : 0x4c6a33, 'plain', {}); }); });
     [-4, -2, 0, 2, 4].forEach(function (x) { b.spawns.A.push({ x: x, z: 24.5 }); b.spawns.B.push({ x: -6 + x, z: 6 }); });
-    return { name: '사격 연습장', b: b, bounds: { minx: -41, maxx: 41, minz: -31, maxz: 31 }, bg: 0x93a7b8, fog: [60, 240], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.7, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1, lod: [40, 80], targets: tg };
+    return { name: '사격 연습장', b: b, bounds: { minx: -41, maxx: 41, minz: -31, maxz: 31 }, bg: 0x93a7b8, fog: [60, 240], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.7, [-26, 40, 18]], rain: false, sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: 1, lod: [40, 80], targets: tg, armory: armory };
   }
 
   // 08–11 세관 야적장 · 고갯길 검문소 · 폐공장 · 시장 골목 — drawn from the approved plan sheets (the 3D draft).
