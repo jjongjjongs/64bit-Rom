@@ -6,7 +6,7 @@ var SV = window.SV = window.SV || {};
   function camo(a, b, c) { var m = mk(a); m.userData.camo = [new T.Color(a).convertSRGBToLinear(), new T.Color(b).convertSRGBToLinear(), new T.Color(c).convertSRGBToLinear()]; return m; }
   var MAT = { steel: mk(0x2c3136), dark: mk(0x15181b), bright: mk(0x6f7a82), poly: mk(0x2b3035), poly2: mk(0x1a1d20), rubber: mk(0x0e1012),
     wood: mk(0x432a18), wood2: mk(0x332012), accent: mk(0xffb347), brass: mk(0xb08a3c), red: mk(0xb23a2a), lens: mk(0xffb347), glass: mk(0x0e1c24),
-    olive: mk(0x4b5a3a), olive2: mk(0x2f3724), sand: mk(0x6f6046), sand2: mk(0x5a4d38), bronze: mk(0x9a7440), mark: mk(0xc9ccc8), yel: mk(0xd1a82a), glove: mk(0x2c2d2e), glove2: mk(0x1b1c1e), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
+    olive: mk(0x4b5a3a), olive2: mk(0x2f3724), sand: mk(0x6f6046), sand2: mk(0x5a4d38), bronze: mk(0x9a7440), mark: mk(0xc9ccc8), yel: mk(0xd1a82a), blade: mk(0x3b4147), edge: mk(0x8c959c), glove: mk(0x2c2d2e), glove2: mk(0x1b1c1e), fde: mk(0x8a7858), fde2: mk(0x6e5f45), band: mk(0xc9a227), skin: mk(0xb98a66),
     sleeveA: camo(0x8a7a58, 0x6b5d40, 0x4d4733), sleeveB: camo(0x5d6a70, 0x44525a, 0x2c363d) };
 
   ['poly', 'poly2', 'rubber', 'wood', 'wood2', 'olive', 'olive2', 'glove', 'glove2', 'fde', 'fde2', 'sand', 'sand2', 'skin', 'sleeveA', 'sleeveB'].forEach(function (n) { MAT[n].userData.soft = true; });
@@ -48,18 +48,38 @@ var SV = window.SV = window.SV || {};
   function wear(k, x0, x1, y, z, m) { [-z, z].forEach(function (zz) { k.b(x1 - x0, .0016, .0016, m.bright, (x0 + x1) / 2, y, zz); }); }
   function stamp(k, x, y, z, m) { [-1, 1].forEach(function (sd) { k.b(.012, .002, .0008, m.mark, x, y + .006, sd * z); k.b(.008, .002, .0008, m.mark, x, y + .002, sd * z); k.b(.004, .002, .0008, m.mark, x, y - .002, sd * z); k.b(.034, .003, .0008, m.mark, x + .04, y, sd * z); }); }
   function stripes(k, x, y, z, m, mat) { [-1, 1].forEach(function (sd) { k.b(.011, .05, .0008, mat, x, y, sd * z, 0, 0, -.5); k.b(.006, .05, .0008, mat, x + .02, y, sd * z, 0, 0, -.5); }); }
+  // a curved box magazine: the profile follows an arc (angle from straight down grows from a0 to a1), with pressed ribs and a floor plate
+  function mag(k, x, y, w, len, a0, a1, hw, mat, rib, n) {
+    var F = [], R = [], cx = x, cy = y, i, N = 6, a, c = [];
+    for (i = 0; i <= N; i++) { a = a0 + (a1 - a0) * i / N; var dx = Math.cos(a), dy = Math.sin(a); F.push([cx + dx * w / 2, cy + dy * w / 2]); R.push([cx - dx * w / 2, cy - dy * w / 2]); c.push([cx, cy, a]); cx += Math.sin(a) * len / N; cy -= Math.cos(a) * len / N; }
+    ex(k, F.concat(R.reverse()), -hw, hw, mat, .002);
+    for (i = 1; i <= (n || 3); i++) { var q = c[Math.round(i * (N - 1) / ((n || 3) + .4))]; k.b(w * .82, .0035, hw * 2 + .002, rib, q[0], q[1], 0, 0, 0, q[2]); }
+    var e = c[N]; k.b(w + .006, .007, hw * 2 + .003, rib, e[0] - Math.sin(e[2]) * .002, e[1] + Math.cos(e[2]) * .002, 0, 0, 0, e[2]);
+  }
+  // the small working parts on the side of a rifle receiver that make it read as a machine: ejection port with its cover and the
+  // bolt showing, case deflector, forward assist, selector lever, bolt release, magazine button, charging handle
+  function parts(k, m, z) {
+    [-1, 1].forEach(function (sd) { var zz = sd * z;
+      if (sd < 0) { k.b(.066, .022, .002, m.rubber, .02, .034, zz); k.b(.05, .011, .003, m.bright, .016, .036, zz + .0006); k.b(.07, .004, .004, m.dark, .02, .022, zz - .001); k.b(.014, .016, .008, m.steel, -.022, .034, zz - .002, 0, 0, .5); k.cz(.006, .012, m.dark, -.05, .036, zz - .004, 10); }
+      k.cz(.0055, .004, m.dark, -.075, -.006, zz, 10); k.b(.022, .005, .003, m.dark, -.066, -.004, zz + sd * .002, 0, 0, sd * .5);                 // selector
+      if (sd < 0) k.b(.012, .026, .003, m.dark, .058, -.002, zz - .001); else k.cz(.0045, .004, m.dark, .03, -.012, zz, 10);                    // bolt release / magazine button
+    });
+    k.b(.022, .007, .038, m.dark, -.134, .058, 0); k.b(.012, .01, .016, m.dark, -.14, .058, 0);                                                    // charging handle
+  }
+  // a slotted flash hider on the muzzle
+  function hider(k, x, y, r, len, m) { lx(k, [[x, 0], [x, r * .8], [x + .006, r], [x + len - .004, r], [x + len, r * .8], [x + len, 0]], m.dark, y, 0, 12); k.b(len * .6, .0035, r * 2 + .0012, m.rubber, x + len * .55, y, 0); k.b(len * .6, r * 2 + .0012, .0035, m.rubber, x + len * .55, y, 0); }
   // AR-01 "Valkyrie": the all-round rifle. Long slotted metal handguard, optic on top, angular adjustable stock, sand panels on gunmetal.
   GUN.rifle = function () {
     var g = new T.Group(), k = kit(g), m = MAT, i, sl = [];
     ex(k, [[-.14, .002], [.13, .002], [.13, .056], [.122, .064], [-.132, .064], [-.14, .052]], -.021, .021, m.steel, .003);
     ex(k, [[-.14, 0], [.1, 0], [.1, -.04], [.04, -.052], [.036, -.03], [-.03, -.03], [-.05, -.022], [-.14, -.022]], -.019, .019, m.steel, .0025);
-    k.b(.062, .02, .003, m.rubber, .02, .034, -.0225); k.cz(.007, .014, m.dark, -.09, .04, -.026, 10); k.b(.016, .008, .006, m.dark, -.07, -.006, -.021); k.cz(.0042, .045, m.bright, -.12, -.012, 0, 8); k.cz(.0042, .045, m.bright, .085, -.01, 0, 8);
-    for (i = 0; i < 6; i++) sl.push([[.158 + i * .05, .02], [.194 + i * .05, .02], [.188 + i * .05, .044], [.152 + i * .05, .044]]);
+    parts(k, m, .0222); k.cz(.0042, .045, m.bright, -.12, -.012, 0, 8); k.cz(.0042, .045, m.bright, .085, -.01, 0, 8);
+    for (i = 0; i < 7; i++) { sl.push([[.15 + i * .044, .037], [.182 + i * .044, .037], [.182 + i * .044, .047], [.15 + i * .044, .047]]); sl.push([[.15 + i * .044, .015], [.182 + i * .044, .015], [.182 + i * .044, .025], [.15 + i * .044, .025]]); }
     ex(k, [[.13, 0], [.46, 0], [.47, .01], [.47, .056], [.46, .064], [.13, .064]], -.023, .023, m.sand, .003, sl); k.b(.33, .003, .03, m.steel, .3, .0655, 0);
-    k.cx(.0085, .5, m.dark, .38, .03, 0, 12); lx(k, [[.6, 0], [.6, .0125], [.612, .0148], [.672, .0148], [.68, .011], [.68, 0]], m.dark, .03); for (i = 0; i < 3; i++) k.b(.008, .01, .032, m.rubber, .624 + i * .016, .03, 0);
+    k.cx(.0085, .5, m.dark, .38, .03, 0, 12); hider(k, .622, .03, .0118, .058, m); k.b(.03, .03, .03, m.dark, .5, .034, 0); k.b(.008, .03, .006, m.dark, .5, .062, 0);
     teeth(k, -.128, 60, .0675, .021, m.steel); optic(k, .0, .05, .078, .04, .018, m);
     ex(k, [[-.09, -.02], [-.045, -.02], [-.058, -.07], [-.08, -.145], [-.128, -.138], [-.108, -.07]], -.014, .014, m.sand2, .005); trig(k, -.005, -.03, m.bright, m.steel);
-    ex(k, [[.04, -.04], [.094, -.034], [.104, -.12], [.122, -.2], [.07, -.214], [.055, -.13]], -.0125, .0125, m.sand, .002); for (i = 0; i < 4; i++) k.b(.05, .004, .0275, m.sand2, .083 + i * .007, -.072 - i * .036, 0, 0, 0, .2);
+    mag(k, .069, -.04, .05, .175, .1, .5, .0122, m.sand, m.sand2, 4);
     ex(k, [[.236, 0], [.276, 0], [.273, -.095], [.239, -.095]], -.013, .013, m.poly2, .005); for (i = 0; i < 5; i++) k.b(.04, .004, .028, m.rubber, .256, -.02 - i * .016, 0);
     k.cx(.0145, .2, m.steel, -.235, .03, 0, 12); k.cx(.0185, .012, m.steel, -.142, .03, 0, 12);
     ex(k, [[-.2, .054], [-.37, .054], [-.39, .04], [-.39, -.075], [-.368, -.082], [-.31, -.03], [-.2, .002]], -.019, .019, m.sand, .004, [[[-.33, 0], [-.368, 0], [-.368, -.05], [-.33, -.02]]]); k.b(.02, .13, .044, m.rubber, -.4, -.014, 0);
@@ -71,13 +91,13 @@ var SV = window.SV = window.SV || {};
     var g = new T.Group(), k = kit(g), m = MAT, i, sl = [];
     ex(k, [[-.14, .002], [.13, .002], [.13, .056], [.122, .064], [-.132, .064], [-.14, .052]], -.021, .021, m.steel, .003);
     ex(k, [[-.14, 0], [.1, 0], [.1, -.04], [.04, -.052], [.036, -.03], [-.03, -.03], [-.05, -.022], [-.14, -.022]], -.019, .019, m.dark, .0025);
-    k.b(.062, .02, .003, m.rubber, .02, .034, -.0225); k.cz(.0042, .045, m.bright, -.12, -.012, 0, 8); k.cz(.0042, .045, m.bright, .085, -.01, 0, 8);
+    parts(k, m, .0222); k.cz(.0042, .045, m.bright, -.12, -.012, 0, 8); k.cz(.0042, .045, m.bright, .085, -.01, 0, 8);
     for (i = 0; i < 3; i++) sl.push([[.158 + i * .072, .014], [.214 + i * .072, .014], [.204 + i * .072, .05], [.148 + i * .072, .05]]);
     ex(k, [[.13, -.004], [.36, -.004], [.372, .01], [.372, .056], [.362, .066], [.13, .066]], -.026, .026, m.poly, .004, sl);
-    k.cx(.0095, .4, m.dark, .33, .03, 0, 12); lx(k, [[.47, 0], [.47, .013], [.482, .0165], [.524, .0165], [.53, .012], [.53, 0]], m.dark, .03); for (i = 0; i < 2; i++) k.b(.01, .012, .036, m.rubber, .49 + i * .018, .03, 0);
+    k.cx(.0095, .4, m.dark, .33, .03, 0, 12); hider(k, .478, .03, .013, .052, m);
     teeth(k, -.128, 50, .0675, .021, m.steel); optic(k, .0, .042, .078, .036, .017, m);
     ex(k, [[-.09, -.02], [-.045, -.02], [-.058, -.07], [-.08, -.145], [-.128, -.138], [-.108, -.07]], -.014, .014, m.poly2, .005); trig(k, -.005, -.03, m.bright, m.dark);
-    ex(k, [[.04, -.04], [.094, -.034], [.1, -.11], [.112, -.175], [.064, -.188], [.052, -.12]], -.0125, .0125, m.poly2, .002); for (i = 0; i < 3; i++) k.b(.05, .004, .0275, m.rubber, .082 + i * .006, -.07 - i * .036, 0, 0, 0, .18);
+    mag(k, .069, -.04, .05, .15, .08, .42, .0122, m.poly2, m.rubber, 3);
     ex(k, [[.19, -.004], [.3, -.004], [.286, -.032], [.226, -.048], [.198, -.032]], -.014, .014, m.poly2, .004);
     k.cx(.0145, .14, m.steel, -.205, .03, 0, 12);
     ex(k, [[-.2, .054], [-.3, .054], [-.318, .04], [-.318, -.062], [-.296, -.068], [-.255, -.022], [-.2, .002]], -.019, .019, m.poly, .004); k.b(.018, .116, .044, m.rubber, -.327, -.008, 0);
@@ -90,7 +110,7 @@ var SV = window.SV = window.SV || {};
     for (i = 0; i < 3; i++) sl.push([[.118 + i * .03, .02], [.138 + i * .03, .02], [.138 + i * .03, .046], [.118 + i * .03, .046]]);
     ex(k, [[-.15, -.014], [.2, -.014], [.212, 0], [.212, .05], [.2, .066], [-.14, .066], [-.15, .056]], -.024, .024, m.steel, .003, sl);
     k.b(.06, .022, .003, m.rubber, .0, .036, -.0255); k.cz(.006, .018, m.bright, -.06, .05, -.031, 8); k.cz(.004, .052, m.bright, -.12, 0, 0, 8); k.cz(.004, .052, m.bright, .09, 0, 0, 8);
-    k.cx(.0095, .16, m.dark, .2, .03, 0, 12); lx(k, [[.26, 0], [.26, .013], [.272, .0165], [.306, .0165], [.312, .012], [.312, 0]], m.dark, .03); for (i = 0; i < 2; i++) k.b(.008, .012, .036, m.rubber, .28 + i * .014, .03, 0);
+    k.cx(.0095, .16, m.dark, .2, .03, 0, 12); hider(k, .262, .03, .013, .05, m); k.b(.05, .018, .002, m.rubber, .0, .04, -.0255); k.b(.036, .008, .003, m.bright, -.004, .041, -.0252); k.cz(.005, .004, m.dark, -.05, .004, -.0245, 10); k.b(.02, .005, .003, m.dark, -.042, .006, -.026, 0, 0, -.5);
     teeth(k, -.13, 33, .069, .022, m.steel); optic(k, -.01, .03, .08, .034, .016, m);
     ex(k, [[-.1, -.014], [-.045, -.014], [-.055, -.07], [-.07, -.135], [-.115, -.13], [-.1, -.07]], -.015, .015, m.poly2, .005); trig(k, -.006, -.016, m.bright, m.steel);
     ex(k, [[.028, -.014], [.062, -.014], [.06, -.235], [.026, -.235]], -.011, .011, m.dark, .002); k.b(.04, .012, .025, m.yel, .043, -.215, 0); k.b(.04, .008, .026, m.poly2, .043, -.238, 0);
@@ -139,7 +159,7 @@ var SV = window.SV = window.SV || {};
     ex(k, [[-.085, .014], [.125, .014], [.125, .04], [.118, .047], [-.08, .047], [-.085, .042]], -.0145, .0145, m.steel, .002, [0, 1, 2, 3].map(function (n) { return [[.052 + n * .017, .023], [.062 + n * .017, .023], [.066 + n * .017, .04], [.056 + n * .017, .04]]; })); k.cx(.0052, .19, m.bright, .025, .031, 0, 10);   // slide with milled slots, the barrel shows through
     for (i = 0; i < 7; i++) k.b(.003, .024, .0305, m.dark, -.072 + i * .007, .03, 0); k.b(.04, .012, .014, m.rubber, .03, .042, -.008);                         // serrations, ejection port
     k.cx(.006, .006, m.bright, .1275, .032, 0, 12); k.cx(.004, .004, m.dark, .1265, .02, 0, 10);                                                                // muzzle, guide rod
-    ex(k, [[-.08, .014], [.112, .014], [.112, -.004], [.045, -.01], [-.02, -.01], [-.035, -.03], [-.045, -.125], [-.095, -.118], [-.085, -.03]], -.0135, .0135, m.poly, .003);   // frame and grip
+    ex(k, [[-.082, .014], [.112, .014], [.112, -.004], [.045, -.01], [-.018, -.01], [-.03, -.026], [-.034, -.05], [-.04, -.09], [-.048, -.125], [-.1, -.118], [-.094, -.085], [-.09, -.05], [-.09, -.02], [-.094, -.004], [-.104, .006], [-.1, .013]], -.0135, .0135, m.poly, .0045);   // frame and grip
     k.b(.05, .006, .022, m.dark, .075, -.008, 0); for (i = 0; i < 3; i++) k.b(.004, .008, .024, m.rubber, .06 + i * .014, -.009, 0);                             // accessory rail
     trig(k, .003, -.01, m.bright, m.poly);
     k.b(.006, .008, .004, m.bright, .112, .051, 0); k.b(.008, .01, .005, m.dark, -.072, .052, .008); k.b(.008, .01, .005, m.dark, -.072, .052, -.008); k.b(.006, .03, .026, m.dark, -.087, .03, 0);   // sights, back plate
@@ -153,22 +173,32 @@ var SV = window.SV = window.SV || {};
     ex(k, [[-.085, .014], [.148, .014], [.15, .034], [.14, .046], [-.08, .046], [-.085, .041]], -.0135, .0135, m.dark, .003);
     for (i = 0; i < 6; i++) k.b(.0025, .022, .0285, m.steel, -.072 + i * .006, .03, 0); k.b(.04, .011, .013, m.rubber, .03, .041, -.0075);
     k.cx(.006, .008, m.bronze, .153, .031, 0, 12); k.cx(.004, .004, m.dark, .1505, .02, 0, 10);
-    ex(k, [[-.08, .014], [.13, .014], [.13, -.002], [.045, -.01], [-.02, -.01], [-.034, -.03], [-.044, -.125], [-.092, -.118], [-.084, -.03]], -.0125, .0125, m.poly2, .003);
+    ex(k, [[-.082, .014], [.13, .014], [.13, -.002], [.045, -.01], [-.018, -.01], [-.03, -.026], [-.034, -.05], [-.039, -.09], [-.046, -.125], [-.097, -.118], [-.092, -.085], [-.088, -.05], [-.088, -.02], [-.092, -.004], [-.102, .006], [-.098, .013]], -.0125, .0125, m.poly2, .0045);
     trig(k, .003, -.01, m.bronze, m.poly2); k.b(.03, .004, .001, m.bronze, .06, .006, -.013); k.b(.03, .004, .001, m.bronze, .06, .006, .013); k.cz(.0075, .0275, m.bronze, -.066, -.07, 0, 12);
     k.b(.006, .008, .004, m.bronze, .135, .05, 0); k.b(.008, .01, .005, m.dark, -.072, .051, .007); k.b(.008, .01, .005, m.dark, -.072, .051, -.007);
     for (i = 0; i < 9; i++) k.b(.03, .0022, .0262, m.rubber, -.055 - i * .0012, -.036 - i * .009, 0, 0, 0, -.12); k.b(.052, .008, .028, m.bronze, -.07, -.124, 0, 0, 0, -.12);
     wear(k, -.075, .135, .0465, .0125, m);
     return { g: g, grip: [-.06, -.07], fore: [-.045, -.095], muzzle: [.156, .031], sight: .062 };
   };
-  // KN-01 "Storm": a broad, heavy blade with a toothed spine, thick rubber handle and a steel ring at the pommel. Shape first, not a real pattern.
+  // KN-01 "Storm": a slim fighting knife. The blade is ground like a real one (flat sides down to a grind line, then a bevel to
+  // the edge) and tapers to a clip point; thin cross-guard, oval ringed handle, steel pommel.
+  function bladeGeo(st) {
+    var F = [], B = [], i;
+    function quad(L, a, b, c, d, out) { var n = new T.Vector3().subVectors(b, a).cross(new T.Vector3().subVectors(d, a)); if (n.dot(out) < 0) { var t = b; b = d; d = t; } [a, b, c, a, c, d].forEach(function (v) { L.push(v.x, v.y, v.z); }); }
+    function sec(q) { var yG = q[2] + (q[1] - q[2]) * .52, h = q[3] / 2; return { tl: new T.Vector3(q[0], q[1], -h), tr: new T.Vector3(q[0], q[1], h), gl: new T.Vector3(q[0], yG, -h), gr: new T.Vector3(q[0], yG, h), e: new T.Vector3(q[0], q[2], 0) }; }
+    for (i = 0; i < st.length - 1; i++) { var a = sec(st[i]), b = sec(st[i + 1]);
+      quad(F, a.tl, a.tr, b.tr, b.tl, new T.Vector3(0, 1, 0)); quad(F, a.tl, b.tl, b.gl, a.gl, new T.Vector3(0, 0, -1)); quad(F, a.tr, b.tr, b.gr, a.gr, new T.Vector3(0, 0, 1));
+      quad(B, a.gl, b.gl, b.e, a.e, new T.Vector3(0, -.2, -1)); quad(B, a.gr, b.gr, b.e, a.e, new T.Vector3(0, -.2, 1)); }
+    return [F, B].map(function (L) { var g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(L, 3)); g.computeVertexNormals(); return g; });
+  }
   GUN.knife = function () {
-    var g = new T.Group(), k = kit(g), m = MAT, sh = new T.Shape(), i;
-    sh.moveTo(0, -.022); sh.lineTo(.12, -.027); sh.lineTo(.176, -.017); sh.lineTo(.206, .007); sh.lineTo(.152, .022); sh.lineTo(.132, .027);
-    for (i = 0; i < 6; i++) { sh.lineTo(.124 - i * .016, .02); sh.lineTo(.116 - i * .016, .027); } sh.lineTo(0, .025); sh.lineTo(0, -.022);
-    var blade = new T.ExtrudeGeometry(sh, { depth: .003, bevelEnabled: true, bevelSize: .0012, bevelThickness: .0012, bevelSegments: 1 }); blade.translate(0, 0, -.0015);
-    k.add(blade, m.steel, .012, 0, 0); k.b(.15, .003, .0064, m.bright, .09, -.0245, 0, 0, 0, -.03); k.b(.07, .008, .0062, m.dark, .07, .002, 0);
-    k.b(.012, .074, .018, m.dark, .006, 0, 0); lx(k, [[-.112, .011], [-.104, .0165], [-.088, .0142], [-.072, .017], [-.056, .0142], [-.04, .017], [-.024, .0142], [-.008, .0165], [0, .014]], m.rubber, 0, 0, 12);
-    k.cx(.0135, .01, m.steel, -.115, 0, 0, 12); k.add(new T.TorusGeometry(.0105, .003, 6, 14), m.bright, -.13, 0, 0);
+    var g = new T.Group(), k = kit(g), m = MAT, i, T0 = .0125, B0 = -.0135;
+    var bg = bladeGeo([[0, T0, B0, .0042], [.12, T0, B0, .0042], [.14, .0115, -.013, .004], [.155, .009, -.0115, .0036], [.17, .005, -.009, .003], [.18, .0015, -.0065, .0022], [.19, -.003, -.003, .0003]]);
+    k.add(bg[0], m.blade, .008, 0, 0); k.add(bg[1], m.edge, .008, 0, 0);
+    k.b(.078, .0032, .0046, m.dark, .068, .004, 0); for (i = 0; i < 8; i++) k.b(.0018, .0016, .0044, m.dark, .02 + i * .0045, T0 - .0004, 0);          // fuller, thumb jimping on the spine
+    ex(k, [[0, -.021], [.004, -.026], [.0105, -.027], [.0115, -.023], [.0075, -.019], [.0075, .019], [.0115, .023], [.0105, .027], [.004, .026], [0, .021]], -.0072, .0072, m.steel, .002);   // cross-guard, tips curled forward
+    var h = lx(k, [[-.105, .0105], [-.1, .0125], [-.09, .0128], [-.086, .0118], [-.082, .0128], [-.068, .0131], [-.064, .012], [-.06, .0131], [-.046, .0131], [-.042, .012], [-.038, .0131], [-.024, .0128], [-.02, .0118], [-.016, .0125], [-.004, .012], [0, .011]], m.rubber, 0, 0, 16); h.scale.z = .82;
+    var pm = lx(k, [[-.119, 0], [-.119, .0102], [-.115, .0124], [-.105, .0124], [-.105, 0]], m.steel, 0, 0, 16); pm.scale.z = .84;
     return { g: g, grip: [-.05, 0], fore: null, muzzle: [.2, 0], sight: .03 };
   };
   // GR-01 "Frag": a round, panelled body, yellow band, lever and ring on top. An icon, not a mechanism.
@@ -410,7 +440,7 @@ var SV = window.SV = window.SV || {};
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
       var ax = V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
-      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.5, 0, .87), 1, .016, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
+      var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.5, 0, .87), 1, .0125, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
     else if (id === 'pistol') {
       var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
@@ -426,7 +456,7 @@ var SV = window.SV = window.SV || {};
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
-    if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.02), ax.clone().multiplyScalar(.215)];   /* base and tip of the blade, for the swing trail */
+    if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.012), ax.clone().multiplyScalar(.198)];   /* base and tip of the blade, for the swing trail */
     return out;
   };
   // where each weapon sits on screen at the hip: [x, y, z, pitch, yaw, roll] — low right, muzzle turned in toward the crosshair
