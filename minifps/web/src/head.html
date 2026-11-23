@@ -153,6 +153,37 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #hud.edit .hb, #hud.edit #stick { display: flex; opacity: 1; pointer-events: auto; border-style: dashed; cursor: grab; touch-action: none; }
 #hud.edit #stick { display: block; } #hud.edit .sel { border: 2px solid var(--signal); box-shadow: 0 0 0 3px rgba(255, 179, 71, .3); }
 #hud.edit #mini, #hud.edit #bottom { opacity: .45; pointer-events: none; }
+
+/* ---- look: field photo behind the menus, cut-corner panels, icon buttons (overrides the plain styles above) ---- */
+.scr { background: linear-gradient(90deg, rgba(11, 13, 15, .96) 0%, rgba(11, 13, 15, .86) 46%, rgba(11, 13, 15, .52) 100%), repeating-linear-gradient(0deg, rgba(255, 255, 255, .022) 0 1px, transparent 1px 3px), url(a/art/ui/bg2.jpg) center / cover no-repeat var(--ink); }
+#s-title { background: linear-gradient(90deg, rgba(11, 13, 15, .94) 0%, rgba(11, 13, 15, .7) 38%, rgba(11, 13, 15, .08) 72%, rgba(11, 13, 15, .35) 100%), linear-gradient(0deg, rgba(11, 13, 15, .9) 0%, transparent 34%), repeating-linear-gradient(0deg, rgba(255, 255, 255, .02) 0 1px, transparent 1px 3px), url(a/art/ui/bg1.jpg) center / cover no-repeat var(--ink); }
+#s-lobby { background: linear-gradient(90deg, rgba(11, 13, 15, .93) 0%, rgba(11, 13, 15, .74) 50%, rgba(11, 13, 15, .4) 100%), linear-gradient(0deg, rgba(11, 13, 15, .85) 0%, transparent 40%), repeating-linear-gradient(0deg, rgba(255, 255, 255, .02) 0 1px, transparent 1px 3px), url(a/art/ui/bg2.jpg) center / cover no-repeat var(--ink); }
+.scr.veil { background: rgba(11, 13, 15, .93); }
+.scr .top { padding-bottom: 8px; border-bottom: 1px solid var(--line); position: relative; }
+.scr .top::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 72px; height: 2px; background: var(--signal); }
+.cta { clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); letter-spacing: .04em; background: linear-gradient(180deg, #ffc266, var(--signal)); }
+.ghost, .opt, .back { background: rgba(11, 13, 15, .58); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px)); border-color: rgba(232, 228, 218, .26); }
+.ghost { border-left: 3px solid var(--signal); }
+.opt[aria-pressed="true"] { box-shadow: inset 0 -3px 0 var(--signal); }
+.scr h2::before { content: '// '; color: var(--signal); font-family: var(--f-mono); font-weight: 400; }
+
+.hb { flex-direction: column; gap: 1px; font-size: 9px; letter-spacing: .02em; border: 1.5px solid rgba(232, 228, 218, .7); background: radial-gradient(circle at 50% 38%, rgba(60, 68, 74, .55), rgba(11, 13, 15, .62) 70%); box-shadow: inset 0 0 0 3px rgba(11, 13, 15, .35), 0 0 0 1px rgba(11, 13, 15, .5); text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.hb::before { content: ''; width: 46%; height: 46%; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+.hb.on { background: radial-gradient(circle at 50% 38%, rgba(255, 179, 71, .5), rgba(232, 228, 218, .28) 75%); border-color: var(--signal); }
+#b-fire, #b-lfire { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='black' stroke='none' d='M12 1.5c2.2 2.2 3.2 5 3.2 8V17H8.800V9.500c0-3 1-5.800 3.200-8z'/%3E%3Cpath fill='black' stroke='none' d='M8 18.500h8V22H8z'/%3E%3C/svg%3E"); } #b-ads { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='7.5'/%3E%3Cpath d='M12 1.500v6M12 16.500v6M1.500 12h6M16.500 12h6'/%3E%3Ccircle cx='12' cy='12' r='1' fill='black'/%3E%3C/svg%3E"); } #b-jump { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l7-7 7 7M5 19l7-7 7 7'/%3E%3C/svg%3E"); } #b-crouch { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 5l7 7 7-7M5 12l7 7 7-7'/%3E%3C/svg%3E"); } #b-reload { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.900-6.200'/%3E%3Cpath d='M18 2v4.500h-4.500'/%3E%3Cpath fill='black' stroke='none' d='M12 8c1 1 1.400 2.200 1.400 3.500V16h-2.800v-4.500c0-1.300.4-2.500 1.400-3.500z'/%3E%3C/svg%3E"); } #b-nade { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='15' r='6.500' fill='black' stroke='none'/%3E%3Cpath fill='black' stroke='none' d='M8.500 5h5v3.500h-5z'/%3E%3Cpath d='M13.500 6.500h3.500l2 4'/%3E%3Ccircle cx='7' cy='4' r='2'/%3E%3C/svg%3E"); }
+#b-fire { font-size: 10px; border: 2px solid var(--alarm); background: radial-gradient(circle at 50% 40%, rgba(255, 90, 64, .5), rgba(120, 30, 20, .35) 72%); outline: 2px dashed rgba(255, 90, 64, .55); outline-offset: 4px; }
+#b-fire::before { width: 42%; height: 42%; }
+#b-jump, #b-nade, #b-ads, #b-crouch, #b-reload, #b-lfire { font-size: 9px; }
+#b-lfire { border-color: rgba(255, 90, 64, .85); background: radial-gradient(circle at 50% 40%, rgba(255, 90, 64, .38), rgba(11, 13, 15, .5) 72%); }
+#stick { border: 1.5px solid rgba(232, 228, 218, .5); background: radial-gradient(circle, rgba(11, 13, 15, .1) 54%, rgba(11, 13, 15, .5) 56%, rgba(11, 13, 15, .32) 100%); box-shadow: inset 0 0 0 6px rgba(232, 228, 218, .06); }
+#knob { background: radial-gradient(circle at 50% 40%, rgba(232, 228, 218, .75), rgba(232, 228, 218, .4)); box-shadow: 0 0 0 2px rgba(11, 13, 15, .4); }
+.sq, .slot { clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px)); background: rgba(11, 13, 15, .66); }
+.slot { min-width: 52px; border-color: rgba(232, 228, 218, .3); border-bottom: 2px solid rgba(232, 228, 218, .3); }
+.slot[aria-pressed="true"] { border: 1px solid var(--signal); border-bottom: 3px solid var(--signal); background: rgba(255, 179, 71, .16); color: var(--signal); }
+#ammo { clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px); border-right: 3px solid var(--signal); padding: 0 10px 0 12px; background: rgba(11, 13, 15, .7); }
+#score { clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%); padding: 3px 20px; background: rgba(11, 13, 15, .7); border-bottom: 2px solid rgba(232, 228, 218, .25); }
+#mini { border: 1px solid rgba(232, 228, 218, .5); outline: 1px solid rgba(11, 13, 15, .6); box-shadow: inset 0 0 0 2px rgba(11, 13, 15, .4); }
+#hp { width: 124px; } #hpb { height: 9px; background: rgba(11, 13, 15, .7); border: 1px solid rgba(232, 228, 218, .3); padding: 1px; } #hpf { height: 5px; background: repeating-linear-gradient(90deg, var(--bone) 0 9px, transparent 9px 11px); }
 </style>
 
 <div id="app">
@@ -195,7 +226,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
   </div>
 
   <section class="scr" id="s-title">
-    <div class="eyebrow">v0.33 · 오프라인 봇전</div>
+    <div class="eyebrow">v0.34 · 오프라인 봇전</div>
     <h1>Mini-FPS</h1>
     <div class="tag"><i></i><span id="t-tag">팀 데스매치 · 폭파 미션</span></div>
     <div><button class="cta" data-go="s-lobby" id="go-start" disabled>불러오는 중…</button></div>

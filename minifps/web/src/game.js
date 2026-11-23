@@ -1018,7 +1018,7 @@
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
   /* tests: draw the world from any point, without the first-person gun */
-  SV.testView = function (px, py, pz, tx, ty, tz, fov) { cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.fov = fov || 40; cam.updateProjectionMatrix(); renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); };
+  SV.testView = function (px, py, pz, tx, ty, tz, fov) { cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.fov = fov || 40; cam.updateProjectionMatrix(); if (window.POSTVIEW) { drawFrame(); return; } renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); };
   SV.stepFrame = function (dt) { if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } } updFx(dt); updRain(dt); updLamps(dt); drawFrame(); };
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

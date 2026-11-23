@@ -11,3 +11,5 @@ fp/kodiak.glb — "FPS Character Animation Pack Ak-47" by Cristian David Duque C
 
 tp/anim.glb — soldier motions holding a rifle (aim idle, run, walk, fire, reload and others), from Mixamo (Adobe), https://www.mixamo.com.
   Copy taken from the Bayou Protocol project (public/game/characters/animations.glb), which lists them under Mixamo's terms of use.
+
+ui/bg1.jpg, ui/bg2.jpg — menu backdrops: pictures taken inside this game (its own map and soldiers).
