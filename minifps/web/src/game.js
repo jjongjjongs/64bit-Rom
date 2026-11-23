@@ -7,7 +7,7 @@
 
   var W = SV.W = {
     rifle:   { name: 'AR-01 발키리', short: '소총', dmg: 27, head: 2.2, interval: .1, mag: 30, res: 120, reload: 2.1, spread: .014, ads: .0035, bloom: .0035, recoil: .011, auto: true, range: 120, fall: 35, pellets: 1, fov: 46, snd: 1 },
-    rifle2:  { name: 'AR-02 레이븐', short: '소총', dmg: 24, head: 2.1, interval: .085, mag: 30, res: 120, reload: 1.9, spread: .017, ads: .005, bloom: .0035, recoil: .0095, auto: true, range: 95, fall: 24, pellets: 1, fov: 48, snd: 1.15 },
+    rifle2:  { name: 'AR-02 레이븐', short: '소총', dmg: 24, head: 2.1, interval: .085, mag: 30, res: 120, reload: 3, spread: .017, ads: .005, bloom: .0035, recoil: .0095, auto: true, range: 95, fall: 24, pellets: 1, fov: 48, snd: 1.15 },
     smg:     { name: 'SM-01 사일런스', short: '기관단총', dmg: 18, head: 1.9, interval: .067, mag: 32, res: 160, reload: 1.8, spread: .022, ads: .011, bloom: .003, recoil: .0075, auto: true, range: 80, fall: 14, pellets: 1, fov: 50, snd: 1.35 },
     sniper:  { name: 'SR-01 오리온', short: '저격', dmg: 92, head: 2.5, interval: 1.25, mag: 5, res: 25, reload: 2.8, spread: .07, ads: .0004, bloom: 0, recoil: .05, auto: false, range: 200, fall: 200, pellets: 1, fov: 13, scope: true, snd: .55 },
     shotgun: { name: 'SG-01 하운드', short: '산탄총', dmg: 14, head: 1.4, interval: .85, mag: 6, res: 30, reload: 2.4, spread: .075, ads: .06, bloom: 0, recoil: .04, auto: false, range: 40, fall: 7, pellets: 8, fov: 50, snd: .7 },
@@ -72,9 +72,9 @@
   function run(mat, target) { post.quad.material = mat; renderer.setRenderTarget(target); renderer.render(post.sc, post.cam); }
   function drawFrame() {
     var vm = G.player && G.player.alive && vmCur;
-    if (!usePost) { renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); if (vm) { renderer.clearDepth(); renderer.render(vmScene, vmCam); } return; }
+    if (!usePost) { renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); if (vm && !window.NOVM) { renderer.clearDepth(); renderer.render(vmScene, vmCam); } return; }
     var p = post, w = p.scene.width, h = p.scene.height;
-    renderer.setRenderTarget(p.scene); renderer.clear(); renderer.render(scene, cam); if (vm) { renderer.clearDepth(); renderer.render(vmScene, vmCam); }
+    renderer.setRenderTarget(p.scene); renderer.clear(); renderer.render(scene, cam); if (vm && !window.NOVM) { renderer.clearDepth(); renderer.render(vmScene, vmCam); }
     p.pre.uniforms.t.value = p.scene.texture; p.pre.uniforms.px.value.set(1 / w, 1 / h); run(p.pre, p.a1);
     p.blur.uniforms.t.value = p.a1.texture; p.blur.uniforms.d.value.set(1 / p.a1.width, 0); run(p.blur, p.b1); p.blur.uniforms.t.value = p.b1.texture; p.blur.uniforms.d.value.set(0, 1 / p.a1.height); run(p.blur, p.a1);
     p.blur.uniforms.t.value = p.a1.texture; p.blur.uniforms.d.value.set(1 / p.a2.width, 0); run(p.blur, p.b2); p.blur.uniforms.t.value = p.b2.texture; p.blur.uniforms.d.value.set(0, 1 / p.a2.height); run(p.blur, p.a2);
@@ -444,7 +444,7 @@
   function reload(a) { var g = a.guns[a.slot], w = W[g.id]; if (w.melee || g.reload > 0 || g.mag >= w.mag || g.res <= 0) return; g.reload = w.reload; g.rlEmpty = g.mag === 0; g.rlNeed = Math.min(w.mag - g.mag, g.res); a.ads = false; if (a.isPlayer) { vmSwap = .25; tick(.12, 1800, .22); tick(w.reload * .55, 900, .3, 2); tick(w.reload * .84, 2600, .22); tick(w.reload * .9, 1500, .22); } }
   function fire(a, o, dir, muzzle) {
     var g = a.guns[a.slot], w = W[g.id], i, res;
-    if (g.cool > 0 || g.reload > 0) return false;
+    if (g.cool > 0 || g.reload > 0) return false; a.fireK = 1;
     if (w.melee) {
       /* a blade sweeps a width, not a line: try the middle and a little to each side and above and below, keep the best thing met */
       g.cool = w.interval; var d0 = new T.Vector3().copy(dir); vR.set(d0.z, 0, -d0.x).normalize(); vU.crossVectors(vR, d0); var bestM = null, bx2, by2;
@@ -865,8 +865,15 @@
     m.root.position.copy(a.pos); m.root.rotation.set(0, a.yaw + PI, 0); m.shadow.visible = true;
     if (m.skinned) {   // the downloaded model: blend idle and run by how fast it is going, sink to a knee, then lay the arms on the weapon
       a.kneel = (a.kneel || 0) + ((a.crouch ? 1 : 0) - (a.kneel || 0)) * Math.min(1, dt * 9); a.gait = (a.gait || 0) + ((a.moving ? 1 : 0) - (a.gait || 0)) * Math.min(1, dt * 7);
-      var gt = a.gait * (1 - a.kneel * .6); m.acts.Idle.setEffectiveWeight(1 - gt); m.acts.Run.setEffectiveWeight(gt); m.acts.Run.setEffectiveTimeScale(1.05); m.mixer.update(dt);
-      var bn = m.bones, kn = a.kneel; if (kn > .01) { bn.Hips.position.y -= 42 * kn; bn.LeftUpLeg.rotateX(-1.25 * kn); bn.LeftLeg.rotateX(1.5 * kn); bn.RightUpLeg.rotateX(-.25 * kn); bn.RightLeg.rotateX(1.9 * kn); bn.Spine.rotateX(.15 * kn); }
+      var gt = a.gait * (1 - a.kneel * .6), rlK = 0;
+      if (m.held) {   /* reload and fire come from the same set of motions */
+        var gg = a.guns[a.slot], wr = W[gg.id], rl = gg.reload > 0 && wr.reload ? 1 - gg.reload / wr.reload : -1; a.rlK = (a.rlK || 0) + ((rl >= 0 ? 1 : 0) - (a.rlK || 0)) * Math.min(1, dt * 10); rlK = a.rlK;
+        if (rl >= 0) m.acts.Reload.time = rl * m.acts.Reload.getClip().duration * .98; m.acts.Reload.setEffectiveTimeScale(0); m.acts.Reload.setEffectiveWeight(rlK);
+        a.fireK = Math.max(0, (a.fireK || 0) - dt * 6); m.acts.Fire.setEffectiveWeight(a.fireK * (1 - rlK));
+      }
+      m.acts.Idle.setEffectiveWeight((1 - gt) * (1 - rlK)); m.acts.Run.setEffectiveWeight(gt * (1 - rlK)); m.acts.Run.setEffectiveTimeScale(1.05); m.mixer.update(dt);
+      var bn = m.bones, kn = a.kneel; if (kn > .01) { bn.Hips.position.z -= 50 * kn;   /* this skeleton's root is turned: Z is its height */ bn.LeftUpLeg.rotateX(-1.25 * kn); bn.LeftLeg.rotateX(1.5 * kn); bn.RightUpLeg.rotateX(-.25 * kn); bn.RightLeg.rotateX(1.9 * kn); bn.Spine.rotateX(.15 * kn); }
+      if (m.held) { SV.poseHeld(m, rlK); return; }
       m.gun.position.y = (bn.Spine2.getWorldPosition(vP).y - a.pos.y - 1.3) * .8 - kn * .02; m.gun.position.z = 0; SV.poseArms(m); return;
     }
     // legs: thighs swing from the hip, the trailing knee bends; kneeling folds both and lowers the body
@@ -1010,6 +1017,8 @@
   SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
+  /* tests: draw the world from any point, without the first-person gun */
+  SV.testView = function (px, py, pz, tx, ty, tz, fov) { cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.fov = fov || 40; cam.updateProjectionMatrix(); renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); };
   SV.stepFrame = function (dt) { if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } } updFx(dt); updRain(dt); updLamps(dt); drawFrame(); };
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

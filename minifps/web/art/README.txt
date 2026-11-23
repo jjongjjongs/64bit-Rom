@@ -8,3 +8,6 @@ fp/*.glb — first-person arms and guns with their animations: the "fps animated
 fp/kodiak.glb — "FPS Character Animation Pack Ak-47" by Cristian David Duque Camacho (https://sketchfab.com/DuqueCD7), CC BY 4.0.
   https://sketchfab.com/3d-models/fps-character-animation-pack-ak-47-b95778a564094fc3a49d1d6a3b6a30ab
   Compressed copy (meshopt, WebP textures) taken from the Bayou Protocol project (public/game/models/rig-kodiak-arms.glb).
+
+tp/anim.glb — soldier motions holding a rifle (aim idle, run, walk, fire, reload and others), from Mixamo (Adobe), https://www.mixamo.com.
+  Copy taken from the Bayou Protocol project (public/game/characters/animations.glb), which lists them under Mixamo's terms of use.
