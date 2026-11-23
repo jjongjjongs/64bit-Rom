@@ -549,6 +549,21 @@
     }
     trGeo.attributes.position.needsUpdate = true; trGeo.attributes.color.needsUpdate = true; trMesh.visible = true;
   }
+  /* Reloading, by hand: the gun is canted up, the supporting hand leaves its hold, takes the magazine down out of view, brings a
+     fresh one up and seats it, then goes back. d = where that hand has to travel to reach the magazine (gun space: forward, up). */
+  var RL = { rifle: [-.146, -.11], rifle2: [-.15, -.18], smg: [-.127, -.13], sniper: [-.24, -.04], pistol: [0, -.02], pistol2: [0, -.02], shotgun: [-.2, -.03] };
+  function sm(a, b, x) { x = clamp((x - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); }
+  function reloadPose(id, r, off, mg) {
+    var d = RL[id] || RL.rifle, tilt, side = id === 'pistol' || id === 'pistol2';
+    if (id === 'shotgun') {   /* shells go in one at a time through the port underneath, then the fore-end is racked */
+      tilt = sm(0, .1, r) - sm(.86, .96, r); var at = sm(.06, .14, r) - sm(.74, .82, r), ph = r > .14 && r < .74 ? ((r - .14) / .6 * 4) % 1 : 0, dip = r > .14 && r < .74 ? Math.sin(ph * PI) : 0, rack = r > .84 && r < .96 ? Math.sin((r - .84) / .12 * PI) : 0;
+      if (off) off.position.set(d[0] * at - .07 * rack, d[1] * at - .1 * dip, .03 * at);
+      vmRoot.rotation.x += .24 * tilt; vmRoot.rotation.z -= .6 * tilt; vmRoot.position.x -= .09 * tilt; vmRoot.position.y += .08 * tilt; return;
+    }
+    tilt = sm(0, .1, r) - sm(.76, .92, r); var to = sm(.05, .15, r) - sm(.6, .74, r), drop = sm(.15, .3, r) - sm(.4, .56, r), seat = Math.max(0, 1 - Math.abs(r - .575) / .03), chg = r > .82 && r < .92 ? Math.sin((r - .82) / .1 * PI) : 0;
+    if (off) off.position.set(d[0] * to - .04 * drop, d[1] * to - .42 * drop, 0); if (mg) mg.position.set(-.04 * drop, -.42 * drop, 0);
+    var RZ = side ? [.3, -.35, -.04, .06] : [.24, -.55, -.09, .08];   /* muzzle up and the gun rolled over, so the magazine well shows */ vmRoot.rotation.x += RZ[0] * tilt; vmRoot.rotation.z += RZ[1] * tilt; vmRoot.position.x += RZ[2] * tilt; vmRoot.position.y += RZ[3] * tilt + .008 * seat; vmRoot.position.z += .022 * chg;
+  }
   function updVm(dt, p) {
     /* planting or defusing: the gun gives way to the bomb held in both hands, or to the wire cutters */
     var act = G.bomb && p.alive && p.useP > 0 && G.bomb.phase === 'live' ? G.bomb.can : null;
@@ -556,7 +571,9 @@
       if (act === 'plant' && !vms[kb]) { vms[kb] = SV.bombVM(p.team); vms[kb].rotation.y = PI / 2; vms[kb].position.set(0, -.1, -.4); vmRoot.add(vms[kb]); }
       if (act === 'defuse' && !vms[kk]) { vms[kk] = SV.viewModel('kit', p.team); vms[kk].rotation.y = PI / 2; vms[kk].position.set(.035, -.055, -.34); vmRoot.add(vms[kk]); }
       if (vms[kb]) vms[kb].visible = act === 'plant'; if (vms[kk]) vms[kk].visible = act === 'defuse'; if (vmCur) vmCur.visible = !act; }
-    if (act) { var rise = Math.min(1, p.useP / .3), snip = act === 'defuse' ? Math.max(0, 1 - ((p.useP / DEFUSE * 3) % 1) * 5) : 0; vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(0, -(1 - rise) * .25 - snip * .012, -snip * .02); vmRoot.visible = true; flash.visible = false; return; }
+    if (act) { var rise = Math.min(1, p.useP / .3), snip = act === 'defuse' ? Math.max(0, 1 - ((p.useP / DEFUSE * 3) % 1) * 5) : 0; vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(0, -(1 - rise) * .25 - snip * .012, -snip * .02); vmRoot.visible = true; flash.visible = false;
+      var tp = vms['bomb' + p.team] && vms['bomb' + p.team].userData.tap, kp = Math.max(0, 1 - ((p.useP / PLANT * 8) % 1) * 4); if (tp) tp.position.set(.012 * kp, .0, -.03 * kp);   /* the right hand reaches in for each key */
+      var fv = act === 'defuse' ? 40 : 62; if (Math.abs(cam.fov - fv) > .05) { cam.fov += (fv - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); } return; }
     var id = p.guns[p.slot].id, w = W[id], s = vmCur.userData.sight, ads = p.ads && !w.melee ? 1 : 0;
     vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .34);
     if (p.moving && p.ground) bobT += dt * 9;
@@ -590,6 +607,8 @@
     }
     updTrail(dt, w.melee && vmSwing > 0 && 1 - vmSwing > .16 && 1 - vmSwing < .42);
     vmRoot.visible = !(w.scope && vmAds > .8);
+    var gs = p.guns[p.slot], off = vmCur.userData.off, mgm = vmCur.userData.mag; if (off) off.position.set(0, 0, 0); if (mgm) mgm.position.set(0, 0, 0);
+    if (gs.reload > 0 && !w.melee) reloadPose(id, 1 - gs.reload / w.reload, off, mgm);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
     $('scope').hidden = !(w.scope && vmAds > .8);
