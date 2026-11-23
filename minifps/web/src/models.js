@@ -139,8 +139,8 @@ var SV = window.SV = window.SV || {};
     ex(k, [[-.26, .03], [-.39, .03], [-.39, .05], [-.38, .056], [-.27, .056], [-.26, .05]], -.018, .018, m.poly2, .003); k.b(.022, .13, .046, m.rubber, -.492, -.04, 0);   // cheek rest, butt pad
     k.cx(.007, .2, m.dark, .4, -.042, .02, 8); k.cx(.007, .2, m.dark, .4, -.042, -.02, 8); k.b(.03, .024, .06, m.dark, .49, -.036, 0);                           // folded bipod
     k.cx(.0225, .0016, m.glass, .2495, .125, 0, 16); k.cx(.0175, .0016, m.glass, -.2, .125, 0, 16); k.cz(.007, .05, m.dark, -.33, .043, 0, 10); k.cz(.007, .05, m.dark, -.3, .043, 0, 10); k.cz(.004, .05, m.bright, -.19, -.02, 0, 8); k.cz(.004, .05, m.bright, .15, -.02, 0, 8); k.b(.12, .006, .02, m.dark, .32, -.033, 0);
-    wear(k, -.19, .49, .0305, .0235, m); wear(k, -.46, -.21, .0305, .0205, m); stamp(k, -.12, .0, .0246, m); k.b(.03, .1, .048, m.rubber, -.5, -.04, 0);
-    return { g: g, grip: [-.14, -.1], fore: [.3, -.05], muzzle: [.9, .045], sight: .125 };
+    wear(k, -.19, .198, .0305, .0235, m);   /* only along the flat top of the chassis: past x = .2 the top steps down and the strip would hang in the air */ wear(k, -.46, -.21, .0305, .0205, m); stamp(k, -.12, .0, .0246, m); k.b(.03, .1, .048, m.rubber, -.5, -.04, 0);
+    return { g: g, grip: [-.14, -.1], fore: [.3, -.05], cup: [.3, -.012, .034], thumb: [.5, .3, .3, -.2], muzzle: [.9, .045], sight: .125 };
   };
   // SG-01 "Hound": heavy and thick up front. Ribbed fore-end, short solid stock, red stripes and a row of red shells on the side.
   GUN.shotgun = function () {
@@ -501,7 +501,7 @@ var SV = window.SV = window.SV || {};
       hand(g, V(d.grip[0] + .004, d.grip[1] + .012, 0), V(.28, 1, 0), V(-.55, 0, .85), 1, .018, V(d.grip[0] - .36, d.grip[1] - .2, .17), sl, gl, { top: .03, pad: MAT.poly2, off: [.02, 0, 0], re: .024, sink: .008 });
       var cup = d.cup || (d.fore ? [d.fore[0], d.fore[1] + .028, .027] : null);   // [x, y of the part's axis, its radius]
       if (d.vgrip) hand(oh, V(d.fore[0], d.fore[1] + .015, 0), V(.05, 1, 0), V(-.5, 0, -.87), -1, .017, V(d.fore[0] - .3, d.fore[1] - .22, -.3), sl, gl, { top: .028, pad: MAT.poly2, thumbWrap: true });   // a vertical foregrip is held like a second pistol grip
-      else if (cup) hand(oh, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -.8, -.6), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160], yaw: .85 });
+      else if (cup) hand(oh, V(cup[0], cup[1], 0), V(1, 0, 0), V(0, -.8, -.6), -1, cup[2], V(cup[0] - .3, cup[1] - .27, -.3), sl, gl, { pad: MAT.poly2, thumbDir: V(1, .04, .02), thumbAt: -75, wrap: [40, 85, 125, 160], yaw: .85, thumb: d.thumb });   /* d.thumb: laid along the side where the part is a flat-sided block */
     }
     // two meshes, so steel can shine while polymer, wood, gloves and sleeves stay dull
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
