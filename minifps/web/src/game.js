@@ -122,6 +122,8 @@
     return true;
   }
 
+  var perf = { k: 1, slow: 0, fast: 0, ema: 1 / 60, wait: 0, pr: 1 };
+  SV.perf = perf;
   SV.resize = function () {
     if (!renderer) return; var w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     var want = !!(post && cfg.quality);
@@ -129,7 +131,11 @@
       SV.resize.done = true; usePost = want; renderer.toneMapping = want ? T.NoToneMapping : T.ACESFilmicToneMapping; renderer.outputEncoding = want ? T.LinearEncoding : T.sRGBEncoding;
       [scene, vmScene].forEach(function (s) { s.traverse(function (o) { if (o.material) o.material.needsUpdate = true; }); });
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cfg.quality ? (post ? 1.6 : 2) : 1.25)); renderer.setSize(w, h, false);
+    /* How finely to draw. A tablet has several times a phone's pixels behind a similar graphics chip, so besides the per-inch cap
+       there is a cap on the total drawn (about a 1080p screen's worth with the full look on), and `perf.k` lowers it further
+       when the frame rate stays low (see frame()). */
+    var cap = cfg.quality ? (post ? 1.6 : 2) : 1.25, budget = cfg.quality ? 1.55e6 : 1.0e6, pr = Math.min(window.devicePixelRatio || 1, cap, Math.sqrt(budget / (w * h))) * perf.k;
+    perf.pr = pr = Math.max(.6, Math.round(pr * 20) / 20); renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
     if (usePost) { var dw = renderer.domElement.width, dh = renderer.domElement.height; post.scene.setSize(dw, dh); post.ldr.setSize(dw, dh); post.a1.setSize(dw >> 2, dh >> 2); post.b1.setSize(dw >> 2, dh >> 2); post.a2.setSize(dw >> 3, dh >> 3); post.b2.setSize(dw >> 3, dh >> 3); }
     cam.aspect = vmCam.aspect = w / h; cam.updateProjectionMatrix(); vmCam.updateProjectionMatrix();
   };
@@ -906,7 +912,7 @@
       }
       m.acts.Idle.setEffectiveWeight((1 - gt) * (1 - rlK)); m.acts.Run.setEffectiveWeight(gt * (1 - rlK)); m.acts.Run.setEffectiveTimeScale(1.05); m.mixer.update(dt);
       var bn = m.bones, kn = a.kneel; if (kn > .01) { bn.Hips.position.z -= 50 * kn;   /* this skeleton's root is turned: Z is its height */ bn.LeftUpLeg.rotateX(-1.25 * kn); bn.LeftLeg.rotateX(1.5 * kn); bn.RightUpLeg.rotateX(-.25 * kn); bn.RightLeg.rotateX(1.9 * kn); bn.Spine.rotateX(.15 * kn); }
-      if (m.held) { SV.poseHeld(m, rlK); return; }
+      if (m.held) { var far = (a.pos.x - cam.position.x) * (a.pos.x - cam.position.x) + (a.pos.z - cam.position.z) * (a.pos.z - cam.position.z); if (far < 900) SV.poseHeld(m, rlK); return; }   /* beyond 30 m the support hand's exact place cannot be seen: skip working it out */
       m.gun.position.y = (bn.Spine2.getWorldPosition(vP).y - a.pos.y - 1.3) * .8 - kn * .02; m.gun.position.z = 0; SV.poseArms(m); return;
     }
     // legs: thighs swing from the hip, the trailing knee bends; kneeling folds both and lowers the body
@@ -1072,12 +1078,18 @@
   function watch(p) { var i, a, mates = [], any = null; for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (!a.alive) continue; if (a.team === p.team) mates.push(a); any = any || a; } return mates.length ? mates[(G.specI || 0) % mates.length] : any; }
   var prev = 0;
   function frame(t) {
-    requestAnimationFrame(frame); var dt = Math.min(.05, (t - prev) / 1000 || 0); prev = t;
+    requestAnimationFrame(frame); var raw = (t - prev) / 1000 || 0, dt = Math.min(.05, raw); prev = t;   /* raw: the real time since the last frame, for measuring speed; dt: capped, for the game's own steps */
     if (!renderer || G.state === 'menu') return;
     if (window.MANUAL) return;   /* tests drive frames themselves through SV.stepFrame */
     if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } }
     updFx(dt); updRain(dt); updLamps(dt);
     drawFrame();
+    /* keep it smooth: if the game holds under about 42 frames a second for two seconds, draw a step coarser; if it then has
+       room to spare for a long while, go back a step. Only while playing, and never right after a change. */
+    if (G.state === 'play' && raw > 0 && raw < 3) { raw = Math.min(raw, .5); var pf = perf;   /* a gap of seconds is the app coming back from the background, not a slow frame */ pf.ema += (raw - pf.ema) * .08; pf.wait -= raw;
+      if (pf.wait <= 0) { if (pf.ema > 1 / 42) { pf.slow += raw; pf.fast = 0; } else if (pf.ema < 1 / 57) { pf.fast += raw; pf.slow = 0; } else { pf.slow = pf.fast = 0; }
+        if (pf.slow > 2 && pf.k > .56) { pf.k = Math.max(.55, pf.k * .85); pf.slow = 0; pf.wait = 3; SV.resize(); }
+        else if (pf.fast > 12 && pf.k < 1) { pf.k = Math.min(1, pf.k / .9); pf.fast = 0; pf.wait = 6; SV.resize(); } } }
   }
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
