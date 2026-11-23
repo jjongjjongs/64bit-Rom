@@ -482,6 +482,7 @@ var SV = window.SV = window.SV || {};
     var d = GUN[id0](), g = d.g, bx = new T.Box3(), cut = [];
     // the stock sits against the shoulder, beside and behind the eye: in first person it only shows up as a stray block, so leave it out
     if (id !== 'pistol' && id !== 'knife' && id !== 'shotgun') { g.updateMatrixWorld(true); g.children.forEach(function (c) { bx.setFromObject(c); if ((bx.min.x + bx.max.x) / 2 < -.2) cut.push(c); }); cut.forEach(function (c) { g.remove(c); }); }
+    var stG = new T.Group(); cut.forEach(function (c) { stG.add(c); });   /* kept aside: shown while the gun is turned over for a reload, when its back end comes into view */
     var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 }, oh = new T.Group(), mgG = new T.Group();
     g.children.filter(function (c) { return c.userData.mag; }).forEach(function (c) { mgG.add(c); });   /* reloading moves the magazine and the supporting hand apart from the gun */
     if (id === 'knife' || id === 'kit') {
@@ -507,6 +508,7 @@ var SV = window.SV = window.SV || {};
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
     if (oh.children.length) { var og = new T.Group(); og.add(new T.Mesh(merge(oh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); og.add(new T.Mesh(mergeUV(oh, function (m) { return !!m.userData.sleeve; }), sl)); out.add(og); out.userData.off = og; }
+    if (stG.children.length) { var sg3 = new T.Group(); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); sg3.visible = false; out.add(sg3); out.userData.stock = sg3; }
     if (mgG.children.length) { var mg = new T.Group(); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); out.add(mg); out.userData.mag = mg; }
     if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.012), ax.clone().multiplyScalar(.198)];   /* base and tip of the blade, for the swing trail */
     return out;

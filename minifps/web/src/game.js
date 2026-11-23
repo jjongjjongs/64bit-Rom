@@ -608,6 +608,7 @@
     updTrail(dt, w.melee && vmSwing > 0 && 1 - vmSwing > .16 && 1 - vmSwing < .42);
     vmRoot.visible = !(w.scope && vmAds > .8);
     var gs = p.guns[p.slot], off = vmCur.userData.off, mgm = vmCur.userData.mag; if (off) off.position.set(0, 0, 0); if (mgm) mgm.position.set(0, 0, 0);
+    if (vmCur.userData.stock) vmCur.userData.stock.visible = gs.reload > 0;
     if (gs.reload > 0 && !w.melee) reloadPose(id, 1 - gs.reload / w.reload, off, mgm);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
