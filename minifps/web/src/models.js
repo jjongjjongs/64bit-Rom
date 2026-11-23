@@ -613,11 +613,11 @@ var SV = window.SV = window.SV || {};
   var PACK = {
     rifle: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
     rifle2: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
-    smg: { f: 'hornet', ax: -.005, ay: .021, len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
+    smg: { f: 'hornet', ax: -.006, ay: .0187, len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
     sniper: { f: 'sniper', len: 1.15, muzzle: [.12, -.15, -1.25], clips: { fire: [0, .4], pump: [.4, 1.6], reload: [1.6, 3.1], idle: [4.9, 6.0] } },
     shotgun: { f: 'mauler', ay: .0265, len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
     pistol: { f: 'striker', ay: .0186, len: .19, muzzle: [.09, -.088, -.42], clips: { fire: [0, .43], reload: [.43, 2.73], reloadEmpty: [3.1, 6.0], idle: [7.8, 8.83] } },
-    pistol2: { f: 'kestrel', ax: .005, ay: .02, len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
+    pistol2: { f: 'kestrel', ax: .0033, ay: .014, len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
   var PKC = {}, PKW = { rifle: [.31, .62], rifle2: [.31, .62], smg: [.36, .66], sniper: [.3, .52], shotgun: [.3, .62], pistol: [.14, 0], pistol2: [.14, 0] };
   SV.packVM = function (id0) {
     if (PKC[id0]) return PKC[id0];
