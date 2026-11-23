@@ -20,8 +20,8 @@
   var BOTGUN = ['rifle', 'smg', 'sniper', 'shotgun', 'rifle2', 'smg', 'rifle'];
   var EYE = 1.64, EYEC = 1.12, RAD = .35, TALL = 1.78;   // the map pack's player reference: 1.78 m tall, eye at 1.64 m, capsule radius 0.35 m
 
-  var G = SV.G = { state: 'menu', actors: [], nades: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
-  var inp = SV.inp = { use: false, gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
+  var G = SV.G = { state: 'menu', actors: [], nades: [], drops: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
+  var inp = SV.inp = { use: false, gy: 0, gp: 0, mx: 0, mz: 0, lx: 0, ly: 0, fire: false, ads: false, drop: false, jump: false, crouch: false, reload: false, nade: false, slot: -1 };
   var cfg = SV.cfg;
 
   // ---------- renderer ----------
@@ -391,8 +391,13 @@
     var a = { team: team, name: name, isPlayer: isPlayer, primary: primary, pos: new T.Vector3(), vy: 0, yaw: 0, pitch: 0, hp: 100, alive: false, respawn: 0, prot: 0, crouch: false, ground: true,
       kills: 0, deaths: 0, slot: 0, guns: null, nade: 1, bloom: 0, ads: false, walk: 0, moving: false, dead: 0, spot: 0, model: null, useP: 0, useAt: null, idx: 0,
       ai: { tgt: null, seen: 0, path: [], pathT: 0, goal: null, think: Math.random() * .2, strafe: 1, strafeT: 0, burst: 0, pause: 0, lastX: 0, lastZ: 0, stuckT: 0, hurtBy: null, lastSeen: null, lastSeenT: 99 } };
-    if (!isPlayer) { a.model = SV.soldier(team, primary); scene.add(a.model.root); a.model.root.visible = false; if (team === G.match.team) { var mk = new T.Mesh(new T.OctahedronGeometry(.09), new T.MeshBasicMaterial({ color: team === 'A' ? 0xffb347 : 0x6cc4e0, fog: false })); mk.position.y = 2.1; a.model.root.add(mk); } }
+    if (!isPlayer) { a.model = soldierModel(team, primary); a.tpGun = primary; }
     return a;
+  }
+  function soldierModel(team, id) {
+    var m = SV.soldier(team, id); scene.add(m.root); m.root.visible = false;
+    if (team === G.match.team) { var mk = new T.Mesh(new T.OctahedronGeometry(.09), new T.MeshBasicMaterial({ color: team === 'A' ? 0xffb347 : 0x6cc4e0, fog: false })); mk.position.y = 2.1; m.root.add(mk); }
+    return m;
   }
   function eye(a, out) { return out.set(a.pos.x, a.pos.y + (a.crouch ? EYEC : EYE), a.pos.z); }
   function spawn(a) {
@@ -400,6 +405,7 @@
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
     a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) { a.primary = G.match.primary; a.ads = false; if (SV.resetAds) SV.resetAds(); } a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
+    a.ai.wantDrop = null; a.ai.skipDrop = {}; a.ai.swapped = false; equipped(a);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
@@ -414,7 +420,7 @@
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
-      v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds();
+      v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds(); dropGun(v, v.slot, false, true);
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
       if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z, lvl(v)); }
       feed(by, v, head);
@@ -708,7 +714,8 @@
     var sens = (p.ads && !w.melee ? cfg.adsSens * (w.scope ? .35 : 1) : cfg.sens) * .00011 * (G.assistSlow ? .55 : 1);
     p.yaw -= inp.lx * sens; p.yaw += inp.gy; p.pitch = clamp(p.pitch - inp.ly * sens + inp.gp, -1.45, 1.45); inp.lx = inp.ly = inp.gy = inp.gp = 0;
     if (inp.crouch) { p.crouch = !p.crouch; inp.crouch = false; }
-    if (inp.slot >= 0) { if (inp.slot !== p.slot) { p.slot = inp.slot; p.ads = false; g.reload = 0; setVm(); } inp.slot = -1; g = p.guns[p.slot]; w = W[g.id]; }
+    if (inp.slot >= 0) { if (inp.slot !== p.slot && p.guns[inp.slot]) { p.slot = inp.slot; p.ads = false; g.reload = 0; setVm(); equipped(p); } inp.slot = -1; g = p.guns[p.slot]; w = W[g.id]; }
+    if (inp.drop) { inp.drop = false; if (!w.melee) { g.reload = 0; dropGun(p, p.slot, true); p.slot = [0, 1, 2].filter(function (k) { return p.guns[k]; })[0]; p.ads = false; if (SV.resetAds) SV.resetAds(); setVm(); equipped(p); g = p.guns[p.slot]; w = W[g.id]; } }
     p.ads = inp.ads && !w.melee && g.reload <= 0;
     var mag = Math.min(1, Math.hypot(inp.mx, inp.mz)), sp = p.crouch ? 2.3 : p.ads ? 2.6 : mag > .92 ? 6 : 4.4; if (g.id === 'knife') sp *= 1.1;
     var s = Math.sin(p.yaw), c = Math.cos(p.yaw), vx = (inp.mx * c - inp.mz * s) * sp, vz = (-inp.mx * s - inp.mz * c) * sp;
@@ -737,6 +744,76 @@
     for (var i = 0; i < AF.length; i++) { afD.copy(d).addScaledVector(afR, AF[i][0]).addScaledVector(afU, AF[i][1]).normalize(); var r = castShot(p, o, afD, range); if (r.actor && !smokeHit(o, afD, r.t)) return true; }
     return false;
   }
+  // ---------- guns on the ground ----------
+  // As in Counter-Strike: a soldier who dies drops the gun in hand, the drop button throws the held gun down, and walking over a
+  // gun picks it up when that slot (main gun or pistol) is empty. Bomb rounds clear the ground at each new round; otherwise a
+  // dropped gun lies for 30 s. Bots pick up too: a bot with nobody to fight may walk to a different main gun and swap for it.
+  // Multiplayer: whoever owns the soldier creates the drop and tells everyone ('dp'); pickups are settled by the host ('pq' ->
+  // 'pk') so two players can never take the same gun; a soldier's visible gun follows 'eq'.
+  var DROP_LIFE = 30, dropSeq = 0, ringGeo = null;
+  function slotOf(id) { return W[id].side ? 1 : 0; }
+  function tpId(a) { var g = a.guns && a.guns[a.slot]; if (g && !W[g.id].melee) return g.id; g = a.guns && (a.guns[0] || a.guns[1]); return g ? g.id : null; }
+  function setTp(a, id) {   // the gun a soldier is seen holding; a different gun means a fresh model fitted to it
+    var m = a.model; if (!m) return; if (id && a.tpGun !== id) { var vis = m.root.visible; scene.remove(m.root); m = a.model = soldierModel(a.team, id); m.root.visible = vis; a.tpGun = id; a.rlK = 0; }
+    if (m.gun) m.gun.visible = !!id;
+  }
+  function equipped(a) { var id = tpId(a); setTp(a, id); if (G.net && !a.remote && a.nid != null) G.net.send({ t: 'eq', id: a.nid, g: id }); }
+  function findDrop(gid) { for (var i = 0; i < G.drops.length; i++) if (G.drops[i].g === gid) return G.drops[i]; return null; }
+  function makeDrop(o) {
+    var root = new T.Group(), gm = SV.gunDrop ? SV.gunDrop(o.id) : null; if (gm) root.add(gm);
+    if (!ringGeo) { ringGeo = new T.RingGeometry(.28, .5, 28); ringGeo.rotateX(-PI / 2); }
+    var ring = new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: .3, depthWrite: false, blending: T.AdditiveBlending, fog: false })); ring.position.y = .03; ring.renderOrder = 2; root.add(ring);
+    root.position.fromArray(o.p); root.rotation.y = o.yaw || 0; scene.add(root);
+    var d = { g: o.g, id: o.id, mag: o.mag, res: o.res, by: o.by, pos: root.position, vel: new T.Vector3().fromArray(o.v || [0, 0, 0]), rest: false, age: 0, root: root, ring: ring, pend: 0 };
+    G.drops.push(d); if (G.drops.length > 40) killDrop(G.drops[0]); return d;
+  }
+  function killDrop(d) { scene.remove(d.root); d.ring.material.dispose(); var i = G.drops.indexOf(d); if (i >= 0) G.drops.splice(i, 1); }
+  function clearDrops() { (G.drops || []).slice().forEach(killDrop); G.drops = []; }
+  // the owner of `a` calls this. keep: leave the slot filled (a dead soldier's kit is replaced when it respawns)
+  function dropGun(a, slot, toss, keep) {
+    var g = a.guns[slot]; if (!g || W[g.id].melee) return null; if (!keep) a.guns[slot] = null;
+    var fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw), o = { g: (a.nid || 0) * 100000 + (++dropSeq), id: g.id, mag: g.mag, res: Math.min(g.res, W[g.id].res), by: a.nid != null ? a.nid : -1, yaw: a.yaw + PI / 2 + (Math.random() - .5) * .6,
+      p: [a.pos.x + fx * .35, a.pos.y + (toss ? 1.25 : 1), a.pos.z + fz * .35], v: toss ? [fx * 3, 1.5, fz * 3] : [fx * .5, .4, fz * .5] };
+    var d = makeDrop(o); d.byA = a; if (G.net) G.net.send(Object.assign({ t: 'dp' }, o)); return d;
+  }
+  function takeDrop(d, a) {
+    var s = slotOf(d.id);
+    if (!a.isPlayer) { if (a.guns[0]) dropGun(a, 0, true); a.guns[0] = { id: d.id, mag: d.mag > 0 ? d.mag : W[d.id].mag, res: 9999, cool: 0, reload: 0 }; a.slot = 0; a.ai.wantDrop = null; a.ai.swapped = true; }
+    else { a.guns[s] = { id: d.id, mag: d.mag, res: d.res, cool: 0, reload: 0 }; if (a.slot !== s) { a.slot = s; a.ads = false; if (SV.resetAds) SV.resetAds(); setVm(); } if (a === G.player) { sndTone(520, .05, .08); sndTone(780, .06, .06); showMsg(W[d.id].name + ' 획득', 1.2); } }
+    killDrop(d); equipped(a);
+  }
+  function claim(d, a) {
+    if (!G.net || G.net.host) { if (G.net) G.net.send({ t: 'pk', g: d.g, by: a.nid }); takeDrop(d, a); return; }
+    if (d.pend > G.elapsed) return; d.pend = G.elapsed + 1; G.net.send({ t: 'pq', g: d.g, by: a.nid });   // a guest asks the host, and takes it when the host says so
+  }
+  function updDrops(dt) {
+    for (var i = G.drops.length - 1; i >= 0; i--) {
+      var d = G.drops[i], k, a; d.age += dt;
+      if (!d.rest) {
+        d.vel.y -= 14 * dt; var hs = Math.hypot(d.vel.x, d.vel.z) * dt;
+        if (hs > 1e-4) { vH.set(d.vel.x, 0, d.vel.z).normalize(); if (rayWorld(d.pos, vH, hs + .2) < hs + .2) { d.vel.x *= -.15; d.vel.z *= -.15; } }   // off a wall, not through it
+        d.pos.addScaledVector(d.vel, dt); var gy = groundAt({ pos: d.pos }); if (d.pos.y <= gy) { d.pos.y = gy; d.rest = true; d.vel.set(0, 0, 0); }
+      }
+      if (!G.bomb && d.age > DROP_LIFE) { killDrop(d); continue; }
+      d.ring.material.opacity = .2 + .12 * Math.sin(G.elapsed * 4 + d.g % 7); if (!G.bomb && d.age > DROP_LIFE - 1) d.root.scale.setScalar(Math.max(.05, DROP_LIFE - d.age));
+      if (!d.rest) continue;
+      for (k = 0; k < G.actors.length; k++) {
+        a = G.actors[k]; var reach = a.isPlayer ? .9 : 1.5;   /* a bot's path ends at the middle of its 1 m cell, so it is allowed a longer reach */
+        if (a.remote || !a.alive || Math.abs(a.pos.x - d.pos.x) > reach || Math.abs(a.pos.z - d.pos.z) > reach || Math.abs(a.pos.y - d.pos.y) > 1.3) continue;
+        if (a.isPlayer) { if (a.guns[slotOf(d.id)] || (d.byA === a && d.age < 1)) continue; claim(d, a); break; }
+        if (a.ai.wantDrop === d.g) { claim(d, a); break; }
+      }
+    }
+  }
+  // a bot with nobody to fight may go for a different main gun lying near it; each gun is weighed once, and given up after 8 s
+  function botDrop(a) {
+    var ai = a.ai, d = ai.wantDrop != null ? findDrop(ai.wantDrop) : null;
+    if (d && G.elapsed - ai.wantAt < 8) return d; ai.wantDrop = null; ai.skipDrop = ai.skipDrop || {}; if (ai.swapped) return null;   // one swap a life, and never back to a gun it threw away
+    var best = null, bd = 10;
+    for (var i = 0; i < G.drops.length; i++) { var q = G.drops[i]; if (!q.rest || slotOf(q.id) || q.byA === a || (a.guns[0] && q.id === a.guns[0].id) || Math.abs(q.pos.y - a.pos.y) > 1.3) continue; var dd = Math.hypot(q.pos.x - a.pos.x, q.pos.z - a.pos.z); if (dd >= bd) continue;
+      if (ai.skipDrop[q.g] == null) ai.skipDrop[q.g] = Math.random() < .35; if (!ai.skipDrop[q.g]) { best = q; bd = dd; } }
+    if (best) { ai.wantDrop = best.g; ai.wantAt = G.elapsed; } return best;
+  }
   function muzzleWorld(p, out) { out.set(.16, -.12, -.6).applyEuler(cam.rotation).add(cam.position); return out; }
 
   // ---------- bots ----------
@@ -755,7 +832,9 @@
     // choose where to walk
     var want = null, pref = { rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
     var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
-    if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
+    var dg = !best && !(ob && ob.force) && !(G.bomb && G.bomb.carrier === a) ? botDrop(a) : null;
+    if (dg) want = { x: dg.pos.x, z: dg.pos.z, l: lvl(a) };
+    else if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; var c2 = c % nav.N; want = { x: nav.ox + (c2 % nav.nx) + .5, z: nav.oz + ((c2 / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0 }; } ai.goal = null; }
@@ -842,7 +921,7 @@
   function newRound() {
     var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
     B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; var sps = G.map.sites[B.plan].spots; B.spot = sps ? sps[(Math.random() * sps.length) | 0] : null;   // this round's place to plant
-    bombMesh.visible = false; G.killer = null;
+    bombMesh.visible = false; G.killer = null; clearDrops();
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
     G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
     at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
@@ -949,7 +1028,7 @@
     if (map.rain) makeRain();
     buildNav(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
     HOT = map.hot || [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
-    G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
+    clearDrops(); G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
     function gun(n) { if (window.TESTGUN) return window.TESTGUN;   /* tests: give every bot one gun */
       var id = BOTGUN[n % BOTGUN.length]; return small && id === 'sniper' ? 'smg' : id; }
     G.net = match.net || null;
@@ -960,6 +1039,7 @@
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
     for (i = 0; i < (match.enemies != null ? match.enemies : match.perTeam); i++) G.actors.push(actor(other, NAMES[other][i], false, gun(i)));
     }
+    if (!SV.gunsWarm) { SV.gunsWarm = true; ['rifle', 'rifle2', 'smg', 'sniper', 'shotgun', 'pistol', 'pistol2'].forEach(function (id) { SV.soldier('A', id); }); }   // build each held gun once now, so a pickup mid-match never stalls a frame
     var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
     G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
     G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
@@ -996,7 +1076,8 @@
     set('sc-a', G.score.A); set('sc-b', G.score.B); var t = Math.max(0, Math.ceil(G.time)); set('sc-t', ('0' + ((t / 60) | 0)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2));
     set('hpn', Math.max(0, Math.ceil(p.hp))); var hw = clamp(p.hp, 0, 100) + '%'; if (last.hw !== hw) { last.hw = hw; $('hpf').style.width = hw; $('hpf').style.background = p.hp < 35 ? '#ff5a40' : '#e8e4da'; }
     set('am', w.melee ? '–' : g.reload > 0 ? '…' : g.mag); set('ar', w.melee ? '' : '/ ' + g.res);
-    for (var i = 0; i < 3; i++) { var on = i === p.slot ? 'true' : 'false'; if (last['s' + i] !== on + p.guns[i].id) { last['s' + i] = on + p.guns[i].id; var e = $('slot' + i); e.setAttribute('aria-pressed', on); e.textContent = W[p.guns[i].id].short; } }
+    for (var i = 0; i < 3; i++) { var gi = p.guns[i], on = i === p.slot ? 'true' : 'false', key = on + (gi ? gi.id : '-'); if (last['s' + i] !== key) { last['s' + i] = key; var e = $('slot' + i); e.setAttribute('aria-pressed', on); e.textContent = gi ? W[gi.id].short : '—'; e.classList.toggle('empty', !gi); } }
+    if (last.dropOk !== !w.melee) { last.dropOk = !w.melee; $('b-drop').classList.toggle('off', w.melee); }
     set('nn', p.nade > 0 ? (G.match.nade === 'smoke' ? '연막' : '투척') : '없음');
     var sp = Math.round(((p.ads ? w.ads : w.spread || 0) + p.bloom + (p.moving ? .012 : 0)) * 380 + 3); if (last.sp !== sp) { last.sp = sp; $('cross').style.setProperty('--g', sp + 'px'); }
     $('cross').hidden = !p.alive || (w.scope && vmAds > .8); var dotOnly = p.ads && !w.melee && !w.scope && vmAds > .6; if (last.dot !== dotOnly) { last.dot = dotOnly; $('cross').classList.toggle('dot', dotOnly); }
@@ -1058,6 +1139,10 @@
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); }
       if (!G.bomb && G.score[by.team] >= G.match.target) endMatch(); }
     else if (m.t === 'f') { a = byNid(m.by); if (!a || !a.remote) return; a.fireK = 1; vP.fromArray(m.o); vH.fromArray(m.e); tracer(vP, vH); var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); gunSnd(m.g, clamp(1 - dd / 95, 0, 1) * .8, dd); }
+    else if (m.t === 'dp') { if (!findDrop(m.g)) makeDrop(m); }
+    else if (m.t === 'pq') { if (!G.net.host) return; v = findDrop(m.g); if (v) { G.net.send({ t: 'pk', g: m.g, by: m.by }); killDrop(v); } }
+    else if (m.t === 'pk') { v = findDrop(m.g); if (!v) return; a = byNid(m.by); if (a && !a.remote) takeDrop(v, a); else killDrop(v); }
+    else if (m.t === 'eq') { a = byNid(m.id); if (a && a.remote) setTp(a, m.g); }
     else if (m.t === 'left') { a = byNid(m.id); if (a) { a.net = { alive: false }; a.remote = true; a.alive = false; a.gone = true; if (a.model) a.model.root.visible = false; } }
   };
 
@@ -1069,12 +1154,12 @@
       a = G.actors[i]; a.prot = Math.max(0, a.prot - dt); a.spot = Math.max(0, a.spot - dt); a.bloom = Math.max(0, a.bloom - dt * .05);
       if (a.remote) { updRemote(dt, a); if (!a.alive) continue; }
       else if (!a.alive) { if (!G.bomb) { a.respawn -= dt; if (a.respawn <= 0) spawn(a); } continue; }
-      for (var k = 0; k < 3; k++) { var g = a.guns[k]; if (g.cool > 0) g.cool -= dt; if (k === a.slot && g.reload > 0) { g.reload -= dt; if (g.reload <= 0) { var n = Math.min(W[g.id].mag - g.mag, g.res); g.mag += n; g.res -= n; } } }
+      for (var k = 0; k < 3; k++) { var g = a.guns[k]; if (!g) continue; if (g.cool > 0) g.cool -= dt; if (k === a.slot && g.reload > 0) { g.reload -= dt; if (g.reload <= 0) { var n = Math.min(W[g.id].mag - g.mag, g.res); g.mag += n; g.res -= n; } } }
       if (a.isPlayer) updPlayer(dt, a); else if (!a.remote) updBot(dt, a);
     }
     if (G.net) netTick(dt);
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
-    updNades(dt); updSmokes(dt);
+    updNades(dt); updSmokes(dt); updDrops(dt);
     if (!p.alive) { G.eyeH = null; inp.nadeHold = false; nadeArc(false); }
     if (p.alive) { G.deadT = 0; G.specName = ''; var eyT = p.crouch ? EYEC : EYE; G.eyeH = G.eyeH == null ? eyT : G.eyeH + clamp((eyT - G.eyeH) * 14, -2.6, 2.6) * dt; cam.position.set(p.pos.x, p.pos.y + G.eyeH, p.pos.z);   /* ease the view down and up instead of snapping */ cam.rotation.set(p.pitch, p.yaw, 0); }
     else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
@@ -1104,7 +1189,8 @@
   // headless test hook: advance the simulation without waiting for frames
   // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
   SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
-  SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
+  SV.navInfo = function () { return nav; };
+  SV.dropTest = function (o) { return makeDrop(o); };   // for tests: lay a gun on the ground   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
   /* tests: draw the world from any point, without the first-person gun */
   SV.testView = function (px, py, pz, tx, ty, tz, fov) { cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.fov = fov || 40; cam.updateProjectionMatrix(); if (window.POSTVIEW) { drawFrame(); return; } renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); };

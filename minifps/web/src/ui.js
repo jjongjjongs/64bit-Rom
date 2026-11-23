@@ -67,7 +67,7 @@
       host.appendChild(col);
     });
   }
-  var EDIT = ['stick', 'b-lfire', 'b-fire', 'b-ads', 'b-jump', 'b-crouch', 'b-reload', 'b-nade'], ENAME = { stick: '이동 스틱', 'b-lfire': '왼손 사격', 'b-fire': '사격', 'b-ads': '정조준', 'b-jump': '점프', 'b-crouch': '앉기', 'b-reload': '장전', 'b-nade': '투척' };
+  var EDIT = ['stick', 'b-lfire', 'b-fire', 'b-ads', 'b-jump', 'b-crouch', 'b-reload', 'b-nade', 'b-drop'], ENAME = { 'b-drop': '버리기', stick: '이동 스틱', 'b-lfire': '왼손 사격', 'b-fire': '사격', 'b-ads': '정조준', 'b-jump': '점프', 'b-crouch': '앉기', 'b-reload': '장전', 'b-nade': '투척' };
   if (!cfg.layout || typeof cfg.layout !== 'object') cfg.layout = {};
   function applyLayout() { EDIT.forEach(function (id) { var l = cfg.layout[id] || {}, st = $(id).style; st.setProperty('--dx', (l.x || 0) + 'px'); st.setProperty('--dy', (l.y || 0) + 'px'); st.setProperty('--sc', l.s || 1); }); }
   function applyCfg() { applyLayout(); var h = $('hud'); h.style.setProperty('--bs', cfg.btnScale / 100); h.style.setProperty('--ba', cfg.btnAlpha / 100); $('b-lfire').hidden = !cfg.leftFire; SV.resize(); }
@@ -232,7 +232,7 @@
   hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
   hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
   hold('b-use', function () { inp.use = true; }, function () { inp.use = false; }, false);
-  hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nadeHold = true; }, function () { if (inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } }, true);   /* hold to aim (drag on the button turns the view), let go to throw */
+  hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-drop', function () { inp.drop = true; }, null, false); hold('b-nade', function () { inp.nadeHold = true; }, function () { if (inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } }, true);   /* hold to aim (drag on the button turns the view), let go to throw */
   /* pointerdown, not click: a browser only makes a click from the first finger down, so with a thumb on the stick these would never fire */
   [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
 
@@ -242,7 +242,7 @@
   window.addEventListener('keydown', function (e) {
     if (G.state !== 'play') { if ((e.code === 'KeyP' || e.code === 'Escape') && G.state === 'pause') resume(); return; }
     keys[e.code] = true; axes();
-    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nadeHold = true; else if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = true;
+    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyX') inp.drop = true; else if (e.code === 'KeyG') inp.nadeHold = true; else if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = true;
     else if (e.code === 'Digit1') inp.slot = 0; else if (e.code === 'Digit2') inp.slot = 1; else if (e.code === 'Digit3') inp.slot = 2; else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); pause(); }
   });
   window.addEventListener('keyup', function (e) { keys[e.code] = false; if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = false; if (e.code === 'KeyG' && inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } if (G.state === 'play') axes(); });

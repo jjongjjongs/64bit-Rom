@@ -109,6 +109,9 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #b-crouch { right: calc(var(--sr) + 98px); bottom: calc(var(--sb) + 4px); width: 50px; height: 50px; }
 #b-reload { right: calc(var(--sr) + 192px); bottom: calc(var(--sb) + 52px); width: 52px; height: 52px; }
 #b-nade { right: calc(var(--sr) + 178px); bottom: calc(var(--sb) + 116px); width: 48px; height: 48px; font-size: 11px; }
+#b-drop { right: calc(var(--sr) + 252px); bottom: calc(var(--sb) + 96px); width: 44px; height: 44px; }
+#b-drop.off { opacity: calc(var(--ba) * .45); }
+.slot.empty { opacity: .45; }
 #b-lfire { left: calc(var(--sl) + 6px); top: 42%; width: 54px; height: 54px; border-color: rgba(255, 90, 64, .8); }
 #stick { position: absolute; left: calc(var(--sl) + 24px); bottom: calc(var(--sb) + 30px); width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(232, 228, 218, .4); background: rgba(11, 13, 15, .28); opacity: var(--ba); pointer-events: none; transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(calc(var(--bs) * var(--sc, 1))); }
 #knob { position: absolute; left: 36px; top: 36px; width: 56px; height: 56px; border-radius: 50%; background: rgba(232, 228, 218, .5); }
@@ -173,7 +176,8 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
 #b-fire, #b-lfire { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='black' stroke='none' d='M12 1.5c2.2 2.2 3.2 5 3.2 8V17H8.800V9.500c0-3 1-5.800 3.200-8z'/%3E%3Cpath fill='black' stroke='none' d='M8 18.500h8V22H8z'/%3E%3C/svg%3E"); } #b-ads { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='7.5'/%3E%3Cpath d='M12 1.500v6M12 16.500v6M1.500 12h6M16.500 12h6'/%3E%3Ccircle cx='12' cy='12' r='1' fill='black'/%3E%3C/svg%3E"); } #b-jump { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l7-7 7 7M5 19l7-7 7 7'/%3E%3C/svg%3E"); } #b-crouch { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 5l7 7 7-7M5 12l7 7 7-7'/%3E%3C/svg%3E"); } #b-reload { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.900-6.200'/%3E%3Cpath d='M18 2v4.500h-4.500'/%3E%3Cpath fill='black' stroke='none' d='M12 8c1 1 1.400 2.200 1.400 3.500V16h-2.800v-4.500c0-1.300.4-2.500 1.400-3.500z'/%3E%3C/svg%3E"); } #b-nade { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='15' r='6.500' fill='black' stroke='none'/%3E%3Cpath fill='black' stroke='none' d='M8.500 5h5v3.500h-5z'/%3E%3Cpath d='M13.500 6.500h3.500l2 4'/%3E%3Ccircle cx='7' cy='4' r='2'/%3E%3C/svg%3E"); }
 #b-fire { font-size: 10px; border: 2px solid var(--alarm); background: radial-gradient(circle at 50% 40%, rgba(255, 90, 64, .5), rgba(120, 30, 20, .35) 72%); outline: 2px dashed rgba(255, 90, 64, .55); outline-offset: 4px; }
 #b-fire::before { width: 42%; height: 42%; }
-#b-jump, #b-nade, #b-ads, #b-crouch, #b-reload, #b-lfire { font-size: 9px; }
+#b-jump, #b-nade, #b-ads, #b-crouch, #b-reload, #b-lfire, #b-drop { font-size: 9px; }
+#b-drop { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v11M7.5 10l4.5 4.5 4.5-4.5M4 20h16'/%3E%3C/svg%3E"); }
 #b-lfire { border-color: rgba(255, 90, 64, .85); background: radial-gradient(circle at 50% 40%, rgba(255, 90, 64, .38), rgba(11, 13, 15, .5) 72%); }
 #stick { border: 1.5px solid rgba(232, 228, 218, .5); background: radial-gradient(circle, rgba(11, 13, 15, .1) 54%, rgba(11, 13, 15, .5) 56%, rgba(11, 13, 15, .32) 100%); box-shadow: inset 0 0 0 6px rgba(232, 228, 218, .06); }
 #knob { background: radial-gradient(circle at 50% 40%, rgba(232, 228, 218, .75), rgba(232, 228, 218, .4)); box-shadow: 0 0 0 2px rgba(11, 13, 15, .4); }
@@ -220,6 +224,7 @@ input[type=range] { accent-color: var(--signal); width: 100%; height: 30px; marg
     <button class="hb" id="b-crouch">앉기</button>
     <button class="hb" id="b-reload">장전</button>
     <button class="hb" id="b-nade"><span id="nn">투척</span></button>
+    <button class="hb" id="b-drop">버리기</button>
     <div id="bottom">
       <div id="hp"><div><span>체력</span><span id="hpn">100</span></div><div id="hpb"><div id="hpf"></div></div></div>
       <div id="slots"><button class="slot" id="slot0" aria-pressed="true">소총</button><button class="slot" id="slot1" aria-pressed="false">권총</button><button class="slot" id="slot2" aria-pressed="false">칼</button></div>

@@ -1082,6 +1082,12 @@ var SV = window.SV = window.SV || {};
     if (m.pistol) { HG.lt.copy(m.grip); HG.lt.x += .03; HG.lt.z += .012; HG.lt.y -= .012; reach(m, 'Left', HG.lt, .6, -1, .1, HG.pf, HG.pn, CURL_WRAP); }
     else if (m.vgrip && m.fore) { HG.lt.copy(m.fore); HG.lt.x += .018; HG.lt.y += .05; reach(m, 'Left', HG.lt, .6, -1, .1, HG.vf, HG.vn, CURL_GRIP2); }   /* a vertical foregrip is held like a second pistol grip */
     else { HG.lt.copy(m.fore || m.grip); HG.lt.y += .006; reach(m, 'Left', HG.lt, .6, -1, .1, HG.lf, HG.ln, CURL_FORE); } };
+  // a gun lying on its side on the ground, for dropped weapons (the same model the soldiers hold)
+  SV.gunDrop = function (id) {
+    var hg = heldGun(id, /^pistol/.test(id) ? -.05 : -.12, 1.4, .4), inner = new T.Group(), piv = new T.Group(), out = new T.Group(), gm = new T.Mesh(hg.geo, SV.litMat); inner.add(gm); if (hg.scan) inner.add(hg.scan.clone(true));
+    var bb = new T.Box3().setFromObject(inner), c = bb.getCenter(new T.Vector3()); inner.position.copy(c).negate(); piv.add(inner); piv.rotation.z = PI / 2; out.add(piv);
+    piv.updateMatrixWorld(true); bb.setFromObject(piv); piv.position.y = -bb.min.y + .005; out.traverse(function (o) { if (o.isMesh) o.castShadow = true; }); return out;
+  };
   SV.soldier = function (team, gunId) {
     if (SV.assets && SV.assets.soldier && SV.assets.scan && T.SkeletonUtils) return scanned(team, gunId);
     if (SV.assets && SV.assets.soldier && T.SkeletonUtils) return skinned(team, gunId);
