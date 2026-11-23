@@ -478,10 +478,36 @@
     if (g.mag <= 0 && !a.isPlayer) reload(a);
     return true;
   }
+  // Smoke: a cloud that hides whatever is behind it, for the player and for bots alike. Each cloud is a handful of soft sprites
+  // that swell out, hang for a while and thin away; sight lines are tested against a sphere of the same size.
+  var SMOKE_R = 3.6, SMOKE_T = 8, smokes = [], smokePool = [];
+  (function () { for (var c = 0; c < 3; c++) { var sp = []; for (var i = 0; i < 16; i++) { var m = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, transparent: true, depthWrite: false, fog: false })); m.visible = false; fx.add(m); sp.push({ m: m, o: new T.Vector3(), s: 1, w: 0 }); } smokePool.push(sp); } })();
+  function smokeAt(pos) {
+    var sp = smokePool.filter(function (q) { return !q.used; })[0]; if (!sp) { var old = smokes.shift(); sp = old.sp; }
+    sp.used = true; var tone = G.map && G.map.hdri ? ({ night: .16, dusk: .42, day: .62, indoor: .45 })[G.map.hdri[0]] || .6 : .6;
+    sp.forEach(function (q, i) { var a = Math.random() * 6.283, r = i < 3 ? .4 : rnd(.8, 2.5); q.o.set(Math.cos(a) * r, rnd(.5, 2.7), Math.sin(a) * r); q.s = rnd(3.4, 4.6); q.w = rnd(-.25, .25); q.m.material.color.setScalar(tone * rnd(.85, 1)); q.m.material.rotation = Math.random() * 6.283; q.m.visible = true; });
+    smokes.push({ pos: pos.clone(), age: 0, sp: sp });
+    if (ac && cfg.sound) { var d = Math.hypot(pos.x - G.player.pos.x, pos.z - G.player.pos.z), t = ac.currentTime, sn = nsrc(t, 1.4, 1), f = ac.createBiquadFilter(), g = ac.createGain(); f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = .7; g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.3 * clamp(1.2 - d / 30, 0, 1), t + .08); g.gain.exponentialRampToValueAtTime(.0001, t + 1.4); sn.connect(f); f.connect(g); g.connect(master); }
+  }
+  function updSmokes(dt) {
+    for (var i = smokes.length - 1; i >= 0; i--) {
+      var c = smokes[i]; c.age += dt; var grow = Math.min(1, c.age / 1.2), fade = clamp((SMOKE_T + 1.5 - c.age) / 1.5, 0, 1); grow = 1 - (1 - grow) * (1 - grow);
+      c.sp.forEach(function (q) { q.m.position.set(c.pos.x + q.o.x * grow, c.pos.y + q.o.y * (.4 + .6 * grow), c.pos.z + q.o.z * grow); q.m.scale.setScalar(q.s * (.25 + .75 * grow)); q.m.material.opacity = .9 * fade * Math.min(1, c.age / .3); q.m.material.rotation += q.w * dt; });
+      if (c.age > SMOKE_T + 1.5) { c.sp.forEach(function (q) { q.m.visible = false; }); c.sp.used = false; smokes.splice(i, 1); }
+    }
+  }
+  function clearSmokes() { smokes.forEach(function (c) { c.sp.forEach(function (q) { q.m.visible = false; }); c.sp.used = false; }); smokes.length = 0; }
+  // does a sight line from o along the unit vector d, dist long, pass through thick smoke?
+  function smokeHit(o, d, dist) {
+    for (var i = 0; i < smokes.length; i++) { var c = smokes[i]; if (c.age < .7 || c.age > SMOKE_T + .4) continue;
+      var cx = c.pos.x - o.x, cy = c.pos.y + 1.4 - o.y, cz = c.pos.z - o.z, t = clamp(cx * d.x + cy * d.y + cz * d.z, 0, dist), ex = cx - d.x * t, ey = cy - d.y * t, ez = cz - d.z * t; if (ex * ex + ey * ey + ez * ez < SMOKE_R * SMOKE_R * .72) return true; }
+    return false;
+  }
+  SV.smokeAt = smokeAt; SV.canSee = function (a, e) { return canSee(a, e); };
   function throwNade(a, o, dir) {
     if (a.nade <= 0) return; a.nade--;
-    var ns = SV.scanOf('grenade'), m = ns || new T.Mesh(SV.merge(SV.GUN.grenade().g), SV.litMat); m.scale.setScalar(ns ? 1 : 1.6); scene.add(m);
-    G.nades.push({ pos: o.clone().addScaledVector(dir, .5), vel: dir.clone().multiplyScalar(15).add(new T.Vector3(0, 4, 0)), t: 2.6, by: a, m: m });
+    var smoke = a.isPlayer && G.match.nade === 'smoke', ns = smoke ? null : SV.scanOf('grenade'), m = ns || new T.Mesh(SV.merge(SV.GUN[smoke ? 'smoke' : 'grenade']().g), SV.litMat); m.scale.setScalar(ns ? 1 : 1.6); scene.add(m);
+    G.nades.push({ pos: o.clone().addScaledVector(dir, .5), vel: dir.clone().multiplyScalar(15).add(new T.Vector3(0, 4, 0)), t: smoke ? 1.7 : 2.6, by: a, m: m, smoke: smoke });
     if (a.isPlayer) sndTone(220, .08, .1, 'triangle');
   }
   function updNades(dt) {
@@ -491,7 +517,8 @@
       for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
       if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
       n.m.position.copy(n.pos); n.m.rotation.x += dt * 8; n.t -= dt;
-      if (n.t <= 0) {
+      if (n.t <= 0 && n.smoke) { scene.remove(n.m); G.nades.splice(i, 1); smokeAt(n.pos); }
+      else if (n.t <= 0) {
         var bm = booms[i % booms.length]; bm.m.position.copy(n.pos); bm.m.visible = true; bm.life = .35; scene.remove(n.m); G.nades.splice(i, 1);
         var dp = Math.hypot(n.pos.x - G.player.pos.x, n.pos.z - G.player.pos.z); gunSnd('boom', clamp(1.4 - dp / 40, 0, 1.2), dp); if (dp < 12) G.shake = .35; for (k = 0; k < 6; k++) part(TX.soft, k < 2 ? cSpark : cSmoke, k < 2, n.pos, k < 2 ? .25 : 1.1, k < 2 ? 1.2 : .6, k < 2 ? 3 : 3.2, k < 2 ? 1 : .35, rnd(-1.5, 1.5), rnd(.5, 2.4), rnd(-1.5, 1.5), 0); mzLight.position.copy(n.pos); mzLight.intensity = 9;
         for (k = 0; k < G.actors.length; k++) { var e = G.actors[k]; if (!e.alive || (e.team === n.by.team && e !== n.by)) continue; eye(e, vH); vO.copy(n.pos); vO.y += .3; vD.subVectors(vH, vO); var d = vD.length(); if (d > 6) continue; vD.normalize(); if (rayWorld(vO, vD, d) < d - .3) continue; hurt(e, 150 * (1 - d / 6.5), n.by, false, 'grenade'); }
@@ -578,7 +605,7 @@
     // aim assist: slow the view near a visible enemy, and optionally pull the trigger
     G.assistSlow = false; var onTarget = false;
     if (cfg.assist || cfg.autoFire) {
-      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5) { G.assistSlow = cfg.assist; if (dot > .9995 || Math.acos(Math.min(1, dot)) * d < .45) onTarget = d < W[g.id].range * .7; } }
+      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) { G.assistSlow = cfg.assist; if (dot > .9995 || Math.acos(Math.min(1, dot)) * d < .45) onTarget = d < W[g.id].range * .7; } }
     }
     if (inp.reload) { reload(p); inp.reload = false; }
     if (inp.nade) { throwNade(p, vO, vD); inp.nade = false; }
@@ -591,7 +618,7 @@
 
   // ---------- bots ----------
   var HOT = null;
-  function canSee(a, e) { eye(a, vO); vH.set(e.pos.x, e.pos.y + (e.crouch ? .8 : 1.2), e.pos.z).sub(vO); var d = vH.length(); if (d > 75) return 0; vH.multiplyScalar(1 / d); return rayWorld(vO, vH, d) >= d - .4 ? d : 0; }
+  function canSee(a, e) { eye(a, vO); vH.set(e.pos.x, e.pos.y + (e.crouch ? .8 : 1.2), e.pos.z).sub(vO); var d = vH.length(); if (d > 75) return 0; vH.multiplyScalar(1 / d); return rayWorld(vO, vH, d) >= d - .4 && !smokeHit(vO, vH, d) ? d : 0; }
   function think(a) {
     var ai = a.ai, best = null, bd = 1e9, i, e, d;
     for (i = 0; i < G.actors.length; i++) {
@@ -694,7 +721,7 @@
     var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
     B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; var sps = G.map.sites[B.plan].spots; B.spot = sps ? sps[(Math.random() * sps.length) | 0] : null;   // this round's place to plant
     bombMesh.visible = false; G.killer = null;
-    G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
+    G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
     G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
     at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
     // spread out: the attackers split over two of the routes to the chosen site, and every third defender pushes forward
@@ -797,7 +824,7 @@
   SV.end = function () {
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); G.map = null; }
     G.actors.forEach(function (a) { if (a.model) scene.remove(a.model.root); }); G.actors = [];
-    G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = [];
+    G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
     if (rain) { scene.remove(rain); rain.geometry.dispose(); rain = null; }
     for (var k in vms) { vmRoot.remove(vms[k]); } vms = {}; vmCur = null; G.state = 'menu'; G.bomb = null; bombMesh.visible = false;
   };
@@ -827,7 +854,7 @@
     set('hpn', Math.max(0, Math.ceil(p.hp))); var hw = clamp(p.hp, 0, 100) + '%'; if (last.hw !== hw) { last.hw = hw; $('hpf').style.width = hw; $('hpf').style.background = p.hp < 35 ? '#ff5a40' : '#e8e4da'; }
     set('am', w.melee ? '–' : g.reload > 0 ? '…' : g.mag); set('ar', w.melee ? '' : '/ ' + g.res);
     for (var i = 0; i < 3; i++) { var on = i === p.slot ? 'true' : 'false'; if (last['s' + i] !== on + p.guns[i].id) { last['s' + i] = on + p.guns[i].id; var e = $('slot' + i); e.setAttribute('aria-pressed', on); e.textContent = W[p.guns[i].id].short; } }
-    set('nn', p.nade > 0 ? '투척' : '없음');
+    set('nn', p.nade > 0 ? (G.match.nade === 'smoke' ? '연막' : '투척') : '없음');
     var sp = Math.round(((p.ads ? w.ads : w.spread || 0) + p.bloom + (p.moving ? .012 : 0)) * 380 + 3); if (last.sp !== sp) { last.sp = sp; $('cross').style.setProperty('--g', sp + 'px'); }
     $('cross').hidden = !p.alive || (w.scope && vmAds > .8); var dotOnly = p.ads && !w.melee && !w.scope && vmAds > .6; if (last.dot !== dotOnly) { last.dot = dotOnly; $('cross').classList.toggle('dot', dotOnly); }
     G.marker = Math.max(0, G.marker - dt); var mk = $('hitm'); mk.hidden = G.marker <= 0; if (G.marker > 0) mk.style.borderColor = G.markerHead ? '#ff5a40' : '#e8e4da';
@@ -874,7 +901,7 @@
       if (a.isPlayer) updPlayer(dt, a); else updBot(dt, a);
     }
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
-    updNades(dt);
+    updNades(dt); updSmokes(dt);
     if (p.alive) { G.deadT = 0; G.specName = ''; cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
     else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
@@ -895,7 +922,7 @@
   requestAnimationFrame(frame);
   // headless test hook: advance the simulation without waiting for frames
   // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
-  SV.setPrimary = function (id, side) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
+  SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();
