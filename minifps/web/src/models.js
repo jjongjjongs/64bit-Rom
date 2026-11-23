@@ -508,6 +508,15 @@ var SV = window.SV = window.SV || {};
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
     if (oh.children.length) { var og = new T.Group(); og.add(new T.Mesh(merge(oh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); og.add(new T.Mesh(mergeUV(oh, function (m) { return !!m.userData.sleeve; }), sl)); out.add(og); out.userData.off = og; }
+    /* Reloading uses a second left hand, modelled already holding what it carries: closed round the magazine, or round a shell
+       for the shotgun. The fingers are fitted to that object once, here, because nothing stops them passing through things:
+       hands are posed by numbers, not by contact. */
+    var rhG = new T.Group();
+    if (id === 'shotgun') { var sh0 = V(.0, -.085, -.01), kk = kit(rhG); kk.cx(.0098, .05, MAT.red, sh0.x + .03, sh0.y, sh0.z, 10); kk.cx(.0102, .014, MAT.brass, sh0.x - .002, sh0.y, sh0.z, 10);
+      hand(rhG, sh0, V(1, 0, 0), V(0, -1, -.25), -1, .0105, sh0.clone().add(V(-.22, -.26, -.2)), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .6 }); }
+    else if (mgG.children.length && id !== 'pistol') { var mb = new T.Box3().setFromObject(mgG), mc = V((mb.min.x + mb.max.x) / 2, mb.min.y + Math.min(.045, (mb.max.y - mb.min.y) * .4), 0);
+      hand(rhG, mc, V(.12, 1, 0), V(-.35, 0, -.94), -1, .019, mc.clone().add(V(-.2, -.3, -.2)), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: .5 }); }
+    if (rhG.children.length) { var rg = new T.Group(); rg.add(new T.Mesh(merge(rhG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); rg.add(new T.Mesh(merge(rhG, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); rg.add(new T.Mesh(mergeUV(rhG, function (m) { return !!m.userData.sleeve; }), sl)); rg.visible = false; out.add(rg); out.userData.rh = rg; }
     if (stG.children.length) { var sg3 = new T.Group(); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); sg3.add(new T.Mesh(merge(stG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); sg3.visible = false; out.add(sg3); out.userData.stock = sg3; }
     if (mgG.children.length) { var mg = new T.Group(); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); mg.add(new T.Mesh(merge(mgG, false, function (m) { return !!m.userData.soft; }), SV.gunSoft)); out.add(mg); out.userData.mag = mg; }
     if (id === 'knife') out.userData.blade = [ax.clone().multiplyScalar(.012), ax.clone().multiplyScalar(.198)];   /* base and tip of the blade, for the swing trail */

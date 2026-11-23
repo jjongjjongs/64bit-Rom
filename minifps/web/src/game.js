@@ -553,16 +553,19 @@
      fresh one up and seats it, then goes back. d = where that hand has to travel to reach the magazine (gun space: forward, up). */
   var RL = { rifle: [-.146, -.11], rifle2: [-.15, -.18], smg: [-.127, -.13], sniper: [-.24, -.04], pistol: [0, -.02], pistol2: [0, -.02], shotgun: [-.2, -.03] };
   function sm(a, b, x) { x = clamp((x - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); }
-  function reloadPose(id, r, off, mg) {
-    var d = RL[id] || RL.rifle, tilt, side = id === 'pistol' || id === 'pistol2';
-    if (id === 'shotgun') {   /* shells go in one at a time through the port underneath, then the fore-end is racked */
-      tilt = sm(0, .1, r) - sm(.86, .96, r); var at = sm(.06, .14, r) - sm(.74, .82, r), ph = r > .14 && r < .74 ? ((r - .14) / .6 * 4) % 1 : 0, dip = r > .14 && r < .74 ? Math.sin(ph * PI) : 0, rack = r > .84 && r < .96 ? Math.sin((r - .84) / .12 * PI) : 0;
-      if (off) off.position.set(d[0] * at - .07 * rack, d[1] * at - .1 * dip, .03 * at);
+  function reloadPose(id, r, off, mg, rh) {
+    var d = RL[id] || RL.rifle, tilt, side = id === 'pistol' || id === 'pistol2', away, k;
+    if (id === 'shotgun') {   /* the left hand lets go and drops away; a hand holding a shell comes up to the port underneath four times; then the fore-end is racked */
+      tilt = sm(0, .1, r) - sm(.86, .96, r); away = sm(.03, .12, r) - sm(.74, .84, r); var ph = r > .14 && r < .74 ? ((r - .14) / .6 * 4) % 1 : 0, up = r > .14 && r < .74 ? Math.sin(ph * PI) : 0, rack = r > .86 && r < .97 ? Math.sin((r - .86) / .11 * PI) : 0;
+      if (off) off.position.set(-.06 * away - .07 * rack, -.45 * away, 0); if (rh) { rh.visible = r > .13 && r < .75; rh.position.set(-.05 * (1 - up), -.3 * (1 - up) + .012 * up, 0); }   /* stops just under the port: the fingers must not enter the receiver */
       vmRoot.rotation.x += .24 * tilt; vmRoot.rotation.z -= .6 * tilt; vmRoot.position.x -= .09 * tilt; vmRoot.position.y += .08 * tilt; return;
     }
-    tilt = sm(0, .1, r) - sm(.76, .92, r); var to = sm(.05, .15, r) - sm(.6, .74, r), drop = sm(.15, .3, r) - sm(.4, .56, r), seat = Math.max(0, 1 - Math.abs(r - .575) / .03), chg = r > .82 && r < .92 ? Math.sin((r - .82) / .1 * PI) : 0;
-    if (off) off.position.set(d[0] * to - .04 * drop, d[1] * to - .42 * drop, 0); if (mg) mg.position.set(-.04 * drop, -.42 * drop, 0);
-    var RZ = side ? [.3, -.35, -.04, .06] : [.24, -.55, -.09, .08];   /* muzzle up and the gun rolled over, so the magazine well shows */ vmRoot.rotation.x += RZ[0] * tilt; vmRoot.rotation.z += RZ[1] * tilt; vmRoot.position.x += RZ[2] * tilt; vmRoot.position.y += RZ[3] * tilt + .008 * seat; vmRoot.position.z += .022 * chg;
+    tilt = sm(0, .1, r) - sm(.78, .92, r); var seat = Math.max(0, 1 - Math.abs(r - .575) / .03), chg = r > .84 && r < .94 ? Math.sin((r - .84) / .1 * PI) : 0, RZ = side ? [.3, -.35, -.04, .06] : [.24, -.55, -.09, .08];   /* muzzle up and the gun rolled over, so the magazine well shows */
+    if (rh) {   /* the hold on the fore-end is dropped; a hand closed round the magazine comes up to it, takes it down, brings it back and seats it, then leaves */
+      away = sm(.03, .13, r) - sm(.76, .88, r); var rise = sm(.12, .24, r), drop = sm(.27, .39, r) - sm(.45, .57, r), leave = sm(.63, .75, r); k = 1 - rise + drop + leave;
+      if (off) off.position.set(-.06 * away, -.45 * away, 0); rh.visible = r > .11 && r < .76; rh.position.set(-.04 * k, -.4 * k, 0); if (mg) mg.position.set(-.04 * drop, -.4 * drop, 0);
+    } else { var to = sm(.05, .15, r) - sm(.6, .74, r), dr = sm(.15, .3, r) - sm(.4, .56, r); if (off) off.position.set(d[0] * to - .04 * dr, d[1] * to - .42 * dr, 0); if (mg) mg.position.set(-.04 * dr, -.42 * dr, 0); }
+    vmRoot.rotation.x += RZ[0] * tilt; vmRoot.rotation.z += RZ[1] * tilt; vmRoot.position.x += RZ[2] * tilt; vmRoot.position.y += RZ[3] * tilt + .008 * seat; vmRoot.position.z += .022 * chg;
   }
   function updVm(dt, p) {
     /* planting or defusing: the gun gives way to the bomb held in both hands, or to the wire cutters */
@@ -609,7 +612,8 @@
     vmRoot.visible = !(w.scope && vmAds > .8);
     var gs = p.guns[p.slot], off = vmCur.userData.off, mgm = vmCur.userData.mag; if (off) off.position.set(0, 0, 0); if (mgm) mgm.position.set(0, 0, 0);
     if (vmCur.userData.stock) vmCur.userData.stock.visible = gs.reload > 0;
-    if (gs.reload > 0 && !w.melee) reloadPose(id, 1 - gs.reload / w.reload, off, mgm);
+    if (vmCur.userData.rh) vmCur.userData.rh.visible = false;
+    if (gs.reload > 0 && !w.melee) reloadPose(id, 1 - gs.reload / w.reload, off, mgm, vmCur.userData.rh);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
     $('scope').hidden = !(w.scope && vmAds > .8);
