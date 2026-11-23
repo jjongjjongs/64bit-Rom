@@ -399,7 +399,7 @@
     var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
     a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
-    if (a.isPlayer) a.primary = G.match.primary; a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
+    if (a.isPlayer) { a.primary = G.match.primary; a.ads = false; if (SV.resetAds) SV.resetAds(); } a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
@@ -414,7 +414,7 @@
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
-      v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001;
+      v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds();
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
       if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z, lvl(v)); }
       feed(by, v, head);
@@ -719,8 +719,10 @@
     // aim assist: slow the view near a visible enemy, and optionally pull the trigger
     G.assistSlow = false; var onTarget = false;
     if (cfg.assist || cfg.autoFire) {
-      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) { G.assistSlow = cfg.assist; if (dot > .9995 || Math.acos(Math.min(1, dot)) * d < .45) onTarget = d < W[g.id].range * .7; } }
+      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) G.assistSlow = cfg.assist; }
     }
+    // auto-fire: the same test a bullet uses (every body part, crouched or behind low cover), along the crosshair and a hair to each side
+    if (cfg.autoFire && !w.melee && g.reload <= 0) onTarget = aimOn(p, vO, vD, Math.min(w.range * .8, 80));
     if (inp.reload) { reload(p); inp.reload = false; }
     nadeArc(!!inp.nadeHold && p.nade > 0, vO, vD);
     if (inp.nade) { throwNade(p, vO, vD); inp.nade = false; }
@@ -728,6 +730,12 @@
     if (want && (w.auto || w.melee || !G.fireHeld || (cfg.autoFire && onTarget && !inp.fire))) { vmCam.updateMatrixWorld(); vmRoot.updateMatrixWorld(); muzzleWorld(p, vM); fire(p, vO, vD, vM); }
     G.fireHeld = inp.fire;
     if (g.mag <= 0 && !w.melee && g.reload <= 0 && g.res > 0) reload(p);
+  }
+  var AF = [[0, 0], [.01, 0], [-.01, 0], [0, .01], [0, -.01]], afR = new T.Vector3(), afU = new T.Vector3(), afD = new T.Vector3();
+  function aimOn(p, o, d, range) {
+    afR.set(d.z, 0, -d.x).normalize(); afU.crossVectors(afR, d);
+    for (var i = 0; i < AF.length; i++) { afD.copy(d).addScaledVector(afR, AF[i][0]).addScaledVector(afU, AF[i][1]).normalize(); var r = castShot(p, o, afD, range); if (r.actor && !smokeHit(o, afD, r.t)) return true; }
+    return false;
   }
   function muzzleWorld(p, out) { out.set(.16, -.12, -.6).applyEuler(cam.rotation).add(cam.position); return out; }
 
@@ -910,7 +918,8 @@
         if (rl >= 0) m.acts.Reload.time = rl * m.acts.Reload.getClip().duration * .98; m.acts.Reload.setEffectiveTimeScale(0); m.acts.Reload.setEffectiveWeight(rlK);
         a.fireK = Math.max(0, (a.fireK || 0) - dt * 6); m.acts.Fire.setEffectiveWeight(a.fireK * (1 - rlK));
       }
-      m.acts.Idle.setEffectiveWeight((1 - gt) * (1 - rlK)); m.acts.Run.setEffectiveWeight(gt * (1 - rlK)); m.acts.Run.setEffectiveTimeScale(1.05); m.mixer.update(dt);
+      var M = m.acts; if (M.IdleLo) { M.Idle.setEffectiveWeight(0); M.Run.setEffectiveWeight(0); M.IdleLo.setEffectiveWeight(1 - gt); M.RunLo.setEffectiveWeight(gt); M.IdleUp.setEffectiveWeight((1 - gt) * (1 - rlK)); M.RunUp.setEffectiveWeight(gt * (1 - rlK)); M.RunLo.setEffectiveTimeScale(1.05); M.RunUp.setEffectiveTimeScale(1.05); }
+      else { M.Idle.setEffectiveWeight((1 - gt) * (1 - rlK)); M.Run.setEffectiveWeight(gt * (1 - rlK)); M.Run.setEffectiveTimeScale(1.05); } m.mixer.update(dt);
       var bn = m.bones, kn = a.kneel; if (kn > .01) { bn.Hips.position.z -= 50 * kn;   /* this skeleton's root is turned: Z is its height */ bn.LeftUpLeg.rotateX(-1.25 * kn); bn.LeftLeg.rotateX(1.5 * kn); bn.RightUpLeg.rotateX(-.25 * kn); bn.RightLeg.rotateX(1.9 * kn); bn.Spine.rotateX(.15 * kn); }
       if (m.held) { var far = (a.pos.x - cam.position.x) * (a.pos.x - cam.position.x) + (a.pos.z - cam.position.z) * (a.pos.z - cam.position.z); if (far < 900) SV.poseHeld(m, rlK); return; }   /* beyond 30 m the support hand's exact place cannot be seen: skip working it out */
       m.gun.position.y = (bn.Spine2.getWorldPosition(vP).y - a.pos.y - 1.3) * .8 - kn * .02; m.gun.position.z = 0; SV.poseArms(m); return;

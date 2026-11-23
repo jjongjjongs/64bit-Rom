@@ -829,6 +829,12 @@ var SV = window.SV = window.SV || {};
       TPC[k] = new T.AnimationClip(k, clip.duration, tracks);
     });
     mixer.stopAllAction(); src.traverse(function (o) { if (A[key(o.name)] === o) { /* leave the file as it was found */ } });
+    // layered motion: legs and hips from walking/standing, everything from the spine up from the action (reload, fire), so a
+    // soldier reloading on the move keeps walking instead of sliding in the standing pose
+    var LOW = /^(Hips|(Left|Right)(UpLeg|Leg|Foot|ToeBase|Toe_End))$/;
+    function part(c, low, nm) { return new T.AnimationClip(nm, c.duration, c.tracks.filter(function (t) { return LOW.test(key(t.name.replace(/\.(quaternion|position)$/, ''))) === low; })); }
+    TPC.IdleLo = part(TPC.Idle, true, 'IdleLo'); TPC.IdleUp = part(TPC.Idle, false, 'IdleUp'); TPC.RunLo = part(TPC.Run, true, 'RunLo'); TPC.RunUp = part(TPC.Run, false, 'RunUp');
+    TPC.Fire = part(TPC.Fire, false, 'Fire'); TPC.Reload = part(TPC.Reload, false, 'Reload');
     return TPC;
   }
   /* ---- fitting a hand to a gun by its real shape ----

@@ -228,7 +228,8 @@
   }
   hold('b-fire', function () { inp.fire = true; }, function () { inp.fire = false; }, true);
   hold('b-lfire', function () { inp.fire = true; }, function () { inp.fire = false; }, false);
-  var adsOn = false; hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
+  var adsOn = false; SV.resetAds = function () { adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); };
+  hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
   hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
   hold('b-use', function () { inp.use = true; }, function () { inp.use = false; }, false);
   hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nadeHold = true; }, function () { if (inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } }, true);   /* hold to aim (drag on the button turns the view), let go to throw */
