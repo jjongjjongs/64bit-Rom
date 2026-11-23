@@ -13,7 +13,9 @@ here = pathlib.Path(__file__).resolve().parent
 out = here / 'assets'
 # 게임 안 표면 이름 -> Poly Haven 텍스처
 TEXTURES = {'conc': 'concrete_pavement', 'floor': 'garage_floor', 'block': 'concrete_block_wall', 'corr': 'corrugated_iron_02', 'panel': 'box_profile_metal_sheet',
-            'metal': 'metal_plate', 'crate': 'brown_planks_05', 'paint': 'painted_metal_shutter', 'canvas': 'denim_fabric', 'asphalt': 'asphalt_02', 'plaster': 'plastered_wall_02', 'roof': 'clay_roof_tiles'}
+            'metal': 'metal_plate', 'crate': 'brown_planks_05', 'paint': 'painted_metal_shutter', 'canvas': 'denim_fabric', 'asphalt': 'asphalt_02', 'plaster': 'plastered_wall_02', 'roof': 'clay_roof_tiles',
+            'snow': 'snow_02', 'sand': 'sand_01', 'rock': 'rock_face_03', 'rust': 'rusty_metal_02',
+            'gunmetal': 'metal_plate_02', 'gunsoft': 'fabric_leather_02'}   # 총기 금속면, 손잡이·장갑 표면
 MODELS = ['Barrel_01', 'barrel_03', 'concrete_road_barrier', 'old_military_crate', 'wooden_military_crate', 'wooden_crate_02', 'ammo_box', 'metal_jerrycan_green', 'old_tyre', 'street_lamp_01',
           'cement_bag', 'portable_generator', 'old_military_compressor', 'tool_cart', 'covered_car', 'metal_toolbox', 'hand_truck', 'utility_box_01',
           'service_pistol', 'bolt_action_rifle_7_62', 'stick_grenade', 'steel_frame_shelves_01', 'metal_tool_chest', 'exterior_aircon_unit', 'flood_lights', 'propane_tank',

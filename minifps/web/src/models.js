@@ -231,16 +231,28 @@ var SV = window.SV = window.SV || {};
   var tCloth = detTex(function (x) { var i, j; for (j = 0; j < 256; j += 4) for (i = 0; i < 256; i += 4) { var o = ((i + j) >> 2) % 3; x.fillStyle = o === 0 ? 'rgba(30,30,30,.45)' : o === 1 ? 'rgba(220,220,220,.3)' : 'rgba(110,110,110,.2)'; x.fillRect(i, j, 3, 3); x.fillStyle = 'rgba(20,20,20,.35)'; x.fillRect(i + 3, j, 1, 4); x.fillRect(i, j + 3, 4, 1); }
     for (i = 0; i < 20; i++) { var bx = Math.random() * 256, by = Math.random() * 256, r = 20 + Math.random() * 40, g = x.createRadialGradient(bx, by, 0, bx, by, r), v = Math.random() < .5 ? 60 : 190; g.addColorStop(0, 'rgba(' + v + ',' + v + ',' + v + ',.18)'); g.addColorStop(1, 'rgba(128,128,128,0)'); x.fillStyle = g; x.fillRect(bx - r, by - r, r * 2, r * 2); } });
   function detail(mat, tex, scale, albedo, rough, bump) {
+    var U = mat.userData.det = { tDet: { value: tex }, uDet: { value: new T.Vector4(scale, albedo, rough, bump) }, uDetM: { value: new T.Vector2(.5, 1) } };   // uDetM: the texture's mean brightness and a gain
     mat.onBeforeCompile = function (sh) {
-      sh.uniforms.tDet = { value: tex }; sh.uniforms.uDet = { value: new T.Vector4(scale, albedo, rough, bump) };
+      sh.uniforms.tDet = U.tDet; sh.uniforms.uDet = U.uDet; sh.uniforms.uDetM = U.uDetM;
       sh.vertexShader = 'varying vec3 vOP; varying vec3 vON;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vOP = position; vON = normal;');
-      sh.fragmentShader = 'uniform sampler2D tDet; uniform vec4 uDet; varying vec3 vOP; varying vec3 vON;\n' + sh.fragmentShader
-        .replace('#include <color_fragment>', '#include <color_fragment>\n vec3 dW = abs(vON); vec2 dUv = (dW.x > dW.y && dW.x > dW.z ? vOP.zy : (dW.y > dW.z ? vOP.xz : vOP.xy)) * uDet.x; float dH = texture2D(tDet, dUv).r; diffuseColor.rgb *= 1. + (dH - .5) * uDet.y;')
+      sh.fragmentShader = 'uniform sampler2D tDet; uniform vec4 uDet; uniform vec2 uDetM; varying vec3 vOP; varying vec3 vON;\n' + sh.fragmentShader
+        .replace('#include <color_fragment>', '#include <color_fragment>\n vec3 dW = abs(vON); vec2 dUv = (dW.x > dW.y && dW.x > dW.z ? vOP.zy : (dW.y > dW.z ? vOP.xz : vOP.xy)) * uDet.x; float dH = clamp(.5 + (dot(texture2D(tDet, dUv).rgb, vec3(.3333)) - uDetM.x) * uDetM.y, 0., 1.); diffuseColor.rgb *= 1. + (dH - .5) * uDet.y;')
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor + (dH - .5) * uDet.z, .05, 1.);')
         .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n { vec3 dSx = dFdx(-vViewPosition), dSy = dFdy(-vViewPosition), dR1 = cross(dSy, normal), dR2 = cross(normal, dSx); float dFd = dot(dSx, dR1); vec3 dGr = sign(dFd) * (dFdx(dH) * dR1 + dFdy(dH) * dR2) * uDet.w; normal = normalize(abs(dFd) * normal - dGr); }');
     };
   }
   detail(SV.gunMetal, tMetal, 9, .5, .55, .0011); detail(SV.gunSoft, tCloth, 60, .32, .25, .0007); detail(SV.clothMat, tCloth, 34, .5, .2, .0016); detail(SV.litMat, tMetal, 9, .4, .5, .0008);
+  // Once the photographed sets are loaded, weapons take their wear from scanned steel and their grips and gloves from scanned
+  // leather instead of the drawn patterns above. Brightness is measured from the picture so the gun's own colours stay as they are.
+  var scanned2 = false;
+  function useScans() {
+    if (scanned2 || !SV.assets || !SV.assets.tex) return; scanned2 = true;
+    [[SV.gunMetal, 'gunmetal', 1.7, .55, .5, .00025, 2.2], [SV.litMat, 'gunmetal', 1.7, .45, .45, .0002, 2.2], [SV.gunSoft, 'gunsoft', 3.2, .4, .3, .0003, 2.6]].forEach(function (q) {
+      var t = SV.assets.tex[q[1]], tx = t && t.diff; if (!tx || !tx.image) return;
+      var c = document.createElement('canvas'), x, d, i, sum = 0; c.width = c.height = 32; x = c.getContext('2d'); x.drawImage(tx.image, 0, 0, 32, 32); d = x.getImageData(0, 0, 32, 32).data; for (i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+      var U = q[0].userData.det; U.tDet.value = tx; U.uDet.value.set(q[2], q[3], q[4], q[5]); U.uDetM.value.set(sum / (d.length / 4 * 3) / 255, q[6]);
+    });
+  }
 
   // A limb: a tapered tube between two points with a ball at the far joint.
   function tube(g, a, b, r0, r1, mat) {
@@ -385,6 +397,7 @@ var SV = window.SV = window.SV || {};
     m.renderOrder = 5; g.add(m); g.userData = { art: a, muzzle: [0, 0], sight: 0 }; return g;
   }
   SV.viewModel = function (id0, team) {
+    useScans();
     var id = id0.replace(/2$/, '');   // rifle2 and pistol2 are held like their kind
     if (ART[id0] && SV.assets && SV.assets.art[ART[id0].key]) return pictureVM(ART[id0], SV.assets.art[ART[id0].key]);
     var d = GUN[id0](), g = d.g, bx = new T.Box3(), cut = [];
