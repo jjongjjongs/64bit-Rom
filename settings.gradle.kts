@@ -20,6 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "singlevm"
-include(":app")
+rootProject.name = "mini-fps"
 include(":minifps")

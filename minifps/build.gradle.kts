@@ -16,10 +16,10 @@ android {
         versionName = "0.31.0"
     }
 
-    // :app 과 같은 고정 디버그 키로 서명한다. 러너마다 키가 달라지면 업데이트 설치가 거부된다.
+    // 저장소에 둔 고정 디버그 키로 서명한다. 러너마다 키가 달라지면 업데이트 설치가 거부된다.
     signingConfigs {
         getByName("debug") {
-            storeFile = file("../app/debug.keystore")
+            storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"

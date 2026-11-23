@@ -6,8 +6,7 @@
 # 그래서 고정된 태그 하나에 매번 덮어쓴다 — 폰에서는 늘 같은 자리에서 같은 이름의
 # 파일을 받으면 된다. 빌드마다 릴리스를 새로 만들면 몇 GB 씩 쌓이기만 한다.
 #
-# build.yml 과 guest-image.yml 이 각자 자기 파일을 올린다. 둘은 서로 다른 커밋에서
-# 돌 수 있으므로, 노트에 파일 묶음마다 어느 커밋/런에서 왔는지 한 줄씩 남긴다.
+# 노트에는 어느 커밋/런에서 왔는지 한 줄 남긴다.
 #
 # 사용법: publish-latest.sh <키> <설명> <파일>...
 set -euo pipefail
@@ -29,15 +28,18 @@ gh api -X PATCH "repos/$repo/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=t
 
 gh release upload "$TAG" "$@" --clobber
 
+# 예전에 같이 올리던 가상롬 앱과 게스트 이미지는 더 이상 배포하지 않는다. 남아 있으면 지운다.
+for old in app-debug.apk android7-guest.zip; do
+  gh release delete-asset "$TAG" "$old" -y >/dev/null 2>&1 || true
+done
+
 # 노트: 머리말 + 묶음별 한 줄. 자기 줄만 갈아 끼운다.
 line="- **$desc** — \`${GITHUB_SHA:0:7}\` · [런 $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID) · $(date -u '+%Y-%m-%d %H:%M UTC') <!-- $key -->"
-others=$(gh release view "$TAG" --json body -q .body | grep -- '<!-- ' | grep -v -- "<!-- $key -->" || true)
+others=$(gh release view "$TAG" --json body -q .body | grep -- '<!-- ' | grep -v -- "<!-- $key -->" | grep -v -- '<!-- \(apk\|guest\) -->' || true)
 {
   echo "작업 브랜치의 최신 빌드입니다. 빌드할 때마다 같은 이름으로 덮어씁니다."
   echo
-  echo "- \`app-debug.apk\` — 앱"
   echo "- \`mini-fps.apk\` — Mini-FPS (오프라인 봇전 FPS)"
-  echo "- \`android7-guest.zip\` — 게스트 이미지. 앱의 \"Android 7 구성 가져오기\"에 그대로 넣으면 됩니다."
   echo
   echo "### 어느 빌드인가"
   [ -n "$others" ] && printf '%s\n' "$others"
