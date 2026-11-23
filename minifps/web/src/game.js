@@ -550,6 +550,13 @@
     trGeo.attributes.position.needsUpdate = true; trGeo.attributes.color.needsUpdate = true; trMesh.visible = true;
   }
   function updVm(dt, p) {
+    /* planting or defusing: the gun gives way to the bomb held in both hands, or to the wire cutters */
+    var act = G.bomb && p.alive && p.useP > 0 && G.bomb.phase === 'live' ? G.bomb.can : null;
+    if (act !== vmAct) { vmAct = act; var kb = 'bomb' + p.team, kk = 'kit' + p.team;
+      if (act === 'plant' && !vms[kb]) { vms[kb] = SV.bombVM(p.team); vms[kb].rotation.y = PI / 2; vms[kb].position.set(0, -.1, -.4); vmRoot.add(vms[kb]); }
+      if (act === 'defuse' && !vms[kk]) { vms[kk] = SV.viewModel('kit', p.team); vms[kk].rotation.y = PI / 2; vms[kk].position.set(.035, -.055, -.34); vmRoot.add(vms[kk]); }
+      if (vms[kb]) vms[kb].visible = act === 'plant'; if (vms[kk]) vms[kk].visible = act === 'defuse'; if (vmCur) vmCur.visible = !act; }
+    if (act) { var rise = Math.min(1, p.useP / .3), snip = act === 'defuse' ? Math.max(0, 1 - ((p.useP / DEFUSE * 3) % 1) * 5) : 0; vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(0, -(1 - rise) * .25 - snip * .012, -snip * .02); vmRoot.visible = true; flash.visible = false; return; }
     var id = p.guns[p.slot].id, w = W[id], s = vmCur.userData.sight, ads = p.ads && !w.melee ? 1 : 0;
     vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .34);
     if (p.moving && p.ground) bobT += dt * 9;
@@ -674,8 +681,7 @@
   // Rounds without respawn. The attacking side carries one bomb to site A or B and holds "use" for 3 s; it goes off 35 s later
   // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
   var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0], [-5.5, .5], [5, -4.5], [1, 6], [-4, -5.5], [6.5, 3], [-1, -7]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
-  var bombMesh = new T.Mesh(new T.BoxGeometry(.36, .16, .24), new T.MeshLambertMaterial({ color: 0x2a2e31 })), bombLed = new T.Mesh(new T.BoxGeometry(.09, .05, .09), new T.MeshBasicMaterial({ color: 0xff3b2a, fog: false }));
-  bombLed.position.y = .1; bombMesh.add(bombLed); bombMesh.visible = false; scene.add(bombMesh);
+  var bombMesh = SV.bombParts(), bombLed = bombMesh.userData.led, vmAct = null, useCrouch = false, lastKey = -1; bombMesh.scale.setScalar(1.7); bombMesh.visible = false; scene.add(bombMesh);
   function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: c >= nav.N ? nav.H : 0 }; }
   function near(a, s, r) { return Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < r && Math.abs(a.pos.y - (s.y || 0)) < 1.2; }
   function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
@@ -747,7 +753,14 @@
       if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a), site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
       else if (kind === 'defuse' && a.useP >= DEFUSE) { bombMesh.visible = false; a.useP = 0; roundEnd(def, '폭탄 해제'); return; }
     }
-    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + .08, s.z);
+    var act = p.alive && p.useP > 0 ? B.can : null, step2;
+    if (act && !useCrouch && !p.crouch) { p.crouch = true; useCrouch = true; } else if (!act && useCrouch) { p.crouch = false; useCrouch = false; }
+    if (act === 'plant') { p.pitch += (-.55 - p.pitch) * Math.min(1, dt * 6); step2 = Math.min(7, Math.floor(p.useP / PLANT * 8)); SV.bombText('*******'.slice(0, step2) + '_______'.slice(step2), '#ffb347'); if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) sndTone(1500 + (step2 % 3) * 180, .04, .1, 'square'); } }
+    else if (act === 'defuse') { var bx = B.planted.x - p.pos.x, bz = B.planted.z - p.pos.z, wy = Math.atan2(-bx, -bz), dy2 = angd(wy, p.yaw), hd = Math.max(.25, Math.hypot(bx, bz)); p.yaw += dy2 * Math.min(1, dt * 6); p.pitch += (-Math.atan2(EYEC - .1, hd) - p.pitch) * Math.min(1, dt * 6);
+      step2 = Math.floor(p.useP / DEFUSE * 3); if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) { tick(0, 3800, .3, 5); tick(.03, 1800, .2, 3); } } bombMesh.userData.cut(step2); }
+    else { lastKey = -1; bombMesh.userData.cut(0); }
+    if (act !== 'plant') SV.bombText(B.planted ? '0:' + ('0' + Math.ceil(B.planted.t)).slice(-2) : '--:--', '#ff4a2e');
+    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + .012, s.z);
     var na = aliveOf(B.atk), nd = aliveOf(def);
     if (B.planted) {
       s = B.planted; s.t -= dt; s.beep -= dt; bombLed.visible = s.beep > .12 || s.beep < .06;
@@ -826,7 +839,7 @@
     G.actors.forEach(function (a) { if (a.model) scene.remove(a.model.root); }); G.actors = [];
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
     if (rain) { scene.remove(rain); rain.geometry.dispose(); rain = null; }
-    for (var k in vms) { vmRoot.remove(vms[k]); } vms = {}; vmCur = null; G.state = 'menu'; G.bomb = null; bombMesh.visible = false;
+    for (var k in vms) { vmRoot.remove(vms[k]); } vms = {}; vmCur = null; vmAct = null; useCrouch = false; G.state = 'menu'; G.bomb = null; bombMesh.visible = false;
   };
   function endMatch() {
     if (G.state !== 'play') return; G.state = 'over'; inp.fire = false;
@@ -867,7 +880,7 @@
     if (B) ot = B.planted ? (p.team === B.atk ? B.planted.site + ' 지점 설치 완료 · 폭탄을 지키세요' : B.planted.site + ' 지점에 폭탄 · 해제하세요') : p.team === B.atk ? (B.carrier === p ? '폭탄 소지 · A 또는 B에 설치' : B.drop ? '폭탄이 떨어져 있습니다 · 주우세요' : '공격 · ' + (B.carrier ? B.carrier.name + ' 이(가) 폭탄 운반 중' : '')) : '수비 · A, B 지점 방어';
     set('obj', ot); if (last.objh !== !B) { last.objh = !B; $('obj').hidden = !B; }
     if (last.use !== ut) { last.use = ut; $('b-use').hidden = !ut; $('use-t').textContent = ut; if (!ut) inp.use = false; }
-    if (last.up !== up) { last.up = up; $('usef').style.width = up + '%'; }
+    if (last.up !== up) { last.up = up; $('usef').style.width = up + '%'; $('b-use').classList.toggle('busy', up > 0); }
     if (last.red !== red) { last.red = red; $('sc-t').style.color = red ? '#ff5a40' : ''; }
     miniT -= dt; if (miniT <= 0) { miniT = .12; drawMini(); }
     // distance LOD: clutter and decals (tier 1) and medium props (tier 2) are built in 24 m cells; a few times a second each

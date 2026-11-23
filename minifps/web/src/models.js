@@ -204,6 +204,52 @@ var SV = window.SV = window.SV || {};
     var pm = lx(k, [[-.119, 0], [-.119, .0102], [-.115, .0124], [-.105, .0124], [-.105, 0]], m.steel, 0, 0, 16); pm.scale.z = .84;
     return { g: g, grip: [-.05, 0], fore: null, muzzle: [.2, 0], sight: .03 };
   };
+  // The bomb: three wrapped charges taped together, a control unit on top with a display and keypad, an aerial, and three
+  // coloured wires running from the unit down to the charges. Lies flat: width along X, top face up, the display reads from +Z.
+  GUN.bomb = function () {
+    var g = new T.Group(), k = kit(g), m = MAT, i, c, r;
+    for (i = -1; i <= 1; i++) { k.b(.07, .045, .13, m.olive, i * .075, .0225, 0); k.b(.05, .0012, .05, m.sand, i * .075, .0457, .03); }
+    [-.047, .05].forEach(function (z) { k.b(.232, .0475, .014, m.dark, 0, .0238, z); });
+    k.b(.124, .02, .072, m.poly2, 0, .0555, -.008); k.b(.066, .003, .032, m.dark, -.024, .066, -.016);
+    for (c = 0; c < 3; c++) for (r = 0; r < 4; r++) k.b(.0095, .0035, .0085, r === 3 && c !== 1 ? m.red : m.bright, .024 + c * .0125, .0668, -.03 + r * .0118);
+    k.cy(.0028, .06, m.dark, .054, .09, -.036, 6); k.cy(.005, .006, m.dark, -.05, .0665, .018, 8); k.b(.03, .004, .012, m.yel, .0, .0658, .02);
+    return { g: g, grip: [0, 0], fore: null, muzzle: [0, 0], sight: 0, screen: [-.024, .0678, -.016, .058, .026], led: [-.05, .0715, .018] };
+  };
+  // wire cutters for defusing: steel jaws, red dipped handles
+  GUN.kit = function () {
+    var g = new T.Group(), k = kit(g), m = MAT;
+    ex(k, [[0, -.004], [.05, -.004], [.075, -.001], [.075, .0], [.05, .003], [0, .003]], -.004, .004, m.bright, .001); ex(k, [[0, .004], [.05, .004], [.075, .001], [.075, .0], [.05, -.003], [0, -.003]], -.004, .004, m.steel, .001);
+    k.cz(.006, .011, m.dark, .004, 0, 0, 10); k.b(.105, .011, .009, m.red, -.055, .012, 0, 0, 0, -.1); k.b(.105, .011, .009, m.red, -.055, -.012, 0, 0, 0, .1);
+    return { g: g, grip: [-.06, 0], fore: null, muzzle: [.075, 0], sight: 0 };
+  };
+  // the bomb ready to place in a scene: merged body, a live display, a lamp and three wires that can be cut one by one
+  var bombCv = document.createElement('canvas'), bombTex = null, bombStr = null; bombCv.width = 128; bombCv.height = 56;
+  SV.bombText = function (str, col) {
+    if (str + col === bombStr) return; bombStr = str + col; var x = bombCv.getContext('2d'); x.fillStyle = '#0b1210'; x.fillRect(0, 0, 128, 56); x.fillStyle = col || '#ff4a2e'; x.font = '900 34px monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(str, 64, 30);
+    if (!bombTex) { bombTex = new T.CanvasTexture(bombCv); bombTex.encoding = T.sRGBEncoding; } bombTex.needsUpdate = true;
+  };
+  SV.bombParts = function () {
+    SV.bombText('--:--'); var d = GUN.bomb(), out = new T.Group(), sc = d.screen;
+    out.add(new T.Mesh(merge(d.g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(d.g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
+    var scr = new T.Mesh(new T.PlaneGeometry(sc[3], sc[4]), new T.MeshBasicMaterial({ map: bombTex, fog: false })); scr.rotation.x = -PI / 2; scr.position.set(sc[0], sc[1], sc[2]); out.add(scr);
+    var led = new T.Mesh(new T.SphereGeometry(.0055, 8, 6), new T.MeshBasicMaterial({ color: new T.Color(3, .35, .2), fog: false })); led.position.set(d.led[0], d.led[1], d.led[2]); out.add(led);
+    var wires = [0xc2372b, 0xd9b02a, 0x2a6fc2].map(function (col, i) {
+      var x0 = -.03 + i * .03, x1 = (i - 1) * .075, cv = new T.CatmullRomCurve3([new T.Vector3(x0, .058, .028), new T.Vector3(x0, .07, .045), new T.Vector3((x0 + x1) / 2, .066, .066), new T.Vector3(x1, .04, .072), new T.Vector3(x1, .012, .066)]), pts = cv.getPoints(24),
+        mat = new T.MeshStandardMaterial({ color: col, roughness: .55 }), w = new T.Group();
+      [[0, 10], [10, 14], [14, 24]].forEach(function (q, n) { var seg = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.slice(q[0], q[1] + 1)), 8, .0026, 6), mat); if (n === 1) w.userData.mid = seg; w.add(seg); });
+      out.add(w); return w;
+    });
+    out.userData = { led: led, wires: wires, cut: function (n) { wires.forEach(function (w, i) { w.userData.mid.visible = i >= n; }); } };
+    return out;
+  };
+  // first person, planting: the bomb held flat in both hands, tilted up so the display and keypad face the eye
+  SV.bombVM = function (team) {
+    var out = new T.Group(), hold = new T.Group(), b = SV.bombParts(), hg = new T.Group(), sl = sleeveMat(team), V = function (x, y, z) { return new T.Vector3(x, y, z); };
+    b.rotation.y = -PI / 2; hold.add(b); hold.rotation.z = .95; out.add(hold); hold.updateMatrixWorld(true);
+    [[-1, -.118], [1, .118]].forEach(function (q) { var O = hold.localToWorld(V(.005, .02, q[1])), ax = V(1, 0, 0).applyEuler(hold.rotation); hand(hg, O, ax, V(0, 0, q[0]), q[0], .022, V(O.x - .3, O.y - .2, q[0] * .26), sl, MAT.glove, { pad: MAT.poly2, thumbWrap: true, yaw: .5 }); });
+    out.add(new T.Mesh(merge(hg, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); out.add(new T.Mesh(mergeUV(hg, function (m) { return !!m.userData.sleeve; }), sl));
+    out.userData = { muzzle: [0, 0], sight: 0, parts: b }; return out;
+  };
   // GR-01 "Frag": a round, panelled body, yellow band, lever and ring on top. An icon, not a mechanism.
   GUN.grenade = function () {
     var g = new T.Group(), k = kit(g), m = MAT, i;
@@ -437,11 +483,11 @@ var SV = window.SV = window.SV || {};
     // the stock sits against the shoulder, beside and behind the eye: in first person it only shows up as a stray block, so leave it out
     if (id !== 'pistol' && id !== 'knife' && id !== 'shotgun') { g.updateMatrixWorld(true); g.children.forEach(function (c) { bx.setFromObject(c); if ((bx.min.x + bx.max.x) / 2 < -.2) cut.push(c); }); cut.forEach(function (c) { g.remove(c); }); }
     var sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, pad = { pad: MAT.poly2 };
-    if (id === 'knife') {
+    if (id === 'knife' || id === 'kit') {
       // Held as in the reference picture: blade up and to the left, the palm on the right of the handle so the back of the
       // hand shows on the right, fingers wrapped round to the left, forearm coming up from the lower right in line with the hand.
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
-      var ax = V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
+      var ax = id === 'kit' ? V(.82, -.42, -.38).normalize() : V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
       var kc = ax.clone().multiplyScalar(d.grip[0]); hand(g, kc, ax, V(-.5, 0, .87), 1, .0125, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
