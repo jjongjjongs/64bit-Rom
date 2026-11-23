@@ -13,7 +13,7 @@
     shotgun: { name: 'SG-01 하운드', short: '산탄총', dmg: 14, head: 1.4, interval: .85, mag: 6, res: 30, reload: 2.4, spread: .075, ads: .06, bloom: 0, recoil: .04, auto: false, range: 40, fall: 7, pellets: 8, fov: 50, snd: .7 },
     pistol2: { name: 'HG-02 스펙터', short: '권총', side: true, dmg: 34, head: 2.1, interval: .2, mag: 9, res: 45, reload: 1.5, spread: .013, ads: .0045, bloom: .008, recoil: .019, auto: false, range: 75, fall: 20, pellets: 1, fov: 50, snd: 1.05 },
     pistol:  { name: 'HG-01 세이버', short: '권총', side: true, dmg: 26, head: 2, interval: .15, mag: 12, res: 60, reload: 1.4, spread: .016, ads: .006, bloom: .006, recoil: .014, auto: false, range: 70, fall: 16, pellets: 1, fov: 50, snd: 1.15 },
-    knife:   { name: 'KN-01 스톰', short: '칼', dmg: 55, head: 1, interval: .4, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
+    knife:   { name: 'KN-01 스톰', short: '칼', dmg: 55, head: 1, interval: .34, melee: true, range: 2.3, mag: 0, res: 0, reload: 0, fov: 62 }
   };
   var DIFF = [{ err: .05, react: .62, turn: 5 }, { err: .032, react: .42, turn: 7 }, { err: .02, react: .28, turn: 9.5 }, { err: .011, react: .17, turn: 13 }];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니', '삵'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비', '수리'] };
@@ -368,8 +368,11 @@
   function tick(delay, freq, vol, q) { if (!ac || !cfg.sound) return; var t = ac.currentTime + delay, s = nsrc(t, .05), f = ac.createBiquadFilter(), g = env(t, vol, .035); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 3; s.connect(f); f.connect(g); g.connect(master); }
   function ping(freq, vol) { if (!ac || !cfg.sound) return; var t = ac.currentTime, o = ac.createOscillator(), g = env(t, vol, .09); o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(master); o.start(t); o.stop(t + .1); }
   function thud(vol) { if (!ac || !cfg.sound) return; var t = ac.currentTime, s = nsrc(t, .08, .5), f = ac.createBiquadFilter(), g = env(t, vol, .07); f.type = 'lowpass'; f.frequency.value = 260; s.connect(f); f.connect(g); g.connect(master); }
-  function sndShot(rate, vol) {   // the knife's swish
-    if (!ac || !cfg.sound || vol < .02) return; var t = ac.currentTime, s = nsrc(t, .2, rate), f = ac.createBiquadFilter(), g = env(t, .4 * vol, .16); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(3800, t + .12); f.Q.value = 1.2; s.connect(f); f.connect(g); g.connect(master);
+  function sndShot(rate, vol) {   // the knife's swish: air, not impact, so it swells in and fades rather than starting at full level
+    if (!ac || !cfg.sound || vol < .02) return; var t = ac.currentTime, s = nsrc(t, .22, rate), f = ac.createBiquadFilter(), hp = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'bandpass'; f.frequency.setValueAtTime(1800, t); f.frequency.exponentialRampToValueAtTime(6500, t + .09); f.frequency.exponentialRampToValueAtTime(2600, t + .2); f.Q.value = 2.2; hp.type = 'highpass'; hp.frequency.value = 1200;
+    g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.55 * vol, t + .07); g.gain.exponentialRampToValueAtTime(.0001, t + .2);
+    s.connect(f); f.connect(hp); hp.connect(g); g.connect(master);
   }
   function sndTone(freq, dur, vol, type) {
     if (!ac || !cfg.sound) return; var o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime; o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
@@ -448,9 +451,9 @@
       for (i = 0; i < 5; i++) { bx2 = [0, -.12, .12, 0, 0][i]; by2 = [0, 0, 0, .1, -.1][i]; vD.copy(d0).addScaledVector(vR, bx2).addScaledVector(vU, by2).normalize(); res = castShot(a, o, vD, w.range);
         var rank = res.actor ? 3 : res.target ? 2 : res.world ? 1 : 0; if (rank && (!bestM || rank > bestM.rank || (rank === bestM.rank && res.t < bestM.t))) { bestM = res; bestM.rank = rank; bestM.p = new T.Vector3().copy(o).addScaledVector(vD, res.t); bestM.n = hitNrm.clone(); } }
       if (a.isPlayer) { vmSwing = 1; sndShot(2.4, .25); }
-      if (bestM && bestM.actor) { var back = Math.abs(angd(bestM.actor.yaw, a.yaw)) < 1; if (hurt(bestM.actor, back ? 200 : w.dmg, a, false, g.id)) puff(bestM.p, 0xc23b2a, .2, 1.3); if (a.isPlayer) tick(.06, 500, .3, 2); }
-      else if (bestM && bestM.target) { hitTarget(bestM.target, bestM.bull); if (a.isPlayer) tick(.06, 700, .3, 2); }
-      else if (bestM && bestM.world) { slashMark(bestM.p, bestM.n); if (a.isPlayer) { tick(.07, 2600, .22); tick(.08, 900, .28, 2); } }
+      if (bestM && bestM.actor) { var back = Math.abs(angd(bestM.actor.yaw, a.yaw)) < 1; if (hurt(bestM.actor, back ? 200 : w.dmg, a, false, g.id)) puff(bestM.p, 0xc23b2a, .2, 1.3); if (a.isPlayer) tick(.07, 2400, .16, 3); }
+      else if (bestM && bestM.target) { hitTarget(bestM.target, bestM.bull); if (a.isPlayer) tick(.07, 3000, .16, 4); }
+      else if (bestM && bestM.world) { slashMark(bestM.p, bestM.n); if (a.isPlayer) { tick(.07, 4200, .18, 5); tick(.085, 5600, .12, 6); } }
       return true;
     }
     if (g.mag <= 0) { reload(a); return false; }
@@ -521,7 +524,7 @@
   }
   function updVm(dt, p) {
     var id = p.guns[p.slot].id, w = W[id], s = vmCur.userData.sight, ads = p.ads && !w.melee ? 1 : 0;
-    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .4);
+    vmAds += (ads - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9); vmSwap = Math.max(0, vmSwap - dt); vmSwing = Math.max(0, vmSwing - dt / .34);
     if (p.moving && p.ground) bobT += dt * 9;
     var bob = Math.sin(bobT) * .006 * (1 - vmAds), bx = Math.cos(bobT * .5) * .006 * (1 - vmAds), k = vmAds;
     var art = vmCur.userData.art;
@@ -542,16 +545,16 @@
     vmRoot.position.set(ps[0] * h + bx, (ps[1] * h + (-s) * k) + bob - vmSwap * .5, ps[2] * h + az * k + vmKick * .035);
     vmRoot.rotation.set(ps[3] * h + (w.melee ? 0 : vmKick * .05) - vmSwap * 1.2, ps[4] * h, ps[5] * h);
     if (w.melee && vmSwing > 0) {
-      /* Left-click slash, after the reference clip (mirrored to the right hand): the blade is laid over from upright to
-         flat across the view in about an eighth of a second, carries on down out of sight, then comes back up at rest. */
-      var q = 1 - vmSwing, roll, dx2, dy2, dz2, e;
-      if (q < .08) { e = q / .08; roll = -.18 * e; dx2 = .01 * e; dy2 = .015 * e; dz2 = 0; }
-      else if (q < .4) { e = (q - .08) / .32; e = e * e * (3 - 2 * e); roll = -.18 + 1.5 * e; dx2 = .01 - .13 * e; dy2 = .015 - .05 * e; dz2 = -.07 * e; }
-      else if (q < .58) { e = (q - .4) / .18; roll = 1.32 + .45 * e; dx2 = -.12 - .04 * e; dy2 = -.035 - .3 * e; dz2 = -.07; }
-      else { e = (q - .58) / .42; e = 1 - (1 - e) * (1 - e); roll = 0; dx2 = .05 * (1 - e); dy2 = -.3 * (1 - e); dz2 = 0; }
-      vmRoot.position.x += dx2; vmRoot.position.y += dy2; vmRoot.position.z += dz2; vmRoot.rotation.z += roll; vmRoot.rotation.y += .35 * Math.sin(Math.min(1, q / .4) * PI);
+      /* Left-click slash, after the reference clip (mirrored to the right hand): the blade reaches out flat to the left,
+         is drawn across to the right and out of the view, then comes back in from the right. */
+      var q = 1 - vmSwing, roll, yaw2, dx2, dy2, dz2, e;
+      if (q < .22) { e = q / .22; e = e * (2 - e); roll = 1.2 * e; yaw2 = .25 * e; dx2 = -.13 * e; dy2 = -.05 * e; dz2 = -.08 * e; }                                   /* reach: the blade is laid flat, pointing left across the view */
+      else if (q < .4) { e = (q - .22) / .18; roll = 1.2; yaw2 = .25 - 2.0 * e; dx2 = -.13 + .4 * e; dy2 = -.05; dz2 = -.08; }                                        /* cut: tip and hand sweep from left to right and out of the view */
+      else if (q < .7) { roll = 1.2; yaw2 = -1.75; dx2 = .5; dy2 = -.2; dz2 = 0; }                                                                                    /* out of sight */
+      else { e = (q - .7) / .3; e = 1 - (1 - e) * (1 - e); roll = 0; yaw2 = 0; dx2 = .22 * (1 - e); dy2 = -.12 * (1 - e); dz2 = 0; }                                   /* back in from the right to rest */
+      vmRoot.position.x += dx2; vmRoot.position.y += dy2; vmRoot.position.z += dz2; vmRoot.rotation.z += roll; vmRoot.rotation.y += yaw2;
     }
-    updTrail(dt, w.melee && vmSwing > 0 && 1 - vmSwing > .06 && 1 - vmSwing < .46);
+    updTrail(dt, w.melee && vmSwing > 0 && 1 - vmSwing > .16 && 1 - vmSwing < .42);
     vmRoot.visible = !(w.scope && vmAds > .8);
     }
     var fov = 62 + (w.fov - 62) * vmAds; if (Math.abs(cam.fov - fov) > .05) { cam.fov = fov; cam.updateProjectionMatrix(); }
