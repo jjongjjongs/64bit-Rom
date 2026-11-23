@@ -600,8 +600,9 @@
         else { seg = g1.rlEmpty && C.reloadEmpty ? C.reloadEmpty : C.reload; tt = seg[0] + (seg[1] - seg[0]) * rr; }
       } else if (PU.fireT < C.fire[1] - C.fire[0]) tt = C.fire[0] + PU.fireT;
       else if (C.pump && PU.pumpT < (C.fire[1] - C.fire[0]) + (C.pump[1] - C.pump[0])) tt = C.pump[0] + PU.pumpT - (C.fire[1] - C.fire[0]);
-      else tt = C.idle[0] + PU.t % (C.idle[1] - C.idle[0]);
+      else { tt = C.idle[0] + PU.t % (C.idle[1] - C.idle[0]); var idleK = 1 - clamp((SV.cfg.sway == null ? 30 : SV.cfg.sway) / 100, 0, 1) * (1 - vmAds); }   /* aiming holds the gun still so the sight stays on the aim point */
       PU.mixer.setTime(Math.min(tt, PU.mixer._actions[0].getClip().duration - .001));
+      if (idleK > 0) for (var ri = 0, rs = PU.rest; ri < rs.length; ri++) { rs[ri].o.position.lerp(rs[ri].p, idleK); rs[ri].o.quaternion.slerp(rs[ri].q, idleK); }   /* settings slider: 0 holds the gun still, 100 plays the idle motion as authored */
       vmSwap = Math.max(0, vmSwap - dt); vmAds += ((p.ads && rr < 0 ? 1 : 0) - vmAds) * Math.min(1, dt * 14); vmKick = Math.max(0, vmKick - dt * 9);
       if (p.moving && p.ground) bobT += dt * 9; var kb2 = 1 - vmAds, A2 = PU.ads;
       if (vmCam.fov !== 60) { vmCam.fov = 60; vmCam.updateProjectionMatrix(); }
@@ -981,7 +982,8 @@
     }
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt); updSmokes(dt);
-    if (p.alive) { G.deadT = 0; G.specName = ''; cam.position.set(p.pos.x, p.pos.y + (p.crouch ? EYEC : EYE), p.pos.z); cam.rotation.set(p.pitch, p.yaw, 0); }
+    if (!p.alive) G.eyeH = null;
+    if (p.alive) { G.deadT = 0; G.specName = ''; var eyT = p.crouch ? EYEC : EYE; G.eyeH = G.eyeH == null ? eyT : G.eyeH + clamp((eyT - G.eyeH) * 14, -2.6, 2.6) * dt; cam.position.set(p.pos.x, p.pos.y + G.eyeH, p.pos.z);   /* ease the view down and up instead of snapping */ cam.rotation.set(p.pitch, p.yaw, 0); }
     else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
     if (G.shake > 0) { G.shake -= dt; cam.position.x += rnd(-1, 1) * G.shake * .12; cam.position.y += rnd(-1, 1) * G.shake * .12; }
@@ -994,6 +996,7 @@
   function frame(t) {
     requestAnimationFrame(frame); var dt = Math.min(.05, (t - prev) / 1000 || 0); prev = t;
     if (!renderer || G.state === 'menu') return;
+    if (window.MANUAL) return;   /* tests drive frames themselves through SV.stepFrame */
     if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } }
     updFx(dt); updRain(dt); updLamps(dt);
     drawFrame();
@@ -1003,5 +1006,7 @@
   // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
   SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };   // for tests: lets a script check that every walkable cell can be reached
+  SV.curVm = function () { return vmCur; };
+  SV.stepFrame = function (dt) { if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } } updFx(dt); updRain(dt); updLamps(dt); drawFrame(); };
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

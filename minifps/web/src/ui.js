@@ -45,7 +45,7 @@
     }
     if (id === 's-pause') board();
     if (id === 's-set') {
-      [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['gs', 'gyroSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
+      [['sens', 'sens', ''], ['ads', 'adsSens', ''], ['gs', 'gyroSens', ''], ['bs', 'btnScale', '%'], ['ba', 'btnAlpha', '%'], ['sw', 'sway', '%']].forEach(function (r) { $('c-' + r[0]).value = cfg[r[1]]; $('v-' + r[0]).textContent = cfg[r[1]] + r[2]; });
       [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro'], ['autoup', 'autoUpdate']].forEach(function (r) { $('c-' + r[0]).setAttribute('aria-checked', cfg[r[1]] ? 'true' : 'false'); });
     }
   }
@@ -95,7 +95,7 @@
   };
 
   // ---------- settings ----------
-  [['sens', 'sens'], ['ads', 'adsSens'], ['gs', 'gyroSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
+  [['sens', 'sens'], ['ads', 'adsSens'], ['gs', 'gyroSens'], ['bs', 'btnScale'], ['ba', 'btnAlpha'], ['sw', 'sway']].forEach(function (r) { $('c-' + r[0]).addEventListener('input', function () { cfg[r[1]] = +this.value; save(); refresh('s-set'); applyCfg(); }); });
   $('c-reset').addEventListener('click', function () { var d = SV.cfgDefaults; for (var k in d) cfg[k] = JSON.parse(JSON.stringify(d[k])); save(); refresh('s-set'); applyCfg(); });
   [['assist', 'assist'], ['auto', 'autoFire'], ['left', 'leftFire'], ['sound', 'sound'], ['quality', 'quality'], ['gyro', 'gyro'], ['autoup', 'autoUpdate']].forEach(function (r) { $('c-' + r[0]).addEventListener('click', function () { cfg[r[1]] = !cfg[r[1]]; save(); refresh('s-set'); applyCfg(); if (r[1] === 'sound') SV.audio(); }); });
 

@@ -609,14 +609,15 @@ var SV = window.SV = window.SV || {};
   // First-person view from an animated arms-and-gun model: the hands, the gun and every motion (fire, reload, reload from
   // empty, idle) were made together by an animator, so nothing here poses a hand. The model is only turned, scaled and placed:
   // barrel along the view, gun at its real length, muzzle at a set point in front of the eye.
+  /* ax, ay: how far to shift the gun when aiming so its sight sits on the aim point (set by eye against the screen centre) */
   var PACK = {
-    rifle: { f: 'carbine', len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
-    rifle2: { f: 'carbine', len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
-    smg: { f: 'hornet', len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
+    rifle: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
+    rifle2: { f: 'carbine', ax: .002, ay: .0417, len: .84, muzzle: [.12, -.13, -.8], clips: { fire: [0, .25], reload: [.3, 2.4], reloadEmpty: [2.4, 4.45], idle: [5.95, 6.55] } },
+    smg: { f: 'hornet', ax: -.005, ay: .021, len: .6, muzzle: [.115, -.125, -.6], clips: { fire: [0, .2], reloadEmpty: [.2, 2.4], reload: [2.4, 4.2], idle: [6.3, 6.63] } },
     sniper: { f: 'sniper', len: 1.15, muzzle: [.12, -.15, -1.25], clips: { fire: [0, .4], pump: [.4, 1.6], reload: [1.6, 3.1], idle: [4.9, 6.0] } },
-    shotgun: { f: 'mauler', len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
-    pistol: { f: 'striker', len: .19, muzzle: [.09, -.088, -.42], clips: { fire: [0, .43], reload: [.43, 2.73], reloadEmpty: [3.1, 6.0], idle: [7.8, 8.83] } },
-    pistol2: { f: 'kestrel', len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
+    shotgun: { f: 'mauler', ay: .0265, len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
+    pistol: { f: 'striker', ay: .0186, len: .19, muzzle: [.09, -.088, -.42], clips: { fire: [0, .43], reload: [.43, 2.73], reloadEmpty: [3.1, 6.0], idle: [7.8, 8.83] } },
+    pistol2: { f: 'kestrel', ax: .005, ay: .02, len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
   var PKC = {}, PKW = { rifle: [.31, .62], rifle2: [.31, .62], smg: [.36, .66], sniper: [.3, .52], shotgun: [.3, .62], pistol: [.14, 0], pistol2: [.14, 0] };
   SV.packVM = function (id0) {
     if (PKC[id0]) return PKC[id0];
@@ -626,7 +627,8 @@ var SV = window.SV = window.SV || {};
       var pa = o.geometry.attributes.position; if (pa.normalized) { var den = pa.array instanceof Int16Array ? 32767 : pa.array instanceof Int8Array ? 127 : pa.array instanceof Uint16Array ? 65535 : 255, fa = new Float32Array(pa.count * 3); for (var i = 0; i < pa.count; i++) { fa[i * 3] = Math.max(pa.getX(i) / den, -1); fa[i * 3 + 1] = Math.max(pa.getY(i) / den, -1); fa[i * 3 + 2] = Math.max(pa.getZ(i) / den, -1); } o.geometry.setAttribute('position', new T.BufferAttribute(fa, 3)); }   /* the files store positions as packed integers; unpack once so sizes can be measured */
       var sw = o.geometry.attributes.skinWeight; if (sw && sw.normalized) { var d2 = sw.array instanceof Uint16Array ? 65535 : 255, fw = new Float32Array(sw.count * 4); for (var k = 0; k < fw.length; k++) fw[k] = sw.array[k] / d2; o.geometry.setAttribute('skinWeight', new T.BufferAttribute(fw, 4)); }
     });
-    var mixer = new T.AnimationMixer(root), act = mixer.clipAction(G.animations[0]); act.play(); mixer.setTime(c.clips.idle[0]); wrap.updateMatrixWorld(true); armM.forEach(function (o) { o.skeleton.update(); });
+    var mixer = new T.AnimationMixer(root), act = mixer.clipAction(G.animations[0]); act.play(); mixer.setTime(c.clips.idle[0]); var rest = []; root.traverse(function (o) { rest.push({ o: o, p: o.position.clone(), q: o.quaternion.clone() }); });   /* the still pose the idle motion is blended toward */
+    wrap.updateMatrixWorld(true); armM.forEach(function (o) { o.skeleton.update(); });
     function verts(list, fn) { list.forEach(function (o) { var p = o.geometry.attributes.position, st = Math.max(1, Math.floor(p.count / 4000)); for (var i = 0; i < p.count; i += st) { if (o.isSkinnedMesh) o.boneTransform(i, v); else v.fromBufferAttribute(p, i); v.applyMatrix4(o.matrixWorld); fn(v); } }); }
     var gb = new T.Box3(), ac = new T.Vector3(), an = 0; verts(gunM, function (q) { gb.expandByPoint(q); }); verts(armM, function (q) { ac.add(q); an++; }); if (an) ac.multiplyScalar(1 / an);
     var sz = gb.getSize(new T.Vector3()), gc = gb.getCenter(new T.Vector3()), axis = sz.x > sz.z ? 'x' : 'z', sign = Math.sign(gc[axis] - ac[axis]) || 1;
@@ -634,7 +636,7 @@ var SV = window.SV = window.SV || {};
     var mz = null; verts(gunM, function (q) { if (!mz || q.z < mz.z) mz = q.clone(); }); inner.position.add(new T.Vector3(c.muzzle[0], c.muzzle[1], c.muzzle[2]).sub(mz)); wrap.updateMatrixWorld(true);
     var b2 = new T.Box3(); verts(gunM, function (q) { b2.expandByPoint(q); }); var L = b2.max.z - b2.min.z, cx = (b2.min.x + b2.max.x) / 2, top = -1e9; verts(gunM, function (q) { if (q.z > b2.min.z + .45 * L && q.z < b2.min.z + .95 * L && Math.abs(q.x - cx) < .02 && q.y > top) top = q.y; }); if (top < -1e8) top = b2.max.y;
     var fit = { axis: axis, sign: sign, sz: sz.toArray().map(function (x) { return +x.toFixed(3); }), gc: gc.toArray().map(function (x) { return +x.toFixed(3); }), ac: ac.toArray().map(function (x) { return +x.toFixed(3); }), an: an, gun: gunM.length, arm: armM.length };
-    wrap.userData = { fit: fit, pack: c, mixer: mixer, ads: [-cx, -.018 - top, c.len < .3 ? .02 : -.04], muzzle: [-c.muzzle[2], c.muzzle[1]], sight: 0, t: 0, fireT: 9, pumpT: 9 };
+    wrap.userData = { fit: fit, pack: c, mixer: mixer, rest: rest, ads: [-cx + (c.ax || 0), -.018 - top + (c.ay || 0), c.len < .3 ? .02 : -.04], muzzle: [-c.muzzle[2], c.muzzle[1]], sight: 0, t: 0, fireT: 9, pumpT: 9 };
     /* the same gun, without the arms, for the soldiers seen from outside and for the menus: its parts as they sit in the idle
        pose, turned into the game's gun space (+X muzzle, +Y up), with the hand positions measured from its shape */
     var Mg = new T.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1), parts = [], bb = new T.Box3();
