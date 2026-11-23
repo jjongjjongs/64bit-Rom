@@ -510,12 +510,37 @@
     G.nades.push({ pos: o.clone().addScaledVector(dir, .5), vel: dir.clone().multiplyScalar(15).add(new T.Vector3(0, 4, 0)), t: smoke ? 1.7 : 2.6, by: a, m: m, smoke: smoke });
     if (a.isPlayer) sndTone(220, .08, .1, 'triangle');
   }
+  /* one step of a grenade's flight: gravity, bounce off the ground and off boxes. Shared by the real grenades and by the aiming arc, so the arc shows exactly where it will go */
+  function nadeStep(n, dt) {
+    var px = n.pos.x, py = n.pos.y, pz = n.pos.z, k, b, hit = false; n.vel.y -= 18 * dt; n.pos.addScaledVector(n.vel, dt);
+    if (n.pos.y < .06) { n.pos.y = .06; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; }
+    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
+    if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
+  }
+  /* while the throw button is held: the path the grenade would take from here, and a ring where it will go off */
+  var arc = null, ARC_N = 60, arcN = { pos: new T.Vector3(), vel: new T.Vector3() };
+  function nadeArc(show, o, dir) {
+    if (!arc) { if (!show) return; var gm = new T.BufferGeometry(); gm.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(ARC_N * 3), 3));
+      arc = { line: new T.Line(gm, new T.LineBasicMaterial({ color: new T.Color(3, 1.9, .6), transparent: true, opacity: .55, depthTest: false })), dots: new T.Points(gm, new T.PointsMaterial({ color: new T.Color(3, 1.9, .6), size: 7, sizeAttenuation: false, transparent: true, opacity: .95, depthTest: false })), ring: new T.Mesh(new T.RingGeometry(.3, .4, 28), new T.MeshBasicMaterial({ color: new T.Color(3, 1.9, .6), transparent: true, opacity: .9, depthTest: false, side: T.DoubleSide })) };
+      arc.ring.rotation.x = -PI / 2; var g2 = new T.BufferGeometry(); g2.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(20 * 3), 3)); arc.dots.geometry = g2; arc.line.frustumCulled = arc.dots.frustumCulled = false; arc.line.renderOrder = arc.dots.renderOrder = arc.ring.renderOrder = 5; }
+    if (arc.line.parent !== scene) { scene.add(arc.line); scene.add(arc.dots); scene.add(arc.ring); }
+    arc.line.visible = arc.dots.visible = arc.ring.visible = show; if (!show) return;
+    var smoke = G.match.nade === 'smoke', T2 = smoke ? 1.7 : 2.6, dt = T2 / (ARC_N - 1), P = arc.line.geometry.attributes.position, n = arcN;
+    n.pos.copy(o).addScaledVector(dir, .5); n.vel.copy(dir).multiplyScalar(15); n.vel.y += 4;
+    /* drawn as leaving the hand (a little right of and below the eye) and joining the true path, so it is not seen end-on */
+    var rx = -dir.z, rz = dir.x, rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+    for (var i = 0; i < ARC_N; i++) { var f = Math.max(0, 1 - i / 14); f *= f; P.setXYZ(i, n.pos.x + rx * .26 * f, n.pos.y - .2 * f, n.pos.z + rz * .26 * f); if (i < ARC_N - 1) { nadeStep(n, dt * .5); nadeStep(n, dt * .5); } }
+    var P2 = arc.dots.geometry.attributes.position; for (var j = 0; j < 20; j++) P2.setXYZ(j, P.getX(j * 3 + 1), P.getY(j * 3 + 1), P.getZ(j * 3 + 1)); P2.needsUpdate = true;
+    P.needsUpdate = true; arc.ring.position.set(n.pos.x, n.pos.y + .02, n.pos.z); arc.ring.scale.setScalar(smoke ? 2.2 : 1.6);
+    /* looks to choose between (tests set window.ARCV): 1 thin pale line, 2 small sparse dots, 3 faint line and the ring only */
+    var V = window.ARCV || 1, lm = arc.line.material, dm = arc.dots.material, rm = arc.ring.material;
+    if (arc.v !== V) { arc.v = V; lm.color.setRGB(.92, .9, .85); dm.color.setRGB(.92, .9, .85); rm.color.setRGB(.95, .7, .3);
+      lm.opacity = V === 1 ? .6 : V === 3 ? .28 : 0; dm.size = 3.5; dm.opacity = V === 2 ? .8 : 0; rm.opacity = V === 3 ? .85 : .6; }
+    arc.ring.scale.setScalar((smoke ? 2.2 : 1.6) * (V === 3 ? 1 : .7));
+  }
   function updNades(dt) {
     for (var i = G.nades.length - 1; i >= 0; i--) {
-      var n = G.nades[i], px = n.pos.x, py = n.pos.y, pz = n.pos.z, k, b, hit = false; n.vel.y -= 18 * dt; n.pos.addScaledVector(n.vel, dt);
-      if (n.pos.y < .06) { n.pos.y = .06; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; }
-      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
-      if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
+      var n = G.nades[i]; nadeStep(n, dt);
       n.m.position.copy(n.pos); n.m.rotation.x += dt * 8; n.t -= dt;
       if (n.t <= 0 && n.smoke) { scene.remove(n.m); G.nades.splice(i, 1); smokeAt(n.pos); }
       else if (n.t <= 0) {
@@ -684,6 +709,7 @@
       for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) { G.assistSlow = cfg.assist; if (dot > .9995 || Math.acos(Math.min(1, dot)) * d < .45) onTarget = d < W[g.id].range * .7; } }
     }
     if (inp.reload) { reload(p); inp.reload = false; }
+    nadeArc(!!inp.nadeHold && p.nade > 0, vO, vD);
     if (inp.nade) { throwNade(p, vO, vD); inp.nade = false; }
     var want = inp.fire || (cfg.autoFire && onTarget && !w.melee);
     if (want && (w.auto || w.melee || !G.fireHeld || (cfg.autoFire && onTarget && !inp.fire))) { vmCam.updateMatrixWorld(); vmRoot.updateMatrixWorld(); muzzleWorld(p, vM); fire(p, vO, vD, vM); }
@@ -992,7 +1018,7 @@
     }
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt); updSmokes(dt);
-    if (!p.alive) G.eyeH = null;
+    if (!p.alive) { G.eyeH = null; inp.nadeHold = false; nadeArc(false); }
     if (p.alive) { G.deadT = 0; G.specName = ''; var eyT = p.crouch ? EYEC : EYE; G.eyeH = G.eyeH == null ? eyT : G.eyeH + clamp((eyT - G.eyeH) * 14, -2.6, 2.6) * dt; cam.position.set(p.pos.x, p.pos.y + G.eyeH, p.pos.z);   /* ease the view down and up instead of snapping */ cam.rotation.set(p.pitch, p.yaw, 0); }
     else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
@@ -1019,6 +1045,7 @@
   SV.curVm = function () { return vmCur; };
   /* tests: draw the world from any point, without the first-person gun */
   SV.testView = function (px, py, pz, tx, ty, tz, fov) { cam.position.set(px, py, pz); cam.lookAt(tx, ty, tz); cam.fov = fov || 40; cam.updateProjectionMatrix(); if (window.POSTVIEW) { drawFrame(); return; } renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, cam); };
+  SV.arcEnd = function () { return arc && arc.ring.visible ? arc.ring.position.toArray() : null; }; SV.nadeList = function () { return G.nades.map(function (n) { return n.pos.toArray().concat(n.t); }); };
   SV.stepFrame = function (dt) { if (G.state === 'play') { step(dt); if (G.state !== 'menu' && G.player) { updVm(dt, G.player); updHud(dt); } } updFx(dt); updRain(dt); updLamps(dt); drawFrame(); };
   SV.sim = function (sec) { var n = Math.round(sec * 30); for (var i = 0; i < n && G.state === 'play'; i++) step(1 / 30); return { score: G.score, time: G.time, state: G.state, bomb: G.bomb && { round: G.bomb.round, atk: G.bomb.atk, phase: G.bomb.phase, planted: G.bomb.planted && G.bomb.planted.site, t: G.bomb.planted && +G.bomb.planted.t.toFixed(1), carrier: G.bomb.carrier && G.bomb.carrier.name, can: G.bomb.can }, pos: G.actors.map(function (a) { return [a.name, +a.pos.x.toFixed(1), +a.pos.z.toFixed(1), a.kills, a.deaths]; }) }; };
 })();

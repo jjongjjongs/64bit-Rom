@@ -172,7 +172,7 @@
   var adsOn = false; hold('b-ads', function () { adsOn = !adsOn; inp.ads = adsOn; $('b-ads').classList.toggle('on', adsOn); }, function () { $('b-ads').classList.toggle('on', adsOn); }, true);
   hold('b-jump', function () { inp.jump = true; }, null, true); hold('b-crouch', function () { inp.crouch = true; }, null, false);
   hold('b-use', function () { inp.use = true; }, function () { inp.use = false; }, false);
-  hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nade = true; }, null, false);
+  hold('b-reload', function () { inp.reload = true; }, null, false); hold('b-nade', function () { inp.nadeHold = true; }, function () { if (inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } }, true);   /* hold to aim (drag on the button turns the view), let go to throw */
   /* pointerdown, not click: a browser only makes a click from the first finger down, so with a thumb on the stick these would never fire */
   [0, 1, 2].forEach(function (n) { $('slot' + n).addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); inp.slot = n; adsOn = false; inp.ads = false; $('b-ads').classList.remove('on'); }); });
 
@@ -182,10 +182,10 @@
   window.addEventListener('keydown', function (e) {
     if (G.state !== 'play') { if ((e.code === 'KeyP' || e.code === 'Escape') && G.state === 'pause') resume(); return; }
     keys[e.code] = true; axes();
-    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nade = true; else if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = true;
+    if (e.code === 'Space') { inp.jump = true; e.preventDefault(); } else if (e.code === 'KeyC') inp.crouch = true; else if (e.code === 'KeyR') inp.reload = true; else if (e.code === 'KeyG') inp.nadeHold = true; else if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = true;
     else if (e.code === 'Digit1') inp.slot = 0; else if (e.code === 'Digit2') inp.slot = 1; else if (e.code === 'Digit3') inp.slot = 2; else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); pause(); }
   });
-  window.addEventListener('keyup', function (e) { keys[e.code] = false; if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = false; if (G.state === 'play') axes(); });
+  window.addEventListener('keyup', function (e) { keys[e.code] = false; if (e.code === 'KeyE' || e.code === 'KeyF') inp.use = false; if (e.code === 'KeyG' && inp.nadeHold) { inp.nadeHold = false; inp.nade = true; } if (G.state === 'play') axes(); });
   document.addEventListener('mousemove', function (e) { if (document.pointerLockElement === zone && G.state === 'play') { inp.lx += e.movementX * .5; inp.ly += e.movementY * .5; } });
   zone.addEventListener('mousedown', function (e) { if (e.button === 0) inp.fire = true; if (e.button === 2) inp.ads = true; });
   window.addEventListener('mouseup', function (e) { if (e.button === 0) inp.fire = false; if (e.button === 2) inp.ads = false; });
