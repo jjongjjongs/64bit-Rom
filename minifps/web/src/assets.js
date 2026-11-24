@@ -20,12 +20,11 @@
       total++; gl.load(A.base + 'soldier.glb', function (g) { A.soldier = g; step(); }, undefined, step);
       /* first-person arms and gun in one animated model each ("fps animated ..." packs by DJMaesen, CC BY 4.0, as prepared for Bayou Protocol) */
       total++; gl.load(A.base + 'art/tp/anim.glb', function (g) { A.tpAnim = g; step(); }, undefined, step);   /* soldiers' rifle-holding motions */
-      A.fp = {}; if (window.MeshoptDecoder) { gl.setMeshoptDecoder(MeshoptDecoder); ['carbine', 'hornet', 'sniper', 'mauler', 'striker', 'kestrel', 'kodiak'].forEach(function (n) { total++; gl.load(A.base + 'art/fp/' + n + '.glb', function (g) { A.fp[n] = g; step(); }, undefined, step); }); }
+      A.fp = {}; if (window.MeshoptDecoder) { gl.setMeshoptDecoder(MeshoptDecoder); ['carbine', 'hornet', 'sniper', 'mauler', 'striker', 'kestrel', 'kodiak', 'lmg'].forEach(function (n) { total++; gl.load(A.base + 'art/fp/' + n + '.glb', function (g) { A.fp[n] = g; step(); }, undefined, step); }); }
       A.maps = {}; total++; gl.load(A.base + 'art/maps/resoforge.glb', function (g) { A.maps.yard = g; step(); }, undefined, step);
       /* "Lowpoly Map Asset" by Resoforge (Space_One), CC BY 4.0: reduced (welded, simplified) for phones; its collision boxes are worked out ahead of time */
       total += 2; gl.load(A.base + 'art/maps/junkyard.glb', function (g) { A.maps.junk = g; step(); }, undefined, step);
       fl.load(A.base + 'art/maps/junkyard.boxes.json', function (t) { try { A.maps.junkBox = JSON.parse(t); } catch (e) {} step(); }, undefined, step);   /* a whole level: "Lowpoly FPS TDM Game Map" by Resoforge (Space_One), CC BY 4.0 */
-      total++; gl.load(A.base + 'art/lmg.glb', function (g) { A.lmg = g.scene; step(); }, undefined, step);   /* LM-01: FN Minimi model supplied by the player (source to be confirmed) */
       total++; gl.load(A.base + 'art/c4.glb', function (g) { A.c4 = g.scene; step(); }, undefined, step);   /* the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili, CC BY 4.0 */
       total++; gl.load(A.base + 'art/hand.glb', function (g) { A.hand = g; step(); }, undefined, step);   // a real hand mesh for the first-person gloves
       step();

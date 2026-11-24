@@ -34,5 +34,6 @@ c4.glb — the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili (ht
   scaled so each charge is 28 cm long (an M112 block), textures reduced to 1024/512 px, and the display glass, the lamp button and a short
   piece of each of the three top wires are split off so the game can drive the display, blink the lamp and show wires being cut.
 
-lmg.glb — LM-01, an FN Minimi (M249) light machine gun: model supplied by the player as lmg.zip (FBX + PBR textures, no licence file).
-  Its source and licence are still to be confirmed before release. Converted with web/tools/lmg_fbx2glb (textures 1024 px, AO baked in).
+fp/lmg.glb — LM-01: "LMG animated" by DJMaesen (https://sketchfab.com/bumstrum), CC BY 4.0, arms, gun and one animation track (fire,
+  reload from empty, reload, idle and others, 15.6 s). https://sketchfab.com/3d-models/lmg-animated-50d67a9e586148a49c086fe3127e7abb
+  Reduced with glTF-Transform (textures 1024 px WebP, meshopt) from the player's download: 30.9 MB -> 1.0 MB.
