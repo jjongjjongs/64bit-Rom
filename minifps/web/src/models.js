@@ -685,16 +685,17 @@ var SV = window.SV = window.SV || {};
       if (n) (PG[n] = PG[n] || new T.Group()).add(c);
     });
     if (id === 'knife' || id === 'kit') {
-      // The wire cutters, as a right hand really holds them reaching down to the bomb: forearm in from the lower right, palm down and
-      // fingers forward, the handles lying diagonally across the palm (out under the little finger) and the jaws past the thumb toward
-      // the bomb. The hand model's forearm runs square to the handle, so it is turned on its palm (yaw) by the diagonal, keeping the
-      // wrist straight instead of bending it to meet the arm.
+      // The wire cutters (anatomy first, see CLAUDE.md): a right hand, forearm in from the lower right, pronated palm down. The fingers
+      // close round the real handle (no yaw: turning the hand on its palm takes the fingers off the handle). The handle is square to the
+      // hand, so the jaws come out on the thumb side; 30 deg of ulnar deviation at the wrist (normal range 30-45) swings them forward
+      // to the bomb. Thumb joints only flex: CMC 23, MCP 34, IP 52, across the palm 54 (none past its range, none bent backwards).
       // The knife: held as in the reference picture: blade up and to the left, the palm on the right of the handle so the back of the
       // hand shows on the right, fingers wrapped round to the left, forearm coming up from the lower right in line with the hand.
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
-      var ax = id === 'kit' ? V(.276, .207, -.939).normalize() : V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
+      var ax = id === 'kit' ? V(-.044, .252, -.967).normalize() : V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
-      var kc = ax.clone().multiplyScalar(d.grip[0]); var kitH = id === 'kit'; hand(g, kc, ax, kitH ? V(-.275, .953, .13) : V(-.5, 0, .87), 1, .0125, kc.clone().add(kitH ? V(-.388, -.137, .183) : V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: kitH ? .75 : .3, top: .018, thumb: [-.6, .2, .5, -.6] });
+      var kc = ax.clone().multiplyScalar(d.grip[0]); if (id === 'kit') hand(g, kc, ax, V(-.315, .915, .253), 1, .0125, kc.clone().add(V(-.336, -.168, .189)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: 0, top: .018, thumb: [-.4, -.6, -.9, -.95] });
+      else hand(g, kc, ax, V(-.5, 0, .87), 1, .0125, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
     else if (id === 'pistol') {
       var c = V(d.grip[0], d.grip[1] + .005, 0), up = V(.2, 1, 0);
