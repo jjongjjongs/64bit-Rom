@@ -489,6 +489,7 @@ var SV = window.SV = window.SV || {};
   function graspClear(H, X, obs, th0) {   // the open hand (fingers straight, thumb out) must not sink into the object either: false, or which part sinks in ('k' knuckles, 't' the thumb's root)
     return graspSolve(H, X, obs, th0, true); }
   function graspSolve(H, X, obs, th0, openOnly, lo0, reach) {
+    var SPR = (reach && reach.spread) || 0, spr = function (n) { return SPR ? [[0, H.ex, (n - 1.5) * SPR]] : []; };   // the fingers' sideways set (as handBake's spread)
     var Rq = new T.Quaternion(), c = new T.Vector3(), ab = new T.Vector3(), q = new T.Vector3();
     function chain(ch, bends) { var p = ch.map(function (n) { return H.pos[H.ix[n]].clone(); });
       bends.forEach(function (b) { Rq.setFromAxisAngle(b[1], b[2]); var o0 = p[b[0]].clone(); for (var m = b[0]; m < p.length; m++) p[m].sub(o0).applyQuaternion(Rq).add(o0); });
@@ -541,23 +542,27 @@ var SV = window.SV = window.SV || {};
       return best;
     }
     var curl = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) {
-      var chF = ['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), mkF = function (a) { return [[0, H.ez, -a[0]], [1, H.ez, -a[1]], [2, H.ez, -a[2]]]; };
-      if (n === 0 && reach && reach.index) { var sk = seek(chF, mkF, [-.35, 0, 0], [1.57, 1.92, 1.4], [.087, .087, .1], GFR, reach.index); if (sk) return sk; }
+      var chF = ['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), mkF = function (a) { return spr(n).concat([[0, H.ez, -a[0]], [1, H.ez, -a[1]], [2, H.ez, -a[2]]]); };
+      if (n === 0 && reach && reach.index) { var sk = seek(chF, function (a) { return mkF([a[0], a[1], Math.min(1.4, a[1] * a[2])]); }, [-.35, 0, .4], [1.57, 1.92, 1.01], [.087, .087, .2], GFR, reach.index); if (sk) return [sk[0], sk[1], Math.min(1.4, sk[1] * sk[2])]; }   // the end joint bends with the middle one (40-100% of it): it cannot bend on its own
       return close(chF, mkF, [1.57, 1.92, 1.4], [1, 1.15, .8], GFR, 0, lo0 || [-.35, 0, 0]);   // lo0: start part-closed where the open hand would reach into something beyond the grip   // MCP 90, PIP 110, DIP 80 at most   // MCP 90, PIP 110, DIP 80 at most
     });
     var tc = ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'], td = H.pos[H.ix['thumb-tip']].clone().sub(H.pos[H.ix['thumb-metacarpal']]).normalize(), tax = new T.Vector3().crossVectors(td, H.ex).normalize();
     // the thumb swings in across the palm from wide open (opposition, at most 60), then bends at MCP (55) and IP (80)
     var ta = null, skT = null;
-    if (reach && reach.thumb) { var sw0 = th0[0]; for (var sw = .17; sw >= -.79 && !skT; sw -= .12) { th0 = [sw].concat(th0.slice(1)); skT = seek(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [-1.05, 0, 0], [1.05, .96, 1.4], [.12, .12, .15], GTR, reach.thumb, reach.touch); } if (skT) ta = skT; else th0 = [sw0].concat(th0.slice(1)); }   /* CMC flexion 0-45 tried from least */
+    if (reach && reach.thumb) { var sw0 = th0[0], bestT = null, bestTD = 1e9, mkT = function (sw1) { return function (a) { return [[0, H.ez, sw1], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }; };
+      for (var sw = .17; sw >= -.79; sw -= .12) { var c0 = seek(tc, mkT(sw), [-1.05, 0, 0], [1.05, .96, 1.4], [.12, .12, .15], GTR, reach.thumb, reach.touch); if (!c0) continue; var pT = chain(tc, mkT(sw)(c0)), dT = pT[3].distanceTo(new T.Vector3(reach.thumb[0], reach.thumb[1], reach.thumb[2]));
+        if (reach.touch) { var gm = 1; for (var q2 = 1; q2 < 3; q2++) gm = Math.min(gm, gapOf(pT[q2], pT[q2 + 1], GTR[q2])); dT += Math.max(0, gm - .0015) * 4; }
+        if (dT < bestTD) { bestTD = dT; bestT = [sw, c0]; } }   /* CMC flexion 0-45 (and a little extension): every setting tried, the best kept */
+      if (bestT) { th0 = [bestT[0]].concat(th0.slice(1)); skT = ta = bestT[1]; } else th0 = [sw0].concat(th0.slice(1)); }
     if (!ta) ta = close(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [1.05, .96, 1.4], [1, .8, .8], GTR, 0, [-.7, 0, 0]);
-    var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], GFR[k] - .001); }); });
+    var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), spr(n).concat([[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]])); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], GFR[k] - .001); }); });
     var tp = chain(tc, [[0, H.ez, th0[0]], [0, H.ex, -ta[0]], [1, tax, -ta[1]], [2, tax, -ta[2]]]); all.push([0, 1, 2].some(function (k) { return hit(tp[k], tp[k + 1], GTR[k] - .001); }));
     var dbg = window.GRASPDBG ? tp.map(function (v, k) { if (k === 3) return v.toArray(); var b = tp[k + 1], best = 1e9, bs = null; obs.forEach(function (s) { var ux = b.x - v.x, uy = b.y - v.y, uz = b.z - v.z, L2 = ux * ux + uy * uy + uz * uz, t = Math.max(0, Math.min(1, ((s[0] - v.x) * ux + (s[1] - v.y) * uy + (s[2] - v.z) * uz) / L2)), dd = Math.hypot(s[0] - v.x - ux * t, s[1] - v.y - uy * t, s[2] - v.z - uz * t) - s[3] - GTR[k]; if (dd < best) { best = dd; bs = s; } }); return [v.toArray(), +best.toFixed(4), bs]; }) : null;
     /* a finger that met nothing (past the end of a narrow part) does not close into a fist on its own: the fingers share tendons, so it
        follows its touching neighbour's bend, as far as that does not reach into the object */
-    var fgap = function (n, c) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return ['index', 'middle', 'ring', 'pinky'][n] + '-finger-' + j; }), [[0, H.ez, -c[0]], [1, H.ez, -c[1]], [2, H.ez, -c[2]]]); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return g; };
+    var fgap = function (n, c) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return ['index', 'middle', 'ring', 'pinky'][n] + '-finger-' + j; }), spr(n).concat([[0, H.ez, -c[0]], [1, H.ez, -c[1]], [2, H.ez, -c[2]]])); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return g; };
     [3, 0, 2, 1].forEach(function (n) { if (fgap(n, curl[n]) < .004) return; var nb = n === 0 ? 1 : n === 3 ? 2 : (fgap(n - 1, curl[n - 1]) < fgap(n + 1, curl[n + 1]) ? n - 1 : n + 1); if (fgap(nb, curl[nb]) < .004 && fgap(n, curl[nb]) > -.0005) curl[n] = curl[nb].slice(); });
-    var gapF = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return +(g * 1000).toFixed(1); });
+    var gapF = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), spr(n).concat([[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]])); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return +(g * 1000).toFixed(1); });
     var gT = 1; for (var kT = 1; kT < 3; kT++) gT = Math.min(gT, gapOf(tp[kT], tp[kT + 1], GTR[kT])); gapF.push(+(gT * 1000).toFixed(1));
     return { curl: curl, th: [th0[0], -ta[1], -ta[2], -ta[0]], overlap: all, gap: gapF, dbg: dbg, thumbFree: !(reach && reach.thumb) || !!skT };   // gap: how far each finger ends from the object (mm); all near 0 = it holds it   // overlap: does any bone still sink into the object (should all be false)
   }
@@ -582,8 +587,8 @@ var SV = window.SV = window.SV || {};
       for (var gt = 0, gc; gt < 30 && (gc = gcl(X)); gt++) { var bv = gc === 't' ? wv.clone().multiplyScalar(-sg) : pn; X.premultiply(new T.Matrix4().makeTranslation(bv.x * .002, bv.y * .002, bv.z * .002)); }
       /* seat: then the hand comes in along its palm's normal until the palm (or the knuckles, or the thumb's root) meets the object */
       if (o.seat) for (var gs2 = 0; gs2 < 40; gs2++) { var X3 = X.clone().premultiply(new T.Matrix4().makeTranslation(-pn.x * .001, -pn.y * .001, -pn.z * .001)); if (gcl(X3)) break; X = X3; }   // back the hand off until it rests on the object without sinking in
-      var gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.reach);
-      for (var gt2 = 0; gt2 < 24 && !gs.thumbFree; gt2++) { X.premultiply(new T.Matrix4().makeTranslation(pn.x * .001, pn.y * .001, pn.z * .001)); gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.reach); }   // the thumb has no way round without touching: the hand sits a little further off
+      var gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.spread ? Object.assign({ spread: o.spread }, o.reach || {}) : o.reach);
+      for (var gt2 = 0; gt2 < 24 && !gs.thumbFree; gt2++) { X.premultiply(new T.Matrix4().makeTranslation(pn.x * .001, pn.y * .001, pn.z * .001)); gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.spread ? Object.assign({ spread: o.spread }, o.reach || {}) : o.reach); }   // the thumb has no way round without touching: the hand sits a little further off
       curl = gs.curl; th = gs.th; SV.lastGrasp = gs; }
     /* the wrist, in clinical terms: forearm toward the back of the hand = the hand bent toward the palm (flexion, +); forearm toward
        the little-finger side = the hand bent toward the thumb (radial deviation, +; ulnar is -). Kept for the checks. */
@@ -849,12 +854,12 @@ var SV = window.SV = window.SV || {};
        hand is set in line with it, so the wrist is straight; the part held (grip, handguard) then lies across the palm at whatever
        slant that gives, and the fingers close on it. armHand: index toward +A, the back of the hand from the handedness. */
     function armHand(F, A, sg) { F = F.clone().normalize(); var ax = A.clone().addScaledVector(F, -A.dot(F)).normalize(), wv = F.clone().multiplyScalar(-sg), pn = new T.Vector3().crossVectors(wv, ax); return { ax: ax, pn: pn, F: F }; }
-    var LP = window.LMGP || {}, gO = V(d.grip[0], d.grip[1], 0), rh = new T.Group(), lh = new T.Group(), Fr = LP.FR ? V(LP.FR[0], LP.FR[1], LP.FR[2]) : V(-.9, -.1, .35), Fl = LP.FL ? V(LP.FL[0], LP.FL[1], LP.FL[2]) : V(-.5, -.55, -.65);
+    var LP = window.LMGP || {}, gO = V(d.grip[0], d.grip[1], 0).add(LP.rsh ? V(LP.rsh[0], LP.rsh[1], LP.rsh[2]) : V(0, .01, .01)), rh = new T.Group(), lh = new T.Group(), Fr = LP.FR ? V(LP.FR[0], LP.FR[1], LP.FR[2]) : V(-.9, -.1, .35), Fl = LP.FL ? V(LP.FL[0], LP.FL[1], LP.FL[2]) : V(-.35, -.55, -.75);
     var HR = armHand(Fr, V(.28, .96, 0), 1);
-    hand(rh, gO, HR.ax, HR.pn, 1, LP.rr || .024, gO.clone().addScaledVector(HR.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.rtop == null ? .01 : LP.rtop, up: LP.rup == null ? .01 : LP.rup, sink: 0, thumb: [LP.rth == null ? -.3 : LP.rth, 0, 0, 0], grasp: near(gO, .15), graspLo: LP.rlo || [.5, .6, .3], seat: LP.noseat ? 0 : 1, reach: { index: d.trig, thumb: LP.rthumb || [gO.x + .06, gO.y + .04, .04] } });
+    hand(rh, gO, HR.ax, HR.pn, 1, LP.rr || .024, gO.clone().addScaledVector(HR.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.rtop == null ? 0 : LP.rtop, up: LP.rup == null ? .01 : LP.rup, sink: 0, thumb: [LP.rth == null ? -.3 : LP.rth, 0, 0, 0], grasp: near(gO, .15), graspLo: LP.rlo || [.5, .6, .3], seat: LP.noseat ? 0 : 1, spread: LP.rspr == null ? 0 : LP.rspr, reach: { index: d.trig, thumb: LP.rthumb || [gO.x + .07, gO.y + .05, .035], touch: true } });   // the thumb along the receiver's right side, lying on it
     grasp.push(SV.lastGrasp); var wrists = [SV.lastWrist], frames = [SV.lastHandFrame], palmGap = [SV.lastPalmGap];
-    var hO = V(d.hguard[0], d.hguard[1], 0), HL = armHand(Fl, V(1, 0, 0), -1);
-    hand(lh, hO, HL.ax, HL.pn, -1, d.hguard[2], hO.clone().addScaledVector(HL.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), seat: LP.noseat ? 0 : 1, reach: { thumb: LP.lthumb || [hO.x + .09, hO.y - .005, -.03], touch: true } });   /* the thumb along the handguard's left side, pointing ahead, lying on it */
+    var hO = V(d.hguard[0], d.hguard[1], 0).add(LP.lsh ? V(LP.lsh[0], LP.lsh[1], LP.lsh[2]) : V(0, -.01, .015)), HL = armHand(Fl, V(1, 0, 0), -1);
+    hand(lh, hO, HL.ax, HL.pn, -1, d.hguard[2], hO.clone().addScaledVector(HL.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), seat: LP.noseat ? 0 : 1, spread: LP.lspr == null ? .15 : LP.lspr, reach: { thumb: LP.lthumb || [hO.x + .09, hO.y - .005, -.03], touch: true } });   /* the thumb along the handguard's left side, pointing ahead, lying on it */
     grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist); frames.push(SV.lastHandFrame); palmGap.push(SV.lastPalmGap);
     var mesh2 = function (hh) { var o2 = new T.Group(); o2.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); o2.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); return o2; };
     out.add(mesh2(rh)); var lhM = mesh2(lh); out.add(lhM);
