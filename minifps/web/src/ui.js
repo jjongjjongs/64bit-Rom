@@ -34,11 +34,11 @@
     }
     if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [match.mode ? '폭파 미션' : '팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, match.mode ? '5라운드 선승' : '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
     if (id === 's-match') {
-      var om = $('o-map'), keep = om.childNodes.length ? om.scrollLeft : -1;
+      var om = $('o-map'), keep = om.childNodes.length ? om.scrollTop : -1;
       seg(om, SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; if (!SV.MAPS[v].bomb) match.mode = 0; setTimeout(function () { refresh('s-match'); }, 0); });
-      SV.MAPS.forEach(function (m, n) { if (m.bomb) { var tg = document.createElement('i'); tg.textContent = '폭파'; $('o-map-' + n).appendChild(tg); } });
-      if (keep >= 0) om.scrollLeft = keep; else { var cur = $('o-map-' + match.map); om.scrollLeft = Math.max(0, cur.offsetLeft - om.clientWidth / 2 + cur.offsetWidth / 2); }
-      $('map-note').textContent = (match.map + 1) + ' / ' + SV.MAPS.length + ' · 옆으로 넘겨 더 보기';
+      SV.MAPS.forEach(function (m, n) { var t = $('o-map-' + n), no = document.createElement('b'); no.className = 'no'; no.textContent = (n < 9 ? '0' : '') + (n + 1); t.appendChild(no); if (m.bomb) { var tg = document.createElement('i'); tg.textContent = '폭파'; t.appendChild(tg); } });
+      if (keep >= 0) om.scrollTop = keep; else { var cur = $('o-map-' + match.map); om.scrollTop = Math.max(0, cur.offsetTop - om.offsetTop - om.clientHeight / 2 + cur.offsetHeight / 2); }
+      $('map-note').textContent = (match.map + 1) + ' / ' + SV.MAPS.length + ' · 위아래로 넘겨 더 보기';
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
       $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
       $('md-0').setAttribute('aria-pressed', match.mode ? 'false' : 'true'); $('md-1').setAttribute('aria-pressed', match.mode ? 'true' : 'false'); $('tk-box').hidden = !!match.mode;
