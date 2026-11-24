@@ -21,6 +21,7 @@
       /* first-person arms and gun in one animated model each ("fps animated ..." packs by DJMaesen, CC BY 4.0, as prepared for Bayou Protocol) */
       total++; gl.load(A.base + 'art/tp/anim.glb', function (g) { A.tpAnim = g; step(); }, undefined, step);   /* soldiers' rifle-holding motions */
       A.fp = {}; if (window.MeshoptDecoder) { gl.setMeshoptDecoder(MeshoptDecoder); ['carbine', 'hornet', 'sniper', 'mauler', 'striker', 'kestrel', 'kodiak'].forEach(function (n) { total++; gl.load(A.base + 'art/fp/' + n + '.glb', function (g) { A.fp[n] = g; step(); }, undefined, step); }); }
+      A.maps = {}; total++; gl.load(A.base + 'art/maps/resoforge.glb', function (g) { A.maps.yard = g; step(); }, undefined, step);   /* a whole level: "Lowpoly FPS TDM Game Map" by Resoforge (Space_One), CC BY 4.0 */
       total++; gl.load(A.base + 'art/hand.glb', function (g) { A.hand = g; step(); }, undefined, step);   // a real hand mesh for the first-person gloves
       step();
     }, undefined, function () { A.ready = true; done(); });

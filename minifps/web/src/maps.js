@@ -138,7 +138,7 @@
     // append a transformed geometry to a layer. World-space UVs by default, the geometry's own UVs when opt.fit.
     function push(geo, c, t, opt, store) {
       opt = opt || {}; var g = geo.index ? geo.toNonIndexed() : geo, p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv ? g.attributes.uv.array : null, l = lay(store || L, !store && b.tier ? t + '@' + b.tier + '@' + Math.floor(p[0] / 24) + '_' + Math.floor(p[2] / 24) : t), ph = !store && photo(t), ts = (ph && PHT[t]) || TS[t] || TS.plain;
-      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear(); if (ph) col.lerp(WHITE, 1 - (KEEP[t] || .6)).multiplyScalar(GAIN[t] || 1.15);
+      var k = opt.flat ? 1 : .9 + Math.random() * .2, y0 = opt.y0 == null ? 1e9 : opt.y0, rep = opt.rep || [1, 1], i; col.setHex(c).convertSRGBToLinear(); if (ph) col.lerp(WHITE, 1 - (opt.keep || KEEP[t] || .6)).multiplyScalar(GAIN[t] || 1.15);   // opt.keep: how much of the given colour survives the photo's own
       for (i = 0; i < p.length / 3; i++) {
         var px = p[i * 3], py = p[i * 3 + 1], pz = p[i * 3 + 2], nx = n[i * 3], ny = n[i * 3 + 1], q = k;
         l.P.push(px, py, pz); l.N.push(nx, ny, n[i * 3 + 2]);
@@ -1694,13 +1694,87 @@
       lamps(b, [[-30, 3, 0, -1], [-12, 3, 0, -1], [12, 3, 0, -1], [30, 3, 0, -1]], 5); b.mark('MARKET', 0, 4.4, -27.95, 6, 1.4, 0, '#ffd27a');
     } }));
 
-  var MAKERS = [dockM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, range];
-  SV.RANGE = 11;   // the practice range: not in the match list, opened from the lobby's practice button
+  // 12 오렌지 야드 — a ready-made level ("Lowpoly FPS TDM Game Map" by Resoforge / Space_One, CC BY 4.0), laid lengthwise along x.
+  // Its meshes are drawn through the builder (so they get the game's textures and lighting); collision is read off the mesh itself.
+  // Collision from a mesh: a grid of columns; in each, the mesh's solid spans (closed shapes filled between their bottom and top
+  // faces, steep faces kept as thin walls), then neighbouring columns with the same span are merged into boxes.
+  function voxelBoxes(root, cell) {
+    var T = THREE, tris = [], a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), n = new T.Vector3(), bb = new T.Box3().setFromObject(root);
+    root.updateMatrixWorld(true);
+    root.traverse(function (o) { if (!o.isMesh) return; var g = o.geometry, p = g.attributes.position, ix = g.index, cnt = ix ? ix.count : p.count, M = o.matrixWorld, flip = M.determinant() < 0 ? -1 : 1;   // a mirrored node turns its faces inside out
+      for (var i = 0; i + 2 < cnt; i += 3) { a.fromBufferAttribute(p, ix ? ix.getX(i) : i).applyMatrix4(M); b.fromBufferAttribute(p, ix ? ix.getX(i + 1) : i + 1).applyMatrix4(M); c.fromBufferAttribute(p, ix ? ix.getX(i + 2) : i + 2).applyMatrix4(M);
+        n.subVectors(b, a).cross(c.clone().sub(a)); var l = n.length(); if (l < 1e-9) continue; n.multiplyScalar(flip / l); tris.push([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, n.y]); } });
+    var x0 = bb.min.x, z0 = bb.min.z, nx = Math.ceil((bb.max.x - x0) / cell), nz = Math.ceil((bb.max.z - z0) / cell), ev = new Array(nx * nz), vs = new Array(nx * nz);
+    function clip(poly, k, v, keepLess) { var out = []; for (var i = 0; i < poly.length; i++) { var P = poly[i], Q = poly[(i + 1) % poly.length], pi = (P[k] <= v) === keepLess, qi = (Q[k] <= v) === keepLess; if (pi) out.push(P); if (pi !== qi) { var t = (v - P[k]) / (Q[k] - P[k]); out.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t, P[2] + (Q[2] - P[2]) * t]); } } return out; }
+    tris.forEach(function (t) {
+      var ny = t[9], minx = Math.min(t[0], t[3], t[6]), maxx = Math.max(t[0], t[3], t[6]), minz = Math.min(t[2], t[5], t[8]), maxz = Math.max(t[2], t[5], t[8]);
+      var i0 = Math.max(0, Math.floor((minx - x0) / cell)), i1 = Math.min(nx - 1, Math.floor((maxx - x0) / cell)), j0 = Math.max(0, Math.floor((minz - z0) / cell)), j1 = Math.min(nz - 1, Math.floor((maxz - z0) / cell));
+      for (var i = i0; i <= i1; i++) for (var j = j0; j <= j1; j++) {
+        var cx0 = x0 + i * cell, cz0 = z0 + j * cell, poly = [[t[0], t[1], t[2]], [t[3], t[4], t[5]], [t[6], t[7], t[8]]];
+        poly = clip(poly, 0, cx0, false); if (poly.length) poly = clip(poly, 0, cx0 + cell, true); if (poly.length) poly = clip(poly, 2, cz0, false); if (poly.length) poly = clip(poly, 2, cz0 + cell, true); if (poly.length < 3) continue;
+        var area = 0; for (var q = 0; q < poly.length; q++) { var P = poly[q], Q = poly[(q + 1) % poly.length]; area += P[0] * Q[2] - Q[0] * P[2]; } area = Math.abs(area) / 2;
+        var ys = poly.map(function (P) { return P[1]; }), lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys), k = j * nx + i;
+        if (Math.abs(ny) > .35 && area > cell * cell * .25) (ev[k] = ev[k] || []).push([(lo + hi) / 2, ny > 0 ? 1 : -1]);   // a floor-like face covering a good part of the cell
+        else if (Math.abs(ny) <= .35 || hi - lo > .05) (vs[k] = vs[k] || []).push([lo, hi]);                                  // a wall-like face, or the slope of a ramp
+      }
+    });
+    // per column: fill between a bottom face and the next top face; one-sided tops become a thin slab; walls stay as spans
+    var spans = new Array(nx * nz), q = function (v) { return Math.round(v * 10) / 10; };
+    for (var k = 0; k < nx * nz; k++) {
+      var out = (vs[k] || []).slice(), e = (ev[k] || []).sort(function (p, r) { return p[0] - r[0]; }), open = null;
+      var low = 0; e.forEach(function (x) { if (x[1] < 0) { if (open == null) open = x[0]; } else { if (open != null) { out.push([open, x[0]]); open = null; } else out.push([x[0] - low > 2.2 ? x[0] - .12 : low, x[0]]); low = x[0]; } });   // a top with no bottom under it: solid down to the surface below (props are often open underneath), unless it is high up
+      out = out.filter(function (s) { return s[1] > .12; }).map(function (s) { return [Math.max(0, s[0]), s[1]]; }).sort(function (p, r) { return p[0] - r[0]; });
+      var m = []; out.forEach(function (s) { var L = m[m.length - 1]; if (L && s[0] <= L[1] + .2) L[1] = Math.max(L[1], s[1]); else m.push([s[0], s[1]]); });
+      spans[k] = m.map(function (s) { return q(s[0]) + ':' + q(s[1]); });
+    }
+    // greedy rectangles per distinct span
+    var keys = {}; spans.forEach(function (l) { l.forEach(function (s) { keys[s] = 1; }); }), boxes = [];
+    Object.keys(keys).forEach(function (key) {
+      var y = key.split(':').map(Number), used = new Uint8Array(nx * nz), has = function (i, j) { return spans[j * nx + i].indexOf(key) >= 0; };
+      for (var j = 0; j < nz; j++) for (var i = 0; i < nx; i++) { if (used[j * nx + i] || !has(i, j)) continue; var w = 1, h = 1;
+        while (i + w < nx && !used[j * nx + i + w] && has(i + w, j)) w++;
+        outer: while (j + h < nz) { for (var ii = i; ii < i + w; ii++) if (used[(j + h) * nx + ii] || !has(ii, j + h)) break outer; h++; }
+        for (var jj = j; jj < j + h; jj++) for (ii = i; ii < i + w; ii++) used[jj * nx + ii] = 1;
+        boxes.push({ minx: x0 + i * cell, maxx: x0 + (i + w) * cell, minz: z0 + j * cell, maxz: z0 + (j + h) * cell, miny: y[0], maxy: Math.max(y[1], y[0] + .05) }); }
+    });
+    return { boxes: boxes, nx: nx, nz: nz, tris: tris.length };
+  }
+  function yardM() {
+    var b = Builder(), src = SV.assets && SV.assets.maps && SV.assets.maps.yard, HW = 23, HD = 12, H = 2.85, links = [], i;
+    b.day = true;
+    // painted look per material of the model: [texture, colour]; anything else keeps its own colour on plain
+    var LOOK = { material_6: ['plaster', 0xe0702c, .9], material_9: ['plaster', 0xd2552e, .9], material_4: ['conc', 0x9a9fa4, .8], material_11: ['conc', 0x45484b, .85], plane: ['conc', 0x3a3c3e, .85], material: ['crate', 0xc98a45], Point: ['crate', 0xc98a45], '3.010': ['crate', 0xc98a45], '3.015': ['crate', 0xc98a45], stair: ['conc', 0xb0b0ac, .8], material_8: ['conc', 0xb0b0ac, .8], barier: ['conc', 0x7a7a78, .8], blue: ['metal', 0x2a4fc0], material_3: ['paint', 0x9a2a20] };
+    b.ghost = true; b.box(0, 0, 220, 180, .3, 0x8f8a76, -.62, false, 'sand'); b.ghost = false;
+    if (src) {
+      var root = src.scene.clone(true); root.scale.setScalar(2.8); root.rotation.y = PI / 2; root.updateMatrixWorld(true);
+      root.traverse(function (o) { if (!o.isMesh) return; var lk = LOOK[o.material.name], g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (!g.attributes.normal) g.computeVertexNormals(); b.geo(g, lk ? lk[1] : o.material.color.getHex(), lk ? lk[0] : 'plain', { pass: true, keep: lk && lk[2] }); });
+      voxelBoxes(root, .35).boxes.forEach(function (q) { b.boxes.push(q); });
+    }
+    // the model's outer walls are single sheets: a thick wall behind each keeps everyone inside
+    [[0, -HD - .4, HW * 2 + 2, .8], [0, HD + .4, HW * 2 + 2, .8], [-HW - .4, 0, .8, HD * 2 + 2], [HW + .4, 0, .8, HD * 2 + 2]].forEach(function (w) { b.solid(w[0], w[1], w[2], w[3], 9, 0); });
+    // ramps and stairs up to the roofs (2.8-2.9 m): the bots' links between the ground and the upper storey
+    links.push({ a: [12, 9.9, 0], b: [18, 9.9, 1] }, { a: [9.2, -10.6, 0], b: [2, -10.6, 1] }, { a: [-9.2, -10.6, 0], b: [-2, -10.6, 1] }, { a: [-21.15, -8.6, 0], b: [-21.15, .4, 1] });
+    // trees and roofs beyond the wall
+    var gh = b.ghost; b.ghost = true;
+    [[-32, -18], [-34, 2], [-31, 17], [32, -16], [34, 4], [31, 18], [-12, -22], [8, -23], [-6, 22], [14, 23]].forEach(function (q, n) { var k = 1.4 + (n % 3) * .3; b.cyl(q[0], q[1], .28 * k, 3.2 * k, 0x4a3a28, 0, false, 'plain', .2 * k, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (c, m) { var g = new T.IcosahedronGeometry(c[3] * k, 1); g.translate(q[0] + c[0] * k, c[1] * k, q[1] + c[2] * k); b.geo(g, m % 2 ? 0x3f5a2c : 0x4c6a33, 'plain', {}); }); });
+    b.ghost = gh;
+    // spawns: open floor inside each end building (and the yard by A's ramp)
+    [[-20.6, 3.6], [-20.6, 6.4], [-19.4, 9.2], [-19, -9.6], [-18.2, -9.4]].forEach(function (q) { b.spawns.A.push({ x: q[0], z: q[1] }); });
+    [[18.5, -2.5], [19.6, -2.6], [18.5, 8.5], [19.6, 9.1], [20.6, 8.4]].forEach(function (q) { b.spawns.B.push({ x: q[0], z: q[1] }); });
+    var routes = [{ kind: 'main', pts: [[-18.5, 4], [-14.1, -.1], [-8.1, -1.6], [-2.1, -1.6], [4.9, -.1], [13.6, -.1], [18.5, -2.5]] },   // through the middle building
+      { kind: 'flank', pts: [[-19, -9.5], [-13.9, -7.1], [-9.4, -8.9], [-4.1, -7.9], [4.1, -7.9], [8.1, -6.9], [13.9, -2.6], [18.5, -2.5]] },
+      { kind: 'flank', pts: [[-19.4, 9], [-13.4, 7.1], [-8.1, 7.1], [-3.1, 7.6], [2.9, 7.6], [8.1, 6.9], [15.4, 4.4], [19, 8.5]] }];
+    return lit('day', { name: '오렌지 야드', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [40, 80], H: H, navPad: .3, navDeck: .05, navPrune: true, links: links, ladders: [], routes: routes });
+  }
+
+  var MAKERS = [dockM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, yardM, range];
+  SV.RANGE = 12;   // the practice range: not in the match list, opened from the lobby's practice button
   SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '컨테이너 미로와 부두 · 출발점 대각선' }, { name: '물류 창고', info: '소형 · 실내', hint: '선반 두 블록을 도는 8자 순환' },
     { name: '보급기지', info: '대형 · 낮', hint: '폭파 미션 가능 · 가운데 연료 저장소와 외곽 순환로', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 굽은 골목과 집 관통', bomb: true },
     { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 세 갈래와 연결로', bomb: true }, { name: '설산 연구기지', info: '대형 · 야간', hint: '폭파 미션 가능 · 연구동 관통과 지하 통로', bomb: true },
     { name: '사막 협곡', info: '대형 · 해질녘', hint: '폭파 미션 가능 · 철교 · 여울 · 동굴 다리', bomb: true }, { name: '세관 야적장', info: '대형 · 낮', hint: '폭파 미션 가능 · 검사 차선과 컨테이너 블록', bomb: true },
     { name: '고갯길 검문소', info: '대형 · 해질녘', hint: '폭파 미션 가능 · 지그재그 산길', bomb: true }, { name: '폐공장', info: '대형 · 낮', hint: '폭파 미션 가능 · 기계 사이 격자 실내전', bomb: true },
-    { name: '시장 골목', info: '대형 · 야간', hint: '폭파 미션 가능 · 골목 그물망과 지붕 시장', bomb: true }];
+    { name: '시장 골목', info: '대형 · 야간', hint: '폭파 미션 가능 · 골목 그물망과 지붕 시장', bomb: true },
+    { name: '오렌지 야드', info: '소형 · 낮', hint: '양쪽 끝 건물과 옥상 · 계단 네 곳' }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) { var sd = skyDome(m.sky[0], m.sky[1]); sd.userData.sky = 1; m.group.add(sd); } m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

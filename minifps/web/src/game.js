@@ -275,19 +275,27 @@
       var i0 = Math.max(0, Math.floor(x0 - bd.minx)), i1 = Math.min(nx - 1, Math.floor(x1 - bd.minx)), j0 = Math.max(0, Math.floor(z0 - bd.minz)), j1 = Math.min(nz - 1, Math.floor(z1 - bd.minz));
       for (i = i0; i <= i1; i++) for (j = j0; j <= j1; j++) if (inBox(b, bd.minx + i + .5, bd.minz + j + .5, m)) blk[base + j * nx + i] = val;
     }
-    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > .5 && b.miny < 1.6) mark(b, 0, .5, 1); }
+    var pad = map.navPad || .5, deck = map.navDeck || -.15;   // a level with narrow lanes keeps more of its cells open (bots still slide along walls)
+    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > .5 && b.miny < 1.6) mark(b, 0, pad, 1); }
     if (H) {
       blk.fill(1, N);
-      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (!b.soft && Math.abs(b.maxy - H) < .15) mark(b, N, -.15, 0); }
-      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > H + .5 && b.miny < H + 1.6) mark(b, N, .5, 1); }
+      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (!b.soft && Math.abs(b.maxy - H) < .15) mark(b, N, deck, 0); }
+      for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > H + .5 && b.miny < H + 1.6) mark(b, N, pad, 1); }
     }
     nav = { nx: nx, nz: nz, N: N, H: H, blk: blk, ox: bd.minx, oz: bd.minz, g: new Float32Array(blk.length), par: new Int32Array(blk.length), stamp: new Int32Array(blk.length), cl: new Int32Array(blk.length), jmp: new Uint8Array(blk.length), run: 0, free: [], links: {}, exact: {} };
     (map.voids || []).forEach(function (v) { for (var x = Math.floor(v[0] - bd.minx); x < Math.ceil(v[2] - bd.minx); x++) for (var z = Math.floor(v[1] - bd.minz); z < Math.ceil(v[3] - bd.minz); z++) if (x >= 0 && z >= 0 && x < nx && z < nz) blk[z * nx + x] = 1; });   // pits: nobody walks on their floor
-    for (i = 0; i < (map.roamAll ? blk.length : N); i++) if (!blk[i]) nav.free.push(i);
     (map.links || []).forEach(function (L) {
       var ca = freeNear(cellOf(L.a[0], L.a[1], L.a[2])), cb = freeNear(cellOf(L.b[0], L.b[1], L.b[2])), cost = Math.hypot(L.a[0] - L.b[0], L.a[1] - L.b[1]) + 2;
       (nav.links[ca] = nav.links[ca] || []).push({ to: cb, cost: cost }); (nav.links[cb] = nav.links[cb] || []).push({ to: ca, cost: cost }); nav.exact[ca] = L.a; nav.exact[cb] = L.b;
     });
+    if (map.navPrune) {   // close the cells nobody can walk to from a spawn (under ramps, boxed-in corners), so no bot heads for one
+      var seen = new Uint8Array(blk.length), sp = map.spawns.A[0], q = [freeNear(cellOf(sp.x, sp.z, 0))], c, cc, ci, cj; seen[q[0]] = 1;
+      while (q.length) { c = q.pop(); var base = c >= N ? N : 0; cc = c - base; ci = cc % nx; cj = (cc / nx) | 0;
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { var a = ci + d[0], e = cj + d[1], t = base + e * nx + a; if (a >= 0 && e >= 0 && a < nx && e < nz && !blk[t] && !seen[t]) { seen[t] = 1; q.push(t); } });
+        (nav.links[c] || []).forEach(function (L) { if (!seen[L.to]) { seen[L.to] = 1; q.push(L.to); } }); }
+      for (i = 0; i < blk.length; i++) if (!seen[i]) blk[i] = 1;
+    }
+    for (i = 0; i < (map.roamAll ? blk.length : N); i++) if (!blk[i]) nav.free.push(i);
   }
   function cellOf(x, z, l) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return (l && nav.H ? nav.N : 0) + j * nav.nx + i; }
   function freeNear(c) {
@@ -295,9 +303,27 @@
     for (r = 1; r < 8; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; if (!nav.blk[base + j * nav.nx + i]) return base + j * nav.nx + i; }
     return c;
   }
+  // where a walker standing in a closed cell (hugging a wall) starts its path: the nearest open cell it can walk to in a straight
+  // line, not one on the far side of the wall it is pressed against
+  function startNear(x, z, l) {
+    var c = cellOf(x, z, l); if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, y = l ? nav.H : 0, best = -1, bd = 1e9, r, i, j;
+    for (r = 1; r < 4 && best < 0; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) {
+      if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; var k = base + j * nav.nx + i; if (nav.blk[k]) continue;
+      var tx = nav.ox + i + .5, tz = nav.oz + j + .5, d = Math.hypot(tx - x, tz - z); if (d < bd && !wallBetween(x, z, tx, tz, y)) { bd = d; best = k; } }
+    return best >= 0 ? best : freeNear(c);
+  }
+  function wallBetween(x0, z0, x1, z1, y) {
+    for (var k = 0; k < boxes.length; k++) { var b = boxes[k]; if (b.maxy <= y + .45 || b.miny >= y + 1.6) continue;
+      var ax = x0, az = z0, bx = x1, bz = z1; if (b.rot) { var ex = x0 - b.ox, ez = z0 - b.oz; ax = ex * b.c - ez * b.s; az = ex * b.s + ez * b.c; ex = x1 - b.ox; ez = z1 - b.oz; bx = ex * b.c - ez * b.s; bz = ex * b.s + ez * b.c; }
+      var t0 = 0, t1 = 1, dx = bx - ax, dz = bz - az, m = .2;
+      if (Math.abs(dx) < 1e-9) { if (ax < b.minx - m || ax > b.maxx + m) continue; } else { var u = (b.minx - m - ax) / dx, v = (b.maxx + m - ax) / dx; if (u > v) { var q = u; u = v; v = q; } t0 = Math.max(t0, u); t1 = Math.min(t1, v); }
+      if (Math.abs(dz) < 1e-9) { if (az < b.minz - m || az > b.maxz + m) continue; } else { var u2 = (b.minz - m - az) / dz, v2 = (b.maxz + m - az) / dz; if (u2 > v2) { var q2 = u2; u2 = v2; v2 = q2; } t0 = Math.max(t0, u2); t1 = Math.min(t1, v2); }
+      if (t0 < t1 && t1 > .05) return true; }
+    return false;
+  }
   function lineFree(x0, z0, x1, z1, l) { var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i; for (i = 1; i < n; i++) { var t = i / n; if (nav.blk[cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, l)]) return false; } return true; }
   function findPath(x0, z0, l0, x1, z1, l1) {
-    var nx = nav.nx, N = nav.N, s = freeNear(cellOf(x0, z0, l0)), t = freeNear(cellOf(x1, z1, l1)), run = ++nav.run, heap = [s], hf = {}, ti2 = (t % N) % nx, tj = ((t % N) / nx) | 0, guard = 0;
+    var nx = nav.nx, N = nav.N, s = startNear(x0, z0, l0), t = freeNear(cellOf(x1, z1, l1)), run = ++nav.run, heap = [s], hf = {}, ti2 = (t % N) % nx, tj = ((t % N) / nx) | 0, guard = 0;
     nav.g[s] = 0; nav.par[s] = -1; nav.stamp[s] = run; nav.jmp[s] = 0; hf[s] = 0;
     function relax(c, n, ng, jump) { if (nav.stamp[n] === run && ng >= nav.g[n]) return; var nn = n % N; nav.g[n] = ng; nav.par[n] = c; nav.stamp[n] = run; nav.jmp[n] = jump; hf[n] = ng + Math.hypot(nn % nx - ti2, ((nn / nx) | 0) - tj); heap.push(n); }
     while (heap.length && guard++ < 30000) {
@@ -815,7 +841,7 @@
   // a bot with nobody to fight may go for a different main gun lying near it; each gun is weighed once, and given up after 8 s
   function botDrop(a) {
     var ai = a.ai, d = ai.wantDrop != null ? findDrop(ai.wantDrop) : null;
-    if (d && G.elapsed - ai.wantAt < 8) return d; ai.wantDrop = null; ai.skipDrop = ai.skipDrop || {}; if (ai.swapped) return null;   // one swap a life, and never back to a gun it threw away
+    if (d && G.elapsed - ai.wantAt < 8) return d; ai.skipDrop = ai.skipDrop || {}; if (d) ai.skipDrop[d.g] = true; ai.wantDrop = null;   // one it could not reach in time is given up for good if (ai.swapped) return null;   // one swap a life, and never back to a gun it threw away
     var best = null, bd = 10;
     for (var i = 0; i < G.drops.length; i++) { var q = G.drops[i]; if (!q.rest || q.perm || slotOf(q.id) || q.byA === a || (a.guns[0] && q.id === a.guns[0].id) || Math.abs(q.pos.y - a.pos.y) > 1.3) continue; var dd = Math.hypot(q.pos.x - a.pos.x, q.pos.z - a.pos.z); if (dd >= bd) continue;
       if (ai.skipDrop[q.g] == null) ai.skipDrop[q.g] = Math.random() < .35; if (!ai.skipDrop[q.g]) { best = q; bd = dd; } }
