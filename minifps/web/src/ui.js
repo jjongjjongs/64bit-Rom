@@ -23,15 +23,26 @@
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비'] };
   function refresh(id) {
     if (id === 's-room') {
-      $('rm-role').textContent = net.host ? '방장' : '참가자'; $('rm-addrbox').hidden = !net.host; $('rm-host').hidden = !net.host; $('rm-guest').hidden = net.host; $('rm-go').hidden = !net.host; $('rm-n').textContent = net.players.length + '명'; $('rm-note').textContent = net.cfg.mode === 2 ? '개인전 · 나 말고 모두가 적 · 죽으면 2초 뒤 아무 곳에서나 투입' : '팀 데스매치 · 참가 순서대로 두 팀에 나눠 배정';
+      $('rm-role').textContent = net.host ? '방장' : '참가자'; $('rm-addrbox').hidden = !net.host; $('rm-host').hidden = !net.host; $('rm-guest').hidden = net.host; $('rm-go').hidden = !net.host; $('rm-n').textContent = net.players.length + '명'; $('rm-note').textContent = net.cfg.mode === 2 ? '개인전 · 나 말고 모두가 적 · 죽으면 2초 뒤 아무 곳에서나 투입' : net.cfg.mode === 1 ? '폭파 미션 · 라운드마다 부활 없음 · 4라운드 뒤 공수 교대 · 팀은 \'이 팀으로\'로 옮김' : '팀 데스매치 · 들어온 순서대로 나눠 배정 · \'이 팀으로\'로 옮김';
       var ab = $('rm-addr'); ab.textContent = ''; (net.addrs.length ? net.addrs : [{ ip: '주소를 찾지 못했습니다', kind: '' }]).forEach(function (a) { var d = document.createElement('div'); d.textContent = a.ip; var sp = document.createElement('span'); sp.textContent = a.kind; d.appendChild(sp); ab.appendChild(d); });
-      var ls = $('rm-list'); ls.textContent = ''; net.players.forEach(function (p, i) { var d = document.createElement('div'); var ffa = net.cfg.mode === 2; d.className = ffa ? 'tb' : i % 2 ? 'tb' : 'ta'; d.textContent = p.name + (p.id === net.id ? ' (나)' : ''); var sp = document.createElement('i'); sp.textContent = (ffa ? '개인전' : i % 2 ? 'BRAVO' : 'ALPHA') + ' · ' + SV.W[p.primary].name; d.appendChild(sp); ls.appendChild(d); });
+      var ls = $('rm-list'), md = net.cfg.mode || 0; ls.textContent = ''; ls.className = md === 2 ? '' : 'two';
+      function prow(host, p, cls) { var d = document.createElement('div'); d.className = cls + (p.id === net.id ? ' me' : ''); d.textContent = p.name + (p.id === net.id ? ' (나)' : '') + (p.id === net.players[0].id ? ' ★' : ''); var sp = document.createElement('i'); sp.textContent = SV.W[p.primary].name; d.appendChild(sp); host.appendChild(d); }
+      function ghost(host, t, cls) { var d = document.createElement('div'); d.className = cls + ' bot'; d.textContent = t; host.appendChild(d); }
+      if (md === 2) { net.players.forEach(function (p) { prow(ls, p, 'tb'); }); if (net.cfg.bots) for (var k = net.players.length; k < net.cfg.perTeam * 2; k++) ghost(ls, '봇이 채움', 'tb'); }
+      else ['A', 'B'].forEach(function (t) {   /* team deathmatch and bomb: the two sides next to each other, empty places shown as bots */
+        var col = document.createElement('div'), h = document.createElement('h4'), mine = net.players.filter(function (p) { return (p.team || 'A') === t; }); col.className = 'col t' + t;
+        var a = document.createElement('b'); a.textContent = t === 'A' ? 'ALPHA' : 'BRAVO'; var s2 = document.createElement('span'); s2.textContent = md === 1 ? (t === 'A' ? '먼저 공격' : '먼저 수비') : mine.length + '명'; h.appendChild(a); h.appendChild(s2); col.appendChild(h);
+        mine.forEach(function (p) { prow(col, p, t === 'A' ? 'ta' : 'tb'); });
+        if (net.cfg.bots) for (var k = mine.length; k < net.cfg.perTeam; k++) ghost(col, '봇이 채움', t === 'A' ? 'ta' : 'tb');
+        var me = net.players.filter(function (p) { return p.id === net.id; })[0];
+        if (me && (me.team || 'A') !== t) { var bt = document.createElement('button'); bt.className = 'ghost swap'; bt.textContent = '이 팀으로'; bt.addEventListener('click', function () { if (net.host) { me.team = t; netRoom(); } else netSend({ t: 'sw', id: net.id, team: t }); }); col.appendChild(bt); }
+        ls.appendChild(col); });
       if (net.host) {
-        seg($('rm-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }).filter(function (x) { return x[2] !== SV.RANGE; }), function () { return net.cfg.map; }, function (v) { net.cfg.map = v; netRoom(); });
-        seg($('rm-mode'), [['팀 데스매치', '', 0], ['개인전', '모두가 적', 2]], function () { return net.cfg.mode || 0; }, function (v) { if (v !== net.cfg.mode) net.cfg.target = v === 2 ? 20 : 30; net.cfg.mode = v; netRoom(); });
-        seg($('rm-target'), (net.cfg.mode === 2 ? [['15킬', '', 15], ['20킬', '', 20], ['30킬', '', 30]] : [['20킬', '', 20], ['30킬', '', 30], ['50킬', '', 50]]), function () { return net.cfg.target; }, function (v) { net.cfg.target = v; netRoom(); });
+        seg($('rm-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }).filter(function (x) { return x[2] !== SV.RANGE && (net.cfg.mode !== 1 || SV.MAPS[x[2]].bomb); }), function () { return net.cfg.map; }, function (v) { net.cfg.map = v; netRoom(); });
+        seg($('rm-mode'), [['팀 데스매치', '', 0], ['폭파 미션', '5라운드 선승', 1], ['개인전', '모두가 적', 2]], function () { return net.cfg.mode || 0; }, function (v) { if (v !== net.cfg.mode) net.cfg.target = v === 2 ? 20 : 30; net.cfg.mode = v; if (v === 1 && !SV.MAPS[net.cfg.map].bomb) for (var q = 0; q < SV.MAPS.length; q++) if (SV.MAPS[q].bomb) { net.cfg.map = q; break; } netRoom(); });
+        $('rm-tlbl').hidden = $('rm-target').hidden = net.cfg.mode === 1; seg($('rm-target'), (net.cfg.mode === 2 ? [['15킬', '', 15], ['20킬', '', 20], ['30킬', '', 30]] : [['20킬', '', 20], ['30킬', '', 30], ['50킬', '', 50]]), function () { return net.cfg.target; }, function (v) { net.cfg.target = v; netRoom(); });
         seg($('rm-bots'), [['봇으로 채움', net.cfg.mode === 2 ? '모두 6명' : '팀당 3명', 1], ['사람만', '', 0]], function () { return net.cfg.bots; }, function (v) { net.cfg.bots = v; netRoom(); });
-      } else $('rm-sum').textContent = (net.cfg.mode === 2 ? '개인전 · ' : '팀 데스매치 · ') + SV.MAPS[net.cfg.map].name + ' · ' + net.cfg.target + '킬 · ' + (net.cfg.bots ? '빈자리는 봇' : '사람만');
+      } else $('rm-sum').textContent = ['팀 데스매치 · ', '폭파 미션 · ', '개인전 · '][net.cfg.mode || 0] + SV.MAPS[net.cfg.map].name + ' · ' + (net.cfg.mode === 1 ? '5라운드 선승' : net.cfg.target + '킬') + ' · ' + (net.cfg.bots ? '빈자리는 봇' : '사람만');
     }
     if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [['팀 데스매치', '폭파 미션', '개인전'][match.mode], match.mode === 2 ? match.perTeam * 2 + '명' : match.perTeam + ' 대 ' + match.perTeam, match.mode === 1 ? '5라운드 선승' : '목표 ' + (match.mode === 2 ? match.ffaTarget : match.target) + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.mode === 2 ? '' : (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ') + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
     if (id === 's-match') {
@@ -99,9 +110,10 @@
   function netLost(opened) { var inGame = cur === null; netClose(); if (inGame) SV.end(); show('s-multi'); netErr(opened ? '방과 연결이 끊어졌습니다.' : '연결하지 못했습니다. 주소와, 같은 와이파이·Tailscale 인지 확인해 주세요.'); }
   function netIn(m) {
     if (!net.on) return;
-    if (m.t === 'id') { net.id = m.id; var me = { id: m.id, name: '플레이어 ' + m.id, primary: match.primary }; if (net.host) { net.players = [me]; show('s-room'); } else netSend({ t: 'j', p: me }); }
+    if (m.t === 'id') { net.id = m.id; var me = { id: m.id, name: '플레이어 ' + m.id, primary: match.primary, team: 'A' }; if (net.host) { net.players = [me]; show('s-room'); } else netSend({ t: 'j', p: me }); }
     else if (m.t === 'closed') netLost(net.id > 0);
-    else if (m.t === 'j' && net.host) { if (net.players.length < 10 && !net.players.some(function (p) { return p.id === m.p.id; })) net.players.push(m.p); netRoom(); }
+    else if (m.t === 'j' && net.host) { if (net.players.length < 10 && !net.players.some(function (p) { return p.id === m.p.id; })) { var na = net.players.filter(function (p) { return p.team !== 'B'; }).length; m.p.team = na > net.players.length - na ? 'B' : 'A'; net.players.push(m.p); } netRoom(); }
+    else if (m.t === 'sw' && net.host) { net.players.forEach(function (p) { if (p.id === m.id && (m.team === 'A' || m.team === 'B')) p.team = m.team; }); netRoom(); }
     else if (m.t === 'room' && !net.host) { net.players = m.players; net.cfg = m.cfg; if (cur !== null) show('s-room'); }
     else if (m.t === 'left') { net.players = net.players.filter(function (p) { return p.id !== m.id; }); if (net.host && cur !== null) netRoom(); else if (cur === 's-room') refresh('s-room'); SV.netMsg(m); }
     else if (m.t === 'go') netBegin(m);
@@ -121,7 +133,7 @@
       net.players.forEach(function (p) { r.push({ id: p.id, name: p.name, team: 'B', primary: p.primary }); });
       if (c.bots) for (var k = r.length; k < c.perTeam * 2; k++) r.push({ id: 100 + r.length, name: '봇 ' + (r.length + 1), team: 'B', primary: SV.botGun(k, c.map), bot: 1 });
       return r; }
-    net.players.forEach(function (p, i) { var t = i % 2 ? 'B' : 'A'; n[t]++; r.push({ id: p.id, name: p.name, team: t, primary: p.primary }); });
+    net.players.forEach(function (p, i) { var t = p.team === 'B' ? 'B' : 'A'; n[t]++; r.push({ id: p.id, name: p.name, team: t, primary: p.primary }); });
     if (c.bots) ['A', 'B'].forEach(function (t) { for (var k = n[t]; k < c.perTeam; k++) r.push({ id: 100 + r.length, name: '봇 ' + (r.length + 1), team: t, primary: SV.botGun(k, c.map), bot: 1 }); });
     return r; }
   function netBegin(m) {
