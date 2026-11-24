@@ -1040,26 +1040,38 @@
   }
   function roundEnd(winner, why) {
     var B = G.bomb; if (B.phase !== 'live') return; B.phase = 'post'; B.postT = 4; G.score[winner]++; B.round++; inp.use = false;
+    if (G.net && G.net.host) G.net.send({ t: 'be', w: winner, why: why });
     var won = winner === G.player.team; showMsg((won ? '라운드 승리' : '라운드 패배') + ' · ' + why, 3.8); sndTone(won ? 880 : 220, .35, .15);
   }
-  function newRound() {
-    var B = G.bomb, at; if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
-    B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.plan = Math.random() < .5 ? 0 : 1; var sps = G.map.sites[B.plan].spots; B.spot = sps ? sps[(Math.random() * sps.length) | 0] : null;   // this round's place to plant
+  function newRound(hs) {   /* hs: the host's word on this round (multiplayer guests) */
+    var B = G.bomb, at; if (hs) { B.round = hs[0]; B.atk = hs[1]; B.swapped = B.round >= 5; } else if (B.round === 5 && !B.swapped) { B.swapped = true; B.atk = B.atk === 'A' ? 'B' : 'A'; }
+    B.phase = 'live'; B.t = ROUND; B.planted = null; B.drop = null; B.can = null; B.grace = 3; B.cur = B.round; B.boomed = false; B.plan = hs ? hs[9] : Math.random() < .5 ? 0 : 1; var sps = G.map.sites[B.plan].spots; B.spot = sps ? sps[(Math.random() * sps.length) | 0] : null;   // this round's place to plant
     bombMesh.visible = false; G.killer = null; clearDrops();
     G.nades.forEach(function (n) { scene.remove(n.m); }); G.nades = []; clearSmokes();
-    G.actors.forEach(function (a) { a.alive = false; }); G.actors.forEach(spawn);
-    at = G.actors.filter(function (a) { return a.team === B.atk; }); B.carrier = at[(Math.random() * at.length) | 0];
+    G.actors.forEach(function (a) { a.alive = false; if (a.remote) { a.dead = 0; if (a.net) a.net.alive = false; if (a.model) a.model.root.visible = false; } });   // someone else's soldier comes back when its owner says so
+    G.actors.forEach(function (a) { if (!a.remote) spawn(a); });
+    at = G.actors.filter(function (a) { return a.team === B.atk && !a.gone; }); B.carrier = hs ? byNid(hs[3]) : at[(Math.random() * at.length) | 0];
     // spread out: the attackers split over two of the routes to the chosen site, and every third defender pushes forward
     var vs = G.map.sites[B.plan].via || [], v1 = vs[(Math.random() * vs.length) | 0], v2 = vs[(Math.random() * vs.length) | 0], fw = G.map.fwd || [];
     G.actors.forEach(function (a) { a.ai.via = a.team === B.atk ? (a.idx % 2 ? v1 : v2) || null : null; a.ai.fwd = a.team !== B.atk && a.idx % 3 === 2 && fw.length ? fw[(Math.random() * fw.length) | 0] : null; });
     showMsg('라운드 ' + B.round + (B.swapped && B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2);
   }
+  function bombState(b) {   /* guest: the host's snapshot of the round */
+    var B = G.bomb; if (b[2] === 0 && (B.phase !== 'live' || b[0] !== B.cur)) { newRound(b); showMsg('라운드 ' + B.round + (B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2); }
+    if (B.phase !== 'live') return;
+    var c = b[3] < 0 ? null : byNid(b[3]); if (c !== B.carrier) { if (c === G.player && B.carrier !== G.player && B.drop) showMsg('폭탄을 주웠습니다', 1.6); B.carrier = c; }
+    B.drop = b[5] ? { x: b[5][0], y: b[5][1], z: b[5][2], l: b[5][3] } : null;
+    if (b[4] && !B.boomed) { if (!B.planted) { B.planted = { x: b[4][0], y: b[4][1], z: b[4][2], l: b[4][3], site: b[4][4], t: b[4][5], beep: 0 }; showMsg(b[4][4] + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); } else B.planted.t = b[4][5]; }
+    else if (B.planted && !B.mine) B.planted = null;
+    B.t = b[6]; G.score.A = b[7]; G.score.B = b[8];
+  }
   function updBomb(dt) {
-    var B = G.bomb, def = B.atk === 'A' ? 'B' : 'A', i, a, s, kind, want, p = G.player;
-    if (B.phase === 'post') { B.postT -= dt; if (B.postT <= 0) { if (G.score.A >= B.need || G.score.B >= B.need) endMatch(); else newRound(); } return; }
+    var B = G.bomb, def = B.atk === 'A' ? 'B' : 'A', i, a, s, kind, want, p = G.player, guest = G.net && !G.net.host;
+    if (B.phase === 'post') { B.postT -= dt; if (B.postT <= 0 && !guest) { if (G.score.A >= B.need || G.score.B >= B.need) { if (G.net) G.net.send({ t: 'bx', s: G.score }); endMatch(); } else newRound(); } return; }
+    B.grace = Math.max(0, (B.grace || 0) - dt);
     for (i = 0; i < G.actors.length; i++) {
       a = G.actors[i]; if (!a.alive) { a.useP = 0; a.useAt = null; continue; }
-      if (B.drop && a.team === B.atk && near(a, B.drop, 1.5)) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
+      if (!guest && B.drop && a.team === B.atk && near(a, B.drop, 1.5)) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
       if (B.carrier === a && a.ground && !nav.blk[cellOf(a.pos.x, a.pos.z, lvl(a))]) a.lastFree = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a) };   // if the carrier dies the bomb lands where bots can walk
       kind = null; s = null;
       if (!B.planted) { if (B.carrier === a && (s = siteAt(a.pos))) kind = 'plant'; }
@@ -1069,8 +1081,8 @@
       if (!kind || !want) { a.useP = 0; a.useAt = null; continue; }
       if (!a.useAt || Math.hypot(a.pos.x - a.useAt.x, a.pos.z - a.useAt.z) > .35) { a.useAt = { x: a.pos.x, z: a.pos.z }; a.useP = 0; }   // moving starts over
       a.useP += dt;
-      if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a), site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
-      else if (kind === 'defuse' && a.useP >= DEFUSE) { bombMesh.visible = false; a.useP = 0; roundEnd(def, '폭탄 해제'); return; }
+      if (kind === 'plant' && a.useP >= PLANT) { B.planted = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a), site: s.id, t: FUSE, beep: 0 }; B.carrier = null; a.useP = 0; B.mine = 1.5; if (guest) G.net.send({ t: 'bp', p: [+a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2), lvl(a), s.id] }); showMsg(s.id + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
+      else if (kind === 'defuse' && a.useP >= DEFUSE) { a.useP = 0; if (guest) { G.net.send({ t: 'bf' }); continue; } bombMesh.visible = false; roundEnd(def, '폭탄 해제'); return; }
     }
     var act = p.alive && p.useP > 0 ? B.can : null, step2;
     if (act && !useCrouch && !p.crouch) { p.crouch = true; useCrouch = true; } else if (!act && useCrouch) { p.crouch = false; useCrouch = false; }
@@ -1086,11 +1098,12 @@
       if (s.beep <= 0) { s.beep = s.t > 10 ? 1 : s.t > 5 ? .5 : .22; sndTone(1250, .05, clamp(.2 - Math.hypot(s.x - p.pos.x, s.z - p.pos.z) / 220, .02, .2), 'square'); }
       if (s.t <= 0) {
         var bm = booms[0]; bm.m.position.set(s.x, 1, s.z); bm.m.visible = true; bm.life = .5; G.shake = .9; gunSnd('boom', 1.4, Math.hypot(s.x - p.pos.x, s.z - p.pos.z)); bombMesh.visible = false;
-        for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (a.alive && Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < 9) { a.prot = 0; hurt(a, 500, a, false, 'grenade'); } }
-        roundEnd(B.atk, '폭탄 폭발'); return;
+        for (i = 0; i < G.actors.length; i++) { a = G.actors[i]; if (a.alive && !a.remote && Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < 9) { a.prot = 0; hurt(a, 500, a, false, 'grenade'); } }   // each phone blows up its own soldiers
+        B.planted = null; B.boomed = true; if (!guest) roundEnd(B.atk, '폭탄 폭발'); return;
       }
-      if (!nd) roundEnd(B.atk, '수비 팀 전멸');
-    } else { bombLed.visible = true; B.t -= dt; if (!na) roundEnd(def, '공격 팀 전멸'); else if (!nd) roundEnd(B.atk, '수비 팀 전멸'); else if (B.t <= 0) roundEnd(def, '시간 종료'); }
+      if (!nd && !guest && !B.grace) roundEnd(B.atk, '수비 팀 전멸');
+    } else { bombLed.visible = true; B.t -= dt; if (guest || B.grace) { } else if (!na) roundEnd(def, '공격 팀 전멸'); else if (!nd) roundEnd(B.atk, '수비 팀 전멸'); else if (B.t <= 0) roundEnd(def, '시간 종료'); }
+    if (B.mine) B.mine = Math.max(0, B.mine - dt);
     G.time = Math.max(0, B.planted ? B.planted.t : B.t);
   }
   // ---------- lamps ----------
@@ -1257,14 +1270,21 @@
   function netTick(dt) {
     var N = G.net; N.acc += dt; if (N.acc < 1 / 15) return; N.acc = 0; var out = [];
     G.actors.forEach(function (a) { if (a.remote) return; out.push([a.nid, +a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2), +a.yaw.toFixed(3), +a.pitch.toFixed(2), (a.alive ? 1 : 0) | (a.crouch ? 2 : 0) | (a.moving ? 4 : 0), Math.max(0, Math.round(a.hp))]); });
-    var m = { t: 's', a: out }; if (N.host) m.tm = Math.round(G.time); N.send(m);
+    var m = { t: 's', a: out }; if (N.host) m.tm = Math.round(G.time);
+    var B = G.bomb; if (B && N.host) { var q = B.planted, d = B.drop; m.b = [B.round, B.atk, B.phase === 'live' ? 0 : 1, B.carrier ? B.carrier.nid : -1, q ? [+q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2), q.l, q.site, +q.t.toFixed(1)] : 0, d ? [+d.x.toFixed(2), +(d.y || 0).toFixed(2), +d.z.toFixed(2), d.l || 0] : 0, +B.t.toFixed(1), G.score.A, G.score.B, B.plan]; }
+    N.send(m);
   }
   SV.netMsg = function (m) {
     if (!G.net || G.state !== 'play') return; var a, v, by;
-    if (m.t === 's') { m.a.forEach(function (r) { a = byNid(r[0]); if (a && a.remote) a.net = { x: r[1], y: r[2], z: r[3], yaw: r[4], pitch: r[5], alive: !!(r[6] & 1), crouch: !!(r[6] & 2), moving: !!(r[6] & 4), hp: r[7] }; }); if (m.tm != null && !G.net.host) G.time = m.tm; }
+    if (m.t === 's') { m.a.forEach(function (r) { a = byNid(r[0]); if (a && a.remote) a.net = { x: r[1], y: r[2], z: r[3], yaw: r[4], pitch: r[5], alive: !!(r[6] & 1), crouch: !!(r[6] & 2), moving: !!(r[6] & 4), hp: r[7] }; }); if (m.tm != null && !G.net.host) G.time = m.tm; if (m.b && !G.net.host && G.bomb) bombState(m.b); }
+    else if (m.t === 'bp' && G.net.host && G.bomb && G.bomb.phase === 'live' && !G.bomb.planted) { G.bomb.planted = { x: m.p[0], y: m.p[1], z: m.p[2], l: m.p[3], site: m.p[4], t: FUSE, beep: 0 }; G.bomb.carrier = null; showMsg(m.p[4] + ' 지점에 폭탄이 설치됐습니다', 2.6); sndTone(520, .25, .16, 'square'); }
+    else if (m.t === 'bf' && G.net.host && G.bomb && G.bomb.planted) { bombMesh.visible = false; roundEnd(G.bomb.atk === 'A' ? 'B' : 'A', '폭탄 해제'); }
+    else if (m.t === 'be' && !G.net.host && G.bomb) { if (G.bomb.phase === 'live') { bombMesh.visible = false; roundEnd(m.w, m.why); } }
+    else if (m.t === 'bx' && !G.net.host) { G.score.A = m.s.A; G.score.B = m.s.B; endMatch(); }
     else if (m.t === 'h') { v = byNid(m.v); by = byNid(m.by); if (v && !v.remote) hurt(v, m.d, by || v, !!m.h); }
     else if (m.t === 'k') { v = byNid(m.v); by = byNid(m.by) || v; if (!v || !v.remote) return; var head = !!m.h;
       v.alive = false; v.dead = .001; v.deaths++; if (v.net) v.net.alive = false; if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; } feed(by, v, head);
+      if (G.bomb && G.net.host && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = snap(v.pos.x, v.pos.z, lvl(v)); }
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); }
       if (!G.bomb && (G.ffa ? by.kills : G.score[by.team]) >= G.match.target) endMatch(); }
     else if (m.t === 'f') { a = byNid(m.by); if (!a || !a.remote) return; a.fireK = 1; vP.fromArray(m.o); vH.fromArray(m.e); tracer(vP, vH); var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); gunSnd(m.g, clamp(1 - dd / 95, 0, 1) * .8, dd); }

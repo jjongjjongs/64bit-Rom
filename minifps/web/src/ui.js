@@ -41,7 +41,8 @@
         seg($('rm-map'), SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }).filter(function (x) { return x[2] !== SV.RANGE && (net.cfg.mode !== 1 || SV.MAPS[x[2]].bomb); }), function () { return net.cfg.map; }, function (v) { net.cfg.map = v; netRoom(); });
         seg($('rm-mode'), [['팀 데스매치', '', 0], ['폭파 미션', '5라운드 선승', 1], ['개인전', '모두가 적', 2]], function () { return net.cfg.mode || 0; }, function (v) { if (v !== net.cfg.mode) net.cfg.target = v === 2 ? 20 : 30; net.cfg.mode = v; if (v === 1 && !SV.MAPS[net.cfg.map].bomb) for (var q = 0; q < SV.MAPS.length; q++) if (SV.MAPS[q].bomb) { net.cfg.map = q; break; } netRoom(); });
         $('rm-tlbl').hidden = $('rm-target').hidden = net.cfg.mode === 1; seg($('rm-target'), (net.cfg.mode === 2 ? [['15킬', '', 15], ['20킬', '', 20], ['30킬', '', 30]] : [['20킬', '', 20], ['30킬', '', 30], ['50킬', '', 50]]), function () { return net.cfg.target; }, function (v) { net.cfg.target = v; netRoom(); });
-        seg($('rm-bots'), [['봇으로 채움', net.cfg.mode === 2 ? '모두 6명' : '팀당 3명', 1], ['사람만', '', 0]], function () { return net.cfg.bots; }, function (v) { net.cfg.bots = v; netRoom(); });
+        seg($('rm-size'), [3, 4, 5].map(function (k) { return net.cfg.mode === 2 ? [k * 2 + '명', '', k] : [k + ' 대 ' + k, '', k]; }), function () { return net.cfg.perTeam; }, function (v) { net.cfg.perTeam = v; netRoom(); });
+        seg($('rm-bots'), [['봇으로 채움', net.cfg.mode === 2 ? '모두 ' + net.cfg.perTeam * 2 + '명' : '팀당 ' + net.cfg.perTeam + '명', 1], ['사람만', '', 0]], function () { return net.cfg.bots; }, function (v) { net.cfg.bots = v; netRoom(); });
       } else $('rm-sum').textContent = ['팀 데스매치 · ', '폭파 미션 · ', '개인전 · '][net.cfg.mode || 0] + SV.MAPS[net.cfg.map].name + ' · ' + (net.cfg.mode === 1 ? '5라운드 선승' : net.cfg.target + '킬') + ' · ' + (net.cfg.bots ? '빈자리는 봇' : '사람만');
     }
     if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [['팀 데스매치', '폭파 미션', '개인전'][match.mode], match.mode === 2 ? match.perTeam * 2 + '명' : match.perTeam + ' 대 ' + match.perTeam, match.mode === 1 ? '5라운드 선승' : '목표 ' + (match.mode === 2 ? match.ffaTarget : match.target) + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.mode === 2 ? '' : (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ') + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
@@ -138,7 +139,7 @@
     return r; }
   function netBegin(m) {
     SV.audio(); var mine = m.roster.filter(function (r) { return r.id === net.id; })[0]; if (!mine) return;
-    var mm = JSON.parse(JSON.stringify(match)); mm.mode = m.cfg.mode === 2 ? 2 : 0; mm.map = m.cfg.map; mm.target = m.cfg.target; mm.minutes = 15; mm.diff = 1; mm.team = mine.team; mm.multi = true;
+    var mm = JSON.parse(JSON.stringify(match)); mm.mode = m.cfg.mode === 2 ? 2 : m.cfg.mode === 1 && SV.MAPS[m.cfg.map].bomb ? 1 : 0; mm.map = m.cfg.map; mm.target = m.cfg.target; mm.minutes = 15; mm.diff = 1; mm.team = mine.team; mm.multi = true;
     mm.net = { me: net.id, host: net.host, roster: m.roster, send: netSend }; practice = false; lastPractice = false; show(null); SV.start(mm); applyCfg(); }
   $('mp-host').addEventListener('click', function () {
     net.addrs = [];
