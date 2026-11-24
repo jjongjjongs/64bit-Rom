@@ -517,7 +517,12 @@ var SV = window.SV = window.SV || {};
     if (openOnly) {
       // the palm: the line of knuckle bases and the root of the thumb (fingers and thumb find their own way round afterwards)
       var kb = chain(['index-finger-phalanx-proximal', 'middle-finger-phalanx-proximal', 'ring-finger-phalanx-proximal', 'pinky-finger-phalanx-proximal'], []), tm = chain(['thumb-metacarpal', 'thumb-phalanx-proximal'], []);
-      return [0, 1, 2].some(function (k) { return hit(kb[k], kb[k + 1], .012); }) ? 'k' : hit(tm[0], tm[0].clone().lerp(tm[1], .3), GTR[0]) ? 't' : false;   // the thumb's root, in the palm, cannot sink in either (the rest of the thumb moves out of the way by itself)
+      if ([0, 1, 2].some(function (k) { return hit(kb[k], kb[k + 1], .012); })) return 'k';
+      if (hit(tm[0], tm[0].clone().lerp(tm[1], .3), GTR[0])) return 't';
+      // the palm's own surface (H.palm in front of the knuckle line), two lines across it toward the wrist
+      if (lo0 === 'palm') { var pz = function (t, z) { return H.mid.clone().addScaledVector(H.ex, H.palm).addScaledVector(H.ey, t).addScaledVector(H.ez, z).applyMatrix4(X); };
+        if (hit(pz(.02, -.028), pz(.02, .028), .003) || hit(pz(.045, -.026), pz(.045, .026), .003)) return 'p'; }
+      return false;   // the thumb's root, in the palm, cannot sink in either (the rest of the thumb moves out of the way by itself)
     }
     // reach: a finger (or the thumb) that has a place to go rather than a grip to close on, such as the index finger on a trigger
     // inside its guard: every pose in its range of motion is tried, and of those that touch nothing the one whose tip comes
@@ -561,10 +566,22 @@ var SV = window.SV = window.SV || {};
       X.premultiply(new T.Matrix4().makeTranslation(-Pc.x, -Pc.y, -Pc.z)).premultiply(new T.Matrix4().makeRotationAxis(pn, ya)).premultiply(new T.Matrix4().makeTranslation(Pc.x, Pc.y, Pc.z));
     }
     var Wr = H.pos[H.ix.wrist].clone().applyMatrix4(X), aimW = new T.Vector3().subVectors(E, Wr).normalize(), aim = aimW.clone().applyMatrix4(new T.Matrix4().extractRotation(X).transpose());
-    if (o.grasp) { for (var gt = 0, gc; gt < 30 && (gc = graspClear(H, X, o.grasp, th)); gt++) { var bv = gc === 't' ? wv.clone().multiplyScalar(-sg) : pn; X.premultiply(new T.Matrix4().makeTranslation(bv.x * .002, bv.y * .002, bv.z * .002)); }   // back the hand off until it rests on the object without sinking in
+    if (o.grasp) { var gcl = function (X2) { return o.seat ? graspSolve(H, X2, o.grasp, th, true, 'palm') : graspClear(H, X2, o.grasp, th); };
+      for (var gt = 0, gc; gt < 30 && (gc = gcl(X)); gt++) { var bv = gc === 't' ? wv.clone().multiplyScalar(-sg) : pn; X.premultiply(new T.Matrix4().makeTranslation(bv.x * .002, bv.y * .002, bv.z * .002)); }
+      /* seat: then the hand comes in along its palm's normal until the palm (or the knuckles, or the thumb's root) meets the object */
+      if (o.seat) for (var gs2 = 0; gs2 < 40; gs2++) { var X3 = X.clone().premultiply(new T.Matrix4().makeTranslation(-pn.x * .001, -pn.y * .001, -pn.z * .001)); if (gcl(X3)) break; X = X3; }   // back the hand off until it rests on the object without sinking in
       var gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.reach);
-      for (var gt2 = 0; gt2 < 12 && !gs.thumbFree; gt2++) { X.premultiply(new T.Matrix4().makeTranslation(pn.x * .002, pn.y * .002, pn.z * .002)); gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.reach); }   // the thumb has no way round without touching: the hand sits a little further off
+      for (var gt2 = 0; gt2 < 24 && !gs.thumbFree; gt2++) { X.premultiply(new T.Matrix4().makeTranslation(pn.x * .001, pn.y * .001, pn.z * .001)); gs = graspSolve(H, X, o.grasp, th, false, o.graspLo, o.reach); }   // the thumb has no way round without touching: the hand sits a little further off
       curl = gs.curl; th = gs.th; SV.lastGrasp = gs; }
+    /* the wrist, in clinical terms: forearm toward the back of the hand = the hand bent toward the palm (flexion, +); forearm toward
+       the little-finger side = the hand bent toward the thumb (radial deviation, +; ulnar is -). Kept for the checks. */
+    if (o.grasp) { var pg = 1e9; [.01, .02, .03, .045, .06].forEach(function (t) { for (var z = -.03; z <= .0301; z += .01) { var pp = H.mid.clone().addScaledVector(H.ex, H.palm).addScaledVector(H.ey, t).addScaledVector(H.ez, z).applyMatrix4(X);
+      o.grasp.forEach(function (q) { var dd = Math.hypot(q[0] - pp.x, q[1] - pp.y, q[2] - pp.z) - q[3]; if (dd < pg) pg = dd; }); } }); SV.lastPalmGap = pg; }   // how far the palm's surface is from the object at its nearest (m)
+    SV.lastSeat = o.seat ? 1 : 0; SV.lastWrist = { flex: Math.atan2(aim.dot(H.ex), aim.dot(H.ey)) * 180 / PI, radial: Math.atan2(aim.dot(H.ez), aim.dot(H.ey)) * 180 / PI, total: H.ey.angleTo(aim) * 180 / PI };
+    /* where this hand ends up, in the frame it was placed in: the middle of the knuckle line, the way the fingers run (wrist to the
+       middle knuckle) and the way the palm faces. The soldiers seen from outside take the same hold from it (SV.fitFromFP). */
+    var Xr = new T.Matrix4().extractRotation(X), fk = H.pos[H.ix['middle-finger-phalanx-proximal']].clone().sub(H.pos[H.ix.wrist]).applyMatrix4(Xr).normalize();
+    SV.lastHandFrame = { K: H.mid.clone().applyMatrix4(X), f: fk, n: H.ex.clone().negate().applyMatrix4(Xr).normalize() };
     var bk = handBake(curl, th, aim, o.spread), geo = bk.geo; geo.applyMatrix4(X);
     if (sg < 0) { var ix = geo.index.array, q; for (q = 0; q < ix.length; q += 3) { var s0 = ix[q]; ix[q] = ix[q + 1]; ix[q + 1] = s0; } geo.computeVertexNormals(); }   // mirrored into a left hand
     g.add(new T.Mesh(geo, MAT.glove2));
@@ -816,14 +833,19 @@ var SV = window.SV = window.SV || {};
   function lmgVM(d, team) {
     var out = new T.Group(), fp = d.fp, sl = sleeveMat(team), gl = MAT.glove, V = function (x, y, z) { return new T.Vector3(x, y, z); }, grasp = [];
     out.add(fp); var obs = surfSpheres(fp, new T.Matrix4(), .004), near = function (O, r) { return obs.filter(function (s) { return Math.hypot(s[0] - O.x, s[1] - O.y, s[2] - O.z) < r; }); };
-    var LP = window.LMGP || {}, gO = V(d.grip[0], d.grip[1], 0), gax = V(.28, .96, 0).normalize(), rh = new T.Group(), lh = new T.Group();
-    hand(rh, gO, gax, LP.rpn ? V(LP.rpn[0], LP.rpn[1], LP.rpn[2]) : V(0, 0, 1), 1, LP.rr || .022, gO.clone().add(V(-.36, -.2, .17)), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.rtop == null ? .026 : LP.rtop, up: LP.rup == null ? .02 : LP.rup, sink: 0, thumb: [LP.rth == null ? -.3 : LP.rth, 0, 0, 0], grasp: near(gO, .15), graspLo: LP.rlo || [.5, .6, .3], reach: { index: d.trig, thumb: LP.rthumb || [gO.x + .06, gO.y + .04, .04] } });
-    grasp.push(SV.lastGrasp);
-    var hO = V(d.hguard[0], d.hguard[1], 0);
-    hand(lh, hO, V(1, 0, 0), V(0, -.8, -.6), -1, d.hguard[2], hO.clone().add(V(-.3, -.27, -.3)), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), reach: { thumb: LP.lthumb || [hO.x + .07, hO.y + .005, -.035] } });
-    grasp.push(SV.lastGrasp);
+    /* Each hand is worked out from its forearm (anatomy first, see CLAUDE.md): F is the direction from the wrist to the elbow. The
+       hand is set in line with it, so the wrist is straight; the part held (grip, handguard) then lies across the palm at whatever
+       slant that gives, and the fingers close on it. armHand: index toward +A, the back of the hand from the handedness. */
+    function armHand(F, A, sg) { F = F.clone().normalize(); var ax = A.clone().addScaledVector(F, -A.dot(F)).normalize(), wv = F.clone().multiplyScalar(-sg), pn = new T.Vector3().crossVectors(wv, ax); return { ax: ax, pn: pn, F: F }; }
+    var LP = window.LMGP || {}, gO = V(d.grip[0], d.grip[1], 0), rh = new T.Group(), lh = new T.Group(), Fr = LP.FR ? V(LP.FR[0], LP.FR[1], LP.FR[2]) : V(-.9, -.1, .35), Fl = LP.FL ? V(LP.FL[0], LP.FL[1], LP.FL[2]) : V(-.5, -.55, -.65);
+    var HR = armHand(Fr, V(.28, .96, 0), 1);
+    hand(rh, gO, HR.ax, HR.pn, 1, LP.rr || .024, gO.clone().addScaledVector(HR.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.rtop == null ? .01 : LP.rtop, up: LP.rup == null ? .01 : LP.rup, sink: 0, thumb: [LP.rth == null ? -.3 : LP.rth, 0, 0, 0], grasp: near(gO, .15), graspLo: LP.rlo || [.5, .6, .3], seat: LP.noseat ? 0 : 1, reach: { index: d.trig, thumb: LP.rthumb || [gO.x + .06, gO.y + .04, .04] } });
+    grasp.push(SV.lastGrasp); var wrists = [SV.lastWrist], frames = [SV.lastHandFrame], palmGap = [SV.lastPalmGap];
+    var hO = V(d.hguard[0], d.hguard[1], 0), HL = armHand(Fl, V(1, 0, 0), -1);
+    hand(lh, hO, HL.ax, HL.pn, -1, d.hguard[2], hO.clone().addScaledVector(HL.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), seat: LP.noseat ? 0 : 1, reach: { thumb: LP.lthumb || [hO.x + .07, hO.y + .005, -.035] } });
+    grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist); frames.push(SV.lastHandFrame); palmGap.push(SV.lastPalmGap);
     [rh, lh].forEach(function (hh) { out.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); out.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); });
-    out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip, grasp: grasp, H: {}, P: {} };
+    out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip, grasp: grasp, wrists: wrists, frames: frames, palmGap: palmGap, H: {}, P: {} };
     return out;
   }
   SV.viewModel = function (id0, team) {
@@ -1029,8 +1051,8 @@ var SV = window.SV = window.SV || {};
      until the palm lies on the gun's surface; then each finger is closed joint by joint, from straight, until it touches the
      gun, and stops there. Done once per kind of gun (in the aiming stance) and reused by every soldier holding it. */
   /* FITTAB: the result of that fitting for each gun, worked out ahead of time by the build tools (it takes seconds per gun) */
-  var FITTAB = {"lmg":{"mat": [-118.36034, 0.58893, -12.76021, 0, -12.58081, 15.21941, 117.39862, 0, 2.21207, 118.06932, -15.06932, 0, -4.48167, -39.96235, -149.16223, 1], "curlR": [[0, 0.66, 0.54], [0.96, 0.72, 0.54], [0.84, 0.72, 0.54], [1.23, 1.49, 0], [-0.45, 0.12, 0.12]], "curlL": [[0.12, 0.3, 1.1], [0, 1.2, 0.54], [0.72, 0.66, 0.54], [0, 0.48, 0], [-0.45, 0.45, 0]], "palmC": 0.2166},"rifle":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.31672,-41.52094,-149.52373,1],"curlR":[[0.6,0.54,0.54],[0.9,0.66,0.54],[0.78,0.72,0.54],[1.14,0.66,0],[-0.45,0.12,0]],"curlL":[[0.18,0,1.1],[0.3,0.78,0.6],[0.06,0.24,0.66],[0.66,0.72,0],[-0.06,0,0]],"palmC":0.1848},"rifle2":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.23339,-40.03385,-153.612,1],"curlR":[[0.84,0.72,0],[1.26,0.66,0.54],[1.08,0.72,0.54],[1.23,1.49,0],[-0.45,0.06,0]],"curlL":[[0,1.14,0.54],[0.72,0.66,0.72],[0.78,0.72,0.6],[0.72,0.72,0],[-0.45,0.45,0]],"palmC":0.1947},"smg":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.0377,-43.65616,-150.43391,1],"curlR":[[0.42,0.66,0.54],[0.84,0.72,0.48],[0.66,0.66,0.66],[1.23,1.49,0],[0,0,-0.18]],"curlL":[[1.02,0.96,0.72],[1.14,0.78,0.6],[1.23,0.18,0.06],[1.23,1.49,0],[0,-0.06,0]],"palmC":0.0744},"sniper":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.40102,-33.98478,-159.2399,1],"curlR":[[0.06,0.54,0.54],[0.12,1.49,1.1],[0.78,0.72,0.54],[1.26,0.72,0],[0.36,0.06,-0.45]],"curlL":[[0.12,1.02,0.6],[0.66,0.72,0.66],[0.72,0.72,0.54],[0.78,0.72,0],[0,0,0]],"palmC":0.4776},"pistol":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,6.40605,-59.39301,-154.39157,1],"curlR":[[0.18,0.3,0.54],[1.14,0.72,0.48],[1.02,0.66,0.54],[1.32,0.72,0],[-0.45,0,0]],"curlL":[[1.44,1.49,1.1],[0.3,1.2,0.96],[0.96,0.48,0.96],[0.6,0.66,0],[0.45,-0.45,0]],"palmC":0.0321},"pistol2":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,5.03752,-58.25908,-156.00966,1],"curlR":[[0.96,0.72,0],[1.08,0.72,0.54],[0.96,0.72,0.48],[1.44,0.6,0],[0.36,0.06,0]],"curlL":[[1.23,1.49,1.1],[1.23,1.2,1.1],[1.23,1.49,1.1],[1.23,1.49,0],[0,0,0]],"palmC":0.4078},"shotgun":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-1.9548,-45.45797,-166.57772,1],"curlR":[[1.23,1.49,1.1],[0,0.72,0.96],[1.02,1.56,0.84],[0,0.54,0],[0.45,0.45,0.45]],"curlL":[[0,0.54,1.08],[0.36,0.72,0.6],[0.54,0.72,0.54],[0.78,0.78,0],[-0.45,0.45,0]],"palmC":0.2057}};
-  var HOLD = {"rifle":{"curlR":[[0.6,0.54,0.54],[0.9,0.8,0.7],[0.78,0.85,0.7],[1.14,0.75,0.5],[-0.45,0.12,0]],"curlL":[[0.45,0.78,0.5],[0.45,0.78,0.5],[0.45,0.78,0.5],[0.5,0.78,0.45],[-0.06,0,0]]},"rifle2":{"curlL":[[0.5,0.9,0.6],[0.5,0.9,0.6],[0.5,0.9,0.6],[0.55,0.85,0.55],[-0.45,0.45,0]]},"sniper":{"curlL":[[0.35,0.65,0.45],[0.35,0.65,0.45],[0.35,0.65,0.45],[0.4,0.62,0.4],[-0.3,0.2,0]],"curlR":[[0.3,0.75,0.5],[0.85,0.8,0.65],[0.8,0.85,0.65],[0.95,0.8,0.5],[-0.3,0.1,0]],"turn":0.5,"gunOff":[0.015,0,0.004]},"shotgun":{"curlL":[[0.4,0.7,0.5],[0.4,0.7,0.5],[0.4,0.7,0.5],[0.45,0.7,0.45],[-0.45,0.6,0]],"curlR":[[0.5,0.8,0.5],[0.9,0.8,0.7],[0.78,0.85,0.7],[1.14,0.75,0.5],[-0.45,0.12,0]],"gunOff":[0.2,0.095,0.022],"fore":[0,-0.01,-0.2]}};
+  var FITTAB = {"lmg":{"mat":[-107.76289,43.2265,-26.28627,0,-9.86419,42.71498,110.68183,0,49.62052,102.36816,-35.08423,0,-16.70095,-63.29836,-138.30272,1],"curlR":[[0,0,0],[0.59,0.704,1.012],[0.45,0.543,0.26],[0.55,0.658],[0,0,0]],"curlL":[[0.17,0.598,0.416],[0.31,0.759,0.528],[0.53,1.012,0.704],[0.77,1.288],[0,0]],"palmC":0.2166},"rifle":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.31672,-41.52094,-149.52373,1],"curlR":[[0.6,0.54,0.54],[0.9,0.66,0.54],[0.78,0.72,0.54],[1.14,0.66,0],[-0.45,0.12,0]],"curlL":[[0.18,0,1.1],[0.3,0.78,0.6],[0.06,0.24,0.66],[0.66,0.72,0],[-0.06,0,0]],"palmC":0.1848},"rifle2":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.23339,-40.03385,-153.612,1],"curlR":[[0.84,0.72,0],[1.26,0.66,0.54],[1.08,0.72,0.54],[1.23,1.49,0],[-0.45,0.06,0]],"curlL":[[0,1.14,0.54],[0.72,0.66,0.72],[0.78,0.72,0.6],[0.72,0.72,0],[-0.45,0.45,0]],"palmC":0.1947},"smg":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.0377,-43.65616,-150.43391,1],"curlR":[[0.42,0.66,0.54],[0.84,0.72,0.48],[0.66,0.66,0.66],[1.23,1.49,0],[0,0,-0.18]],"curlL":[[1.02,0.96,0.72],[1.14,0.78,0.6],[1.23,0.18,0.06],[1.23,1.49,0],[0,-0.06,0]],"palmC":0.0744},"sniper":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-3.40102,-33.98478,-159.2399,1],"curlR":[[0.06,0.54,0.54],[0.12,1.49,1.1],[0.78,0.72,0.54],[1.26,0.72,0],[0.36,0.06,-0.45]],"curlL":[[0.12,1.02,0.6],[0.66,0.72,0.66],[0.72,0.72,0.54],[0.78,0.72,0],[0,0,0]],"palmC":0.4776},"pistol":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,6.40605,-59.39301,-154.39157,1],"curlR":[[0.18,0.3,0.54],[1.14,0.72,0.48],[1.02,0.66,0.54],[1.32,0.72,0],[-0.45,0,0]],"curlL":[[1.44,1.49,1.1],[0.3,1.2,0.96],[0.96,0.48,0.96],[0.6,0.66,0],[0.45,-0.45,0]],"palmC":0.0321},"pistol2":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,5.03752,-58.25908,-156.00966,1],"curlR":[[0.96,0.72,0],[1.08,0.72,0.54],[0.96,0.72,0.48],[1.44,0.6,0],[0.36,0.06,0]],"curlL":[[1.23,1.49,1.1],[1.23,1.2,1.1],[1.23,1.49,1.1],[1.23,1.49,0],[0,0,0]],"palmC":0.4078},"shotgun":{"mat":[-118.36034,0.58893,-12.76021,0,-12.58081,15.21941,117.39862,0,2.21207,118.06932,-15.06932,0,-1.9548,-45.45797,-166.57772,1],"curlR":[[1.23,1.49,1.1],[0,0.72,0.96],[1.02,1.56,0.84],[0,0.54,0],[0.45,0.45,0.45]],"curlL":[[0,0.54,1.08],[0.36,0.72,0.6],[0.54,0.72,0.54],[0.78,0.78,0],[-0.45,0.45,0]],"palmC":0.2057}};
+  var HOLD = {"lmg":{"fore":[-0.0326,-0.0103,0.0034],"lf":[-0.5007,0.4956,0.7097],"ln":[0.6459,0.7634,0],"wristQ":[-0.0977,-0.0393,-0.2005,-0.974],"hint":[0,-1,0]},"rifle":{"curlR":[[0.6,0.54,0.54],[0.9,0.8,0.7],[0.78,0.85,0.7],[1.14,0.75,0.5],[-0.45,0.12,0]],"curlL":[[0.45,0.78,0.5],[0.45,0.78,0.5],[0.45,0.78,0.5],[0.5,0.78,0.45],[-0.06,0,0]]},"rifle2":{"curlL":[[0.5,0.9,0.6],[0.5,0.9,0.6],[0.5,0.9,0.6],[0.55,0.85,0.55],[-0.45,0.45,0]]},"sniper":{"curlL":[[0.35,0.65,0.45],[0.35,0.65,0.45],[0.35,0.65,0.45],[0.4,0.62,0.4],[-0.3,0.2,0]],"curlR":[[0.3,0.75,0.5],[0.85,0.8,0.65],[0.8,0.85,0.65],[0.95,0.8,0.5],[-0.3,0.1,0]],"turn":0.5,"gunOff":[0.015,0,0.004]},"shotgun":{"curlL":[[0.4,0.7,0.5],[0.4,0.7,0.5],[0.4,0.7,0.5],[0.45,0.7,0.45],[-0.45,0.6,0]],"curlR":[[0.5,0.8,0.5],[0.9,0.8,0.7],[0.78,0.85,0.7],[1.14,0.75,0.5],[-0.45,0.12,0]],"gunOff":[0.2,0.095,0.022],"fore":[0,-0.01,-0.2]}};
   var FIT = {}, FR = .0095, fT = new T.Triangle(), fQ = new T.Vector3(), fA = new T.Vector3(), fB = new T.Vector3();
   function gunTris(m, c, rad) {
     var g = m.gun.geometry, p = g.attributes.position, ix = g.index, n = ix ? ix.count : p.count, out = [], M = m.gun.matrixWorld, r2 = rad * rad, a = new T.Vector3(), b = new T.Vector3(), d = new T.Vector3();
@@ -1097,6 +1119,134 @@ var SV = window.SV = window.SV || {};
       setFinger(row, ang); out.push(ang.slice()); if (fi > 0 && fi < 4) { var tot = ang[0] + ang[1] + ang[2]; if (tot > 1.3 && tot < 3.6 && skinDist(m, side, list, tris, 1) < .005) out.wrap++; } });
     return out;
   }
+  /* Closing a soldier's hand the way CLAUDE.md asks: all joints of a finger close together, and when a segment's own skin meets the
+     gun, that segment's joint and the ones before it stop while the rest go on closing round. The thumb closes toward whichever side
+     the gun is on. Used by the build tools (SV.refitCoupled); the results are stored in FITTAB. */
+  function closeCoupled(m, side, tris, start) {
+    var h = m.hands[side], G = handSkin(m, side), out = [], TH = .0008;
+    h.fingers.forEach(function (row, fi) {
+      var list = G.f[fi], n = row.length, segs = [], a = [], fz = [], MAX = fi < 4 ? [1.57, 1.92, 1.4] : [.9, .9, .9], RATE = fi < 4 ? [1, 1.15, .8] : [1, .8, .8], d = .03, dir = 1, k, j, it;
+      for (k = 0; k < n; k++) { segs.push(list.filter(function (e) { return e.seg === k; })); a.push(0); fz.push(0); }
+      var sd = function (k2) { return segs[k2].length ? skinDist(m, side, segs[k2], tris, 0) : 1; }, put = function () { setFinger(row, a.map(function (x) { return x * dir; })); };
+      if (fi === 4) { a[0] = .25; put(); var dp = sd(n - 1); dir = -1; put(); var dn = sd(n - 1); dir = dn < dp ? -1 : 1; a[0] = 0; }
+      else if (start && start[fi]) { for (k = 0; k < n; k++) a[k] = Math.min(MAX[k], start[fi][k] || 0);   // from the first-person hold: open it while any part is inside the gun
+        for (it = 0; it < 60; it++) { put(); var inside = false; for (k = 0; k < n; k++) if (sd(k) < 0) inside = true; if (!inside) break; for (j = 0; j < n; j++) a[j] = Math.max(0, a[j] - d * RATE[j]); } }
+      put();
+      for (it = 0; it < 120; it++) {
+        var moved = false; for (j = 0; j < n; j++) if (!fz[j] && a[j] < MAX[j]) { a[j] = Math.min(MAX[j], a[j] + d * RATE[j]); moved = true; }
+        if (!moved) break; put();
+        for (k = 0; k < n; k++) if (sd(k) < TH) for (j = 0; j <= k; j++) if (!fz[j]) { a[j] = Math.max(0, a[j] - d * RATE[j]); fz[j] = 1; }
+      }
+      put(); out.push(a.map(function (x) { return +(x * dir).toFixed(3); }));
+    });
+    return out;
+  }
+  /* The hold seen from outside, taken from the one worked out in first person (anatomy and contact checked there): each hand is put
+     where the first-person hand is on the gun (knuckle line, finger direction, palm facing), the right hand by placing the gun in
+     it, the left by reaching for that spot; then each finger closes on the gun by its own skin (closeCoupled). Build tool: the
+     result goes into FITTAB (gun in the right hand, finger angles) and HOLD (where the left hand reaches). */
+  SV.fitFromFP = function (gunId) {
+    var vm = SV.viewModel(gunId, 'A'), fr = vm.userData.frames, g0 = vm.userData.grasp, m = SV.soldier('A', gunId); if (!fr) return null; m.root.updateMatrixWorld(true);
+    m.gunOff = m.pistol ? new T.Vector3(-.05, 1.4, .46) : new T.Vector3(-.12, 1.38, .37);
+    var G2 = function (v, dir) { var o = new T.Vector3(-v.z, v.y, v.x); return dir ? o : o.add(m.gunOff); };   // gun space -> the held gun's own frame (muzzle +Z, the gun's right -X)
+    var basis = function (f, n) { f = f.clone().normalize(); var x = new T.Vector3().crossVectors(f, n).normalize(); n = new T.Vector3().crossVectors(x, f).normalize(); return new T.Matrix4().makeBasis(f, n, x); };
+    var side = function (sd) { var hb = m.hands[sd], ix = m.bones[sd + 'HandIndex1'], pk = m.bones[sd + 'HandPinky1']; return { h: hb, K: ix.position.clone().add(pk.position).multiplyScalar(.5), R: basis(hb.f, hb.n) }; };
+    /* the gun as a solid: its surface as small spheres (4 mm), in its own frame, found through a 1 cm grid. Distance from a point
+       of the hand's skin to the nearest of them, less its radius: needs no inside or outside, so it does not depend on which way the
+       model's triangles face (they do not all face the same way in this file). */
+    var gs0 = new T.Mesh(m.gun.geometry), sph = surfSpheres(gs0, new T.Matrix4(), .004), grid = {}, CELL = .01;
+    sph.forEach(function (q) { var k = Math.floor(q[0] / CELL) + ',' + Math.floor(q[1] / CELL) + ',' + Math.floor(q[2] / CELL); (grid[k] = grid[k] || []).push(q); });
+    var gInv = new T.Matrix4(), vv = new T.Vector3();
+    var near1 = function (p) { var cx = Math.floor(p.x / CELL), cy = Math.floor(p.y / CELL), cz = Math.floor(p.z / CELL), best = .03;
+      for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) for (var k = -1; k <= 1; k++) { var L = grid[(cx + i) + ',' + (cy + j) + ',' + (cz + k)]; if (!L) continue; for (var n = 0; n < L.length; n++) { var q = L[n], d = Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z) - q[3]; if (d < best) best = d; } } return best; };
+    var D = function (sd, list) { m.bones[sd + 'Hand'].updateMatrixWorld(true); gInv.copy(m.gun.matrixWorld).invert(); var best = 1, seen = {};
+      for (var i = 0; i < list.length; i++) { var e = list[i]; if (!seen[e.o.uuid]) { e.o.skeleton.update(); seen[e.o.uuid] = 1; } e.o.boneTransform(e.i, vv); vv.applyMatrix4(e.o.matrixWorld).applyMatrix4(gInv); var d = near1(vv); if (d < best) best = d; } return best; };
+    var pen = function (sd) { var G = handSkin(m, sd), n = 0, deep = 0; m.bones[sd + 'Hand'].updateMatrixWorld(true); gInv.copy(m.gun.matrixWorld).invert(); G.meshes.forEach(function (o) { o.skeleton.update(); });
+      G.all.forEach(function (e) { e.o.boneTransform(e.i, vv); vv.applyMatrix4(e.o.matrixWorld).applyMatrix4(gInv); var d = near1(vv); if (d < -.001) { n++; deep = Math.max(deep, -d); } }); return { n: n, deep_mm: +(deep * 1000).toFixed(1), of: G.all.length }; };
+    /* close one hand: all joints of a finger together; a segment whose skin meets the gun stops with the joints before it, the rest go on (CLAUDE.md).
+       start: the first-person angles; opened first while any part is inside. The thumb closes toward whichever side the gun is on. */
+    var close = function (sd, start, skip) { var h = m.hands[sd], G = handSkin(m, sd), out = [];
+      h.fingers.forEach(function (row, fi) { var n = row.length, segs = [], a = [], fz = [], MAX = fi < 4 ? [1.57, 1.92, 1.4] : [.9, .9, .9], RATE = fi < 4 ? [1, 1.15, .8] : [1, .8, .8], d = .03, dir = 1, k, j, it;
+        for (k = 0; k < n; k++) { segs.push(G.f[fi].filter(function (e) { return e.seg === k; })); a.push(0); fz.push(0); }
+        var sdk = function (k2) { return segs[k2].length ? D(sd, segs[k2]) : 1; }, put = function () { setFinger(row, a.map(function (x) { return x * dir; })); };
+        if (fi === 4) { a[0] = .25; put(); var dp = sdk(n - 1); dir = -1; put(); var dn = sdk(n - 1); dir = dn < dp ? -1 : 1; a[0] = 0; }
+        else if (start && start[fi]) { for (k = 0; k < n; k++) a[k] = Math.min(MAX[k], start[fi][k] || 0);
+          for (it = 0; it < 60; it++) { put(); var ins = false; for (k = 0; k < n; k++) if (sdk(k) < -.0005) ins = true; if (!ins) break; for (j = 0; j < n; j++) a[j] = Math.max(0, a[j] - d * RATE[j]); } }
+        put();
+        for (it = 0; it < 120; it++) { var mv = false; for (j = 0; j < n; j++) if (!fz[j] && a[j] < MAX[j]) { a[j] = Math.min(MAX[j], a[j] + d * RATE[j]); mv = true; } if (!mv) break; put();
+          for (k = 0; k < n; k++) if (sdk(k) < .0005) for (j = 0; j <= k; j++) if (!fz[j]) { a[j] = Math.max(0, a[j] - d * RATE[j]); fz[j] = 1; } }
+        put(); out.push(a.map(function (x) { return +(x * dir).toFixed(3); })); });
+      return out; };
+    var gaps = function (sd) { return handSkin(m, sd).f.map(function (list) { return +(D(sd, list) * 1000).toFixed(1); }); };
+    var maxed = function (c, f3) { return c[f3][0] >= 1.56 && c[f3][1] >= 1.9; };
+    var score = function (sd, c, from) { var gp = gaps(sd), p3 = pen(sd), sc = p3.n * .3 + p3.deep_mm * 2; for (var f3 = from; f3 < 4; f3++) { if (gp[f3] > 1.5) sc += gp[f3]; if (maxed(c, f3)) sc += 20; } return sc; };
+
+    // ---- right hand: the hand turns at the wrist to take the gun the way the first-person hand does; the gun keeps its aim
+    var Rs = side('Right'), F0 = fr[0], Rg = basis(G2(F0.f, 1), G2(F0.n, 1)), Hn = m.bones.RightHand, sw = Hn.getWorldScale(new T.Vector3()).x, Kg = G2(F0.K);
+    var qG = m.gun.getWorldQuaternion(new T.Quaternion()), qHw = qG.clone().multiply(new T.Quaternion().setFromRotationMatrix(Rg)).multiply(new T.Quaternion().setFromRotationMatrix(Rs.R).invert()),
+      qP = Hn.parent.getWorldQuaternion(new T.Quaternion()), qL = qP.clone().invert().multiply(qHw), q0 = Hn.quaternion.clone(), wQ = q0.clone().invert().multiply(qL); m.wristQ = null; Hn.quaternion.copy(qL); m.root.updateMatrixWorld(true);   // (held as it is while fitting; poseHeld turns the animated hand by wQ in play)
+    var wristOfR = function () { var fa = new T.Vector3().setFromMatrixPosition(Hn.matrixWorld).sub(new T.Vector3().setFromMatrixPosition(m.bones.RightForeArm.matrixWorld)).normalize(), q = Hn.getWorldQuaternion(new T.Quaternion()), f = Rs.h.f.clone().applyQuaternion(q), n = Rs.h.n.clone().applyQuaternion(q), x = new T.Vector3().crossVectors(f, n);
+      return { total: +(f.angleTo(fa) * 180 / PI).toFixed(1), flex: +(Math.atan2(fa.dot(n), fa.dot(f)) * 180 / PI).toFixed(1), side: +(Math.atan2(fa.dot(x), fa.dot(f)) * 180 / PI).toFixed(1) }; };
+    var rot = Rs.R.clone().multiply(Rg.clone().transpose()), M = rot.clone().scale(new T.Vector3(1 / sw, 1 / sw, 1 / sw)); M.setPosition(Rs.K.clone().sub(Kg.clone().applyMatrix4(M)));
+    m.gun.matrix.copy(M); m.gun.matrixWorldNeedsUpdate = true; m.root.updateMatrixWorld(true);
+    var GR = handSkin(m, 'Right'), M0 = m.gun.matrix.clone(), qHn = Hn.getWorldQuaternion(new T.Quaternion()), rf = Rs.h.f.clone().applyQuaternion(qHn).normalize(), rn = Rs.h.n.clone().applyQuaternion(qHn).normalize(), rx = new T.Vector3().crossVectors(rf, rn).normalize();
+    var moveGun = function (dv) { var Hw = Hn.matrixWorld.clone(); m.gun.matrix.premultiply(Hw.clone().invert().multiply(new T.Matrix4().makeTranslation(dv.x, dv.y, dv.z)).multiply(Hw)); m.gun.matrixWorldNeedsUpdate = true; m.root.updateMatrixWorld(true); };
+    var seatR = function () { setHand(m, 'Right', [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]); for (var it = 0; it < 8; it++) { var gp = D('Right', GR.palm); if (gp > .0003 && gp < .0012) break; moveGun(rn.clone().multiplyScalar(-(gp - .0008))); } };   // the palm's skin just on the gun
+    var bestR = null, bestRS = 1e9;
+    for (var b1 = -.024; b1 <= .0241; b1 += .006) for (var b2 = -.02; b2 <= .0201; b2 += .005) { m.gun.matrix.copy(M0); moveGun(rf.clone().multiplyScalar(b1).addScaledVector(rx, b2)); seatR(); var c1 = close('Right', g0[0].curl); setHand(m, 'Right', c1); var sc1 = score('Right', c1, 1) + Math.hypot(b1, b2) * 100; if (sc1 < bestRS) { bestRS = sc1; bestR = [b1, b2]; } }
+    m.gun.matrix.copy(M0); moveGun(rf.clone().multiplyScalar(bestR[0]).addScaledVector(rx, bestR[1])); seatR(); m.curlR = close('Right', g0[0].curl); setHand(m, 'Right', m.curlR);
+    var repR = { shift_mm: bestR.map(function (x) { return x * 1000; }), palm_mm: +(D('Right', GR.palm) * 1000).toFixed(1), fingers_mm: gaps('Right'), pen: pen('Right'), wrist: wristOfR() };
+
+    // ---- left hand: reach for the place and facing of the first-person left hand; the elbow is turned for the straightest wrist
+    var Ls = side('Left'), F1 = fr[1], fL = G2(F1.f, 1).normalize(), nL = G2(F1.n, 1).normalize(), KL = G2(F1.K), hl = Ls.h, LHb = m.bones.LeftHand;
+    var pl = hl.f.clone().multiplyScalar(hl.len * .78).addScaledVector(hl.n, hl.len * m.palmC), off = pl.clone().sub(Ls.K).applyMatrix4(Ls.R.clone().transpose()).applyMatrix4(basis(fL, nL)).multiplyScalar(LHb.getWorldScale(new T.Vector3()).x);
+    var t0 = KL.clone().add(off), base = (m.fore || m.grip).clone().add(new T.Vector3(0, .006, 0)), lx = new T.Vector3().crossVectors(fL, nL).normalize(), GL = handSkin(m, 'Left');
+    m.ov = { fore: [0, 0, 0], lf: fL.toArray(), ln: nL.toArray(), wristQ: wQ.toArray(), hint: [.6, -1, .1] };
+    var wristOfL = function () { var fa = new T.Vector3().setFromMatrixPosition(LHb.matrixWorld).sub(new T.Vector3().setFromMatrixPosition(m.bones.LeftForeArm.matrixWorld)).normalize(), q = LHb.getWorldQuaternion(new T.Quaternion()), f = hl.f.clone().applyQuaternion(q), n = hl.n.clone().applyQuaternion(q), x = new T.Vector3().crossVectors(f, n);
+      return { total: +(f.angleTo(fa) * 180 / PI).toFixed(1), flex: +(Math.atan2(fa.dot(n), fa.dot(f)) * 180 / PI).toFixed(1), side: +(Math.atan2(fa.dot(x), fa.dot(f)) * 180 / PI).toFixed(1), fdErr: +(f.angleTo(fL.clone().transformDirection(m.gun.matrixWorld)) * 180 / PI).toFixed(1) }; };
+    /* on this left hand x runs toward the little finger: the forearm leaning that way is the hand bent toward the thumb (radial, at most 20); the other way ulnar (at most 30) */
+    var wPen = function (w) { return Math.max(0, Math.abs(w.flex) - 25) * 10 + Math.max(0, w.side - 15) * 10 + Math.max(0, w.side - 20) * 200 + Math.max(0, -w.side - 25) * 10 + Math.max(0, -w.side - 30) * 200 + w.fdErr * 3; };   // radial past 20 or ulnar past 30: out
+    var placeL = function (a1, a2, a3) { var tg = t0.clone().addScaledVector(nL, a1).addScaledVector(fL, a2).addScaledVector(lx, a3); m.ov.fore = tg.sub(base).toArray(); m.curlL = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]; SV.poseHeld(m, 0); m.root.updateMatrixWorld(true); };
+    var bestH = null, bestHS = 1e9; for (var hy = -1; hy <= .21; hy += .4) for (var hx = -1; hx <= 1.01; hx += .5) for (var hz = -1; hz <= 1.01; hz += .5) { m.ov.hint = [hx, hy, hz]; placeL(0, 0, 0); var wq = wristOfL(), sq = wPen(wq) + wq.total * .1; if (sq < bestHS) { bestHS = sq; bestH = [hx, hy, hz]; } }
+    m.ov.hint = bestH;
+    /* and the hold itself: shifted along the hand's axes, and rolled round the barrel a little (the soldier's hand is not the first-person hand) */
+    var fL0 = fL.clone(), nL0 = nL.clone(), bar = new T.Vector3(0, 0, 1), rollL = function (deg) { var q = new T.Quaternion().setFromAxisAngle(bar, deg * PI / 180); fL.copy(fL0).applyQuaternion(q); nL.copy(nL0).applyQuaternion(q); lx.crossVectors(fL, nL).normalize(); m.ov.lf = fL.toArray(); m.ov.ln = nL.toArray();
+      off = pl.clone().sub(Ls.K).applyMatrix4(Ls.R.clone().transpose()).applyMatrix4(basis(fL, nL)).multiplyScalar(LHb.getWorldScale(new T.Vector3()).x); t0 = KL.clone().add(off); };
+    var bestL = null, bestLS = 1e9;
+    for (var r5 = -30; r5 <= 30.1; r5 += 10) { rollL(r5); for (var a1 = -.012; a1 <= .0121; a1 += .004) for (var a2 = -.024; a2 <= .0241; a2 += .008) for (var a3 = -.04; a3 <= .0401; a3 += .01) { placeL(a1, a2, a3); var c2 = close('Left', g0[1].curl); m.curlL = c2; SV.poseHeld(m, 0); m.root.updateMatrixWorld(true); var sc2 = score('Left', c2, 0) + wPen(wristOfL()) + Math.max(0, D('Left', GL.palm) * 1000 - 2) * .5 + Math.hypot(a1, a2, a3) * 100 + Math.abs(r5) * .05; if (sc2 < bestLS) { bestLS = sc2; bestL = [a1, a2, a3, r5]; } } }
+    rollL(bestL[3]); placeL(bestL[0], bestL[1], bestL[2]); m.curlL = close('Left', g0[1].curl); SV.poseHeld(m, 0); m.root.updateMatrixWorld(true);
+    var repL = { shift_mm: bestL.slice(0, 3).map(function (x) { return x * 1000; }), roll: bestL[3], hint: bestH, palm_mm: +(D('Left', GL.palm) * 1000).toFixed(1), fingers_mm: gaps('Left'), pen: pen('Left'), wrist: wristOfL() };
+    SV.lastFitM = m; var r4 = function (a) { return a.map(function (x) { return +(+x).toFixed(4); }); };
+    return { R: repR, L: repL, fit: { mat: m.gun.matrix.toArray().map(function (x) { return +x.toFixed(5); }), curlR: m.curlR, curlL: m.curlL, palmC: +m.palmC.toFixed(4) },
+      hold: { fore: r4(m.ov.fore), lf: r4(m.ov.lf), ln: r4(m.ov.ln), wristQ: r4(m.ov.wristQ), hint: m.ov.hint.map(function (x) { return +x.toFixed(2); }) } };
+  };
+  /* the check for any soldier as the game builds him: each hand's palm and fingers against the gun's surface spheres, how much of the
+     hand is inside, and the wrist against the forearm (the same measures SV.fitFromFP works to) */
+  SV.holdCheck = function (m) {
+    m.root.updateMatrixWorld(true); var sph = surfSpheres(new T.Mesh(m.gun.geometry), new T.Matrix4(), .004), grid = {}, C = .01, gInv = new T.Matrix4().copy(m.gun.matrixWorld).invert(), v = new T.Vector3(), out = {};
+    sph.forEach(function (q) { var k = Math.floor(q[0] / C) + ',' + Math.floor(q[1] / C) + ',' + Math.floor(q[2] / C); (grid[k] = grid[k] || []).push(q); });
+    var d1 = function (p) { var cx = Math.floor(p.x / C), cy = Math.floor(p.y / C), cz = Math.floor(p.z / C), b = .03; for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) for (var k = -1; k <= 1; k++) { var L = grid[(cx + i) + ',' + (cy + j) + ',' + (cz + k)]; if (L) for (var n = 0; n < L.length; n++) { var q = L[n], d = Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z) - q[3]; if (d < b) b = d; } } return b; };
+    ['Right', 'Left'].forEach(function (sd) { var G = handSkin(m, sd), h = m.hands[sd], Hb = m.bones[sd + 'Hand']; G.meshes.forEach(function (o) { o.skeleton.update(); });
+      var D = function (list) { var b = 1; list.forEach(function (e) { e.o.boneTransform(e.i, v); v.applyMatrix4(e.o.matrixWorld).applyMatrix4(gInv); b = Math.min(b, d1(v)); }); return +(b * 1000).toFixed(1); };
+      var n = 0, deep = 0; G.all.forEach(function (e) { e.o.boneTransform(e.i, v); v.applyMatrix4(e.o.matrixWorld).applyMatrix4(gInv); var d = d1(v); if (d < -.001) { n++; deep = Math.max(deep, -d); } });
+      var fa = new T.Vector3().setFromMatrixPosition(Hb.matrixWorld).sub(new T.Vector3().setFromMatrixPosition(m.bones[sd + 'ForeArm'].matrixWorld)).normalize(), q = Hb.getWorldQuaternion(new T.Quaternion()), f = h.f.clone().applyQuaternion(q), nn = h.n.clone().applyQuaternion(q), x = new T.Vector3().crossVectors(f, nn);
+      out[sd] = { palm_mm: D(G.palm), fingers_mm: G.f.map(D), inside: n, deep_mm: +(deep * 1000).toFixed(1), wrist: { total: +(f.angleTo(fa) * 180 / PI).toFixed(1), flex: +(Math.atan2(fa.dot(nn), fa.dot(f)) * 180 / PI).toFixed(1), side: +(Math.atan2(fa.dot(x), fa.dot(f)) * 180 / PI).toFixed(1) } }; });
+    return out;
+  };
+  SV.refitCoupled = function (gunId) {
+    var m = SV.soldier('A', gunId); m.root.updateMatrixWorld(true); var Hn = m.bones.RightHand, LH = m.bones.LeftHand, h = m.hands.Right, GR = handSkin(m, 'Right'), GL = handSkin(m, 'Left'), rep = {};
+    setHand(m, 'Right', [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]); m.root.updateMatrixWorld(true);
+    var wp = new T.Vector3().setFromMatrixPosition(Hn.matrixWorld), qH = new T.Quaternion(); Hn.getWorldQuaternion(qH); var nW = h.n.clone().applyQuaternion(qH).normalize(), tr, g;
+    for (var it = 0; it < 4; it++) { tr = gunTris(m, wp, .16); g = skinDist(m, 'Right', GR.palm, tr, 0); if (!it) rep.palmR0 = g;
+      var H = Hn.matrixWorld.clone(), Hi = H.clone().invert(), dv = nW.clone().multiplyScalar(-(g - .0008)); m.gun.matrix.premultiply(Hi.clone().multiply(new T.Matrix4().makeTranslation(dv.x, dv.y, dv.z)).multiply(H)); m.gun.matrixWorldNeedsUpdate = true; m.root.updateMatrixWorld(true); }
+    tr = gunTris(m, wp, .16); rep.palmR = skinDist(m, 'Right', GR.palm, tr, 0); m.curlR = closeCoupled(m, 'Right', tr); rep.penR = skinPen(m, 'Right', tr);
+    m.curlL = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]; SV.poseHeld(m, 0); m.root.updateMatrixWorld(true);
+    var tl = gunTris(m, new T.Vector3().setFromMatrixPosition(LH.matrixWorld), .2), hl = m.hands.Left, scl = LH.getWorldScale(new T.Vector3()).x;
+    for (var it2 = 0; it2 < 4; it2++) { g = skinDist(m, 'Left', GL.palm, tl, 0); if (!it2) rep.palmL0 = g; m.palmC -= Math.max(-.03, Math.min(.03, g - .0008)) / (hl.len * scl); SV.poseHeld(m, 0); m.root.updateMatrixWorld(true); tl = gunTris(m, new T.Vector3().setFromMatrixPosition(LH.matrixWorld), .2); }
+    rep.palmL = skinDist(m, 'Left', GL.palm, tl, 0); m.curlL = closeCoupled(m, 'Left', tl); SV.poseHeld(m, 0); m.root.updateMatrixWorld(true); rep.penL = skinPen(m, 'Left', tl);
+    var fit = { mat: m.gun.matrix.toArray().map(function (x) { return +x.toFixed(5); }), curlR: m.curlR, curlL: m.curlL, palmC: +m.palmC.toFixed(4) };
+    return { fit: fit, rep: rep, mesh: SV.meshReport(m) };
+  };
   function palmGap(m, side, tris) {   /* how far the palm's surface is from the gun (negative: sunk in) */
     var h = m.hands[side], Hn = m.bones[side + 'Hand']; Hn.updateMatrixWorld(true); var sc = Hn.getWorldScale(new T.Vector3()).x;
     return surfDist(tris, new T.Vector3().copy(h.f).multiplyScalar(h.len * .78).applyMatrix4(Hn.matrixWorld)) - h.len * .16 * sc;
@@ -1144,7 +1294,8 @@ var SV = window.SV = window.SV || {};
     /* turn: the same wrist turn, but with the palm kept on the same spot of the gun (the gun shifts a little instead of the hand sliding off it) */
     if (ov && ov.turn) { var qt = new T.Quaternion().setFromAxisAngle(h.n, ov.turn), pc2 = h.f.clone().multiplyScalar(h.len * .78), mv = pc2.clone().applyQuaternion(qt).sub(pc2);
       m.gun.matrix.premultiply(new T.Matrix4().makeTranslation(mv.x, mv.y, mv.z)); ov = Object.assign({}, ov, { wrist: ov.turn }); }
-    m.wristQ = null; if (ov && ov.wrist) { m.wristQ = new T.Quaternion().setFromAxisAngle(h.n, ov.wrist); m.gun.matrix.premultiply(new T.Matrix4().makeRotationFromQuaternion(m.wristQ.clone().invert())); m.gun.matrixWorldNeedsUpdate = true; Hn.quaternion.multiply(m.wristQ); }
+    m.wristQ = null; if (ov && ov.wristQ) { m.wristQ = new T.Quaternion().fromArray(ov.wristQ); Hn.quaternion.multiply(m.wristQ); }   /* the hand turned at the wrist to hold as in first person (SV.fitFromFP); FITTAB's gun matrix already allows for it */
+    else if (ov && ov.wrist) { m.wristQ = new T.Quaternion().setFromAxisAngle(h.n, ov.wrist); m.gun.matrix.premultiply(new T.Matrix4().makeRotationFromQuaternion(m.wristQ.clone().invert())); m.gun.matrixWorldNeedsUpdate = true; Hn.quaternion.multiply(m.wristQ); }
     setHand(m, 'Right', m.curlR);
     m.root.updateMatrixWorld(true); m.muzzle = m.muzzle.clone().applyMatrix4(m.gun.matrixWorld).applyMatrix4(new T.Matrix4().copy(m.up.matrixWorld).invert());
   }
@@ -1263,7 +1414,7 @@ var SV = window.SV = window.SV || {};
   SV.poseHeld = function (m, free) { if (m.wristQ) m.bones.RightHand.quaternion.multiply(m.wristQ); if (m.curlR) setHand(m, 'Right', m.curlR); if (free > .99) return; m.root.updateMatrixWorld(true); mI.copy(m.up.matrixWorld).invert();
     if (m.pistol) { vG.copy(m.grip); vG.x += .03; vG.z += .012; vG.y -= .012; } else { vG.copy(m.fore || m.grip); vG.y += .006; }
     var ov = m.ov; if (ov && ov.fore) { vG.x += ov.fore[0]; vG.y += ov.fore[1]; vG.z += ov.fore[2]; } vG.applyMatrix4(m.gun.matrixWorld).applyMatrix4(mI); m.gun.getWorldQuaternion(qG); m.up.getWorldQuaternion(qU); qG.premultiply(qU.invert());
-    vLf.copy(m.pistol ? HG.pf : m.vgrip ? HG.vf : HG.lf); vLn.copy(m.pistol ? HG.pn : m.vgrip ? HG.vn : HG.ln); if (ov && ov.lf) vLf.fromArray(ov.lf); if (ov && ov.ln) vLn.fromArray(ov.ln); vLf.applyQuaternion(qG); vLn.applyQuaternion(qG); reach(m, 'Left', vG, .6, -1, .1, vLf, vLn, m.curlL || (m.pistol ? CURL_WRAP : m.vgrip ? CURL_GRIP2 : CURL_FORE)); };
+    vLf.copy(m.pistol ? HG.pf : m.vgrip ? HG.vf : HG.lf); vLn.copy(m.pistol ? HG.pn : m.vgrip ? HG.vn : HG.ln); if (ov && ov.lf) vLf.fromArray(ov.lf); if (ov && ov.ln) vLn.fromArray(ov.ln); vLf.applyQuaternion(qG); vLn.applyQuaternion(qG); var hn = (ov && ov.hint) || [.6, -1, .1]; reach(m, 'Left', vG, hn[0], hn[1], hn[2], vLf, vLn, m.curlL || (m.pistol ? CURL_WRAP : m.vgrip ? CURL_GRIP2 : CURL_FORE)); };   // hint: which way the elbow points
   SV.poseArms = function (m) { if (m.rigid) return; m.root.updateMatrixWorld(true);
     HG.rt.copy(m.grip); HG.rt.x -= .014; reach(m, 'Right', HG.rt, -1, -.75, -.3, HG.rf, HG.rn, CURL_GRIP);   /* firing elbow out to the side and down */
     if (m.pistol) { HG.lt.copy(m.grip); HG.lt.x += .03; HG.lt.z += .012; HG.lt.y -= .012; reach(m, 'Left', HG.lt, .6, -1, .1, HG.pf, HG.pn, CURL_WRAP); }
