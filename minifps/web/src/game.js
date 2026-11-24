@@ -716,7 +716,7 @@
     var open = r < 0 ? 0 : sm(.12, .24, r) - sm(.74, .86, r); if (R.cover) R.cover.rotation.z = -open * R.coverOpen;
     var chK = r < 0 ? 0 : r < .5 ? sm(.05, .12, r) - sm(.24, .31, r) : sm(.66, .74, r) - sm(.86, .92, r); if (R.coverHand) { hp(R.coverHand, chK); R.coverHand.position.add(vEdge.copy(R.coverEdge).applyAxisAngle(ZAX, R.cover.rotation.z)).sub(vE2.copy(R.coverEdge).applyAxisAngle(ZAX, -R.coverOpen)); }   /* the hand follows the cover's rear edge, its forearm keeping its direction */
     var mhK = r < 0 ? 0 : sm(.28, .34, r) - sm(.62, .68, r); if (R.magHand) hp(R.magHand, mhK);
-    var far = r < 0 ? 0 : r < .48 ? sm(.34, .46, r) : 1 - sm(.5, .62, r); if (R.mag) { R.mag.position.copy(DOWN).multiplyScalar(far * 1.2); R.mag.position.z -= .12 * far; }   /* down and out to the left, out of the picture */
+    var far = r < 0 ? 0 : r < .48 ? sm(.34, .46, r) : 1 - sm(.5, .62, r); if (R.mag) { R.mag.position.copy(DOWN).multiplyScalar(far * (window.RP && window.RP.boxD || .3)); R.mag.position.z -= (window.RP && window.RP.boxZ || .1) * far; }   /* down and out to the left, still in view, in the hand */
     vmRoot.rotation.x += RL[0] * tilt; vmRoot.rotation.y += RL[1] * tilt; vmRoot.rotation.z += RL[2] * tilt; vmRoot.position.x += RL[3] * tilt; vmRoot.position.y += RL[4] * tilt; vmRoot.position.z += RL[5] * tilt;
   }
   function reloadPose(id, r, U, gs) {

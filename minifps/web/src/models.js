@@ -553,7 +553,13 @@ var SV = window.SV = window.SV || {};
     var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], GFR[k] - .001); }); });
     var tp = chain(tc, [[0, H.ez, th0[0]], [0, H.ex, -ta[0]], [1, tax, -ta[1]], [2, tax, -ta[2]]]); all.push([0, 1, 2].some(function (k) { return hit(tp[k], tp[k + 1], GTR[k] - .001); }));
     var dbg = window.GRASPDBG ? tp.map(function (v, k) { if (k === 3) return v.toArray(); var b = tp[k + 1], best = 1e9, bs = null; obs.forEach(function (s) { var ux = b.x - v.x, uy = b.y - v.y, uz = b.z - v.z, L2 = ux * ux + uy * uy + uz * uz, t = Math.max(0, Math.min(1, ((s[0] - v.x) * ux + (s[1] - v.y) * uy + (s[2] - v.z) * uz) / L2)), dd = Math.hypot(s[0] - v.x - ux * t, s[1] - v.y - uy * t, s[2] - v.z - uz * t) - s[3] - GTR[k]; if (dd < best) { best = dd; bs = s; } }); return [v.toArray(), +best.toFixed(4), bs]; }) : null;
-    return { curl: curl, th: [th0[0], -ta[1], -ta[2], -ta[0]], overlap: all, dbg: dbg, thumbFree: !(reach && reach.thumb) || !!skT };   // overlap: does any bone still sink into the object (should all be false)
+    /* a finger that met nothing (past the end of a narrow part) does not close into a fist on its own: the fingers share tendons, so it
+       follows its touching neighbour's bend, as far as that does not reach into the object */
+    var fgap = function (n, c) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return ['index', 'middle', 'ring', 'pinky'][n] + '-finger-' + j; }), [[0, H.ez, -c[0]], [1, H.ez, -c[1]], [2, H.ez, -c[2]]]); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return g; };
+    [3, 0, 2, 1].forEach(function (n) { if (fgap(n, curl[n]) < .004) return; var nb = n === 0 ? 1 : n === 3 ? 2 : (fgap(n - 1, curl[n - 1]) < fgap(n + 1, curl[n + 1]) ? n - 1 : n + 1); if (fgap(nb, curl[nb]) < .004 && fgap(n, curl[nb]) > -.0005) curl[n] = curl[nb].slice(); });
+    var gapF = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); var g = 1; for (var k = 0; k < 3; k++) g = Math.min(g, gapOf(p[k], p[k + 1], GFR[k])); return +(g * 1000).toFixed(1); });
+    var gT = 1; for (var kT = 1; kT < 3; kT++) gT = Math.min(gT, gapOf(tp[kT], tp[kT + 1], GTR[kT])); gapF.push(+(gT * 1000).toFixed(1));
+    return { curl: curl, th: [th0[0], -ta[1], -ta[2], -ta[0]], overlap: all, gap: gapF, dbg: dbg, thumbFree: !(reach && reach.thumb) || !!skT };   // gap: how far each finger ends from the object (mm); all near 0 = it holds it   // overlap: does any bone still sink into the object (should all be false)
   }
   function realHand(g, O, ax, pn, wv, sg, r, E, sleeve, glove, o) {
     if (o.off) O = O.clone().add(new T.Vector3(o.off[0], o.off[1], o.off[2]));
@@ -864,13 +870,17 @@ var SV = window.SV = window.SV || {};
       /* the hand is fitted to the cover as it is when lifted (open), against the cover alone: that is where it holds it */
       var OPEN = 1.3, cE = V(cb.min.x + .012, cb.max.y - .008, (cb.min.z + cb.max.z) / 2).sub(hinge); cp.rotation.z = -OPEN; out.updateMatrixWorld(true);
       var cO = cE.clone().applyAxisAngle(V(0, 0, 1), -OPEN).add(hinge), covS = sphOf(cov); cp.rotation.z = 0; out.updateMatrixWorld(true);
-      var cH = armHand(LP.cF ? V(LP.cF[0], LP.cF[1], LP.cF[2]) : V(-.05, -.95, -.3), V(0, 0, 1), -1), ch = new T.Group();
-      hand(ch, cO, cH.ax, cH.pn, -1, .008, cO.clone().addScaledVector(cH.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: .03, up: .02, sink: 0, thumb: [-.6, 0, 0, 0], grasp: covS, seat: 1, reach: { thumb: [cO.x + .03, cO.y + .02, cO.z], touch: true } });
-      R.coverHand = new T.Group(); out.add(R.coverHand); R.coverHand.add(mesh2(ch)); R.coverHand.visible = false; R.coverEdge = cE; R.coverOpen = OPEN; grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);   // the hand keeps its forearm's direction and follows the cover's rear edge as it swings up grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);
-      /* the box is carried on the palm from underneath, fingers across its bottom toward the gun's right, forearm in line from the lower left */
-      var mf = V(.25, .3, 1).normalize(), mpn = V(0, -1, 0).addScaledVector(mf, mf.y).normalize(), mwv = mf.clone().multiplyScalar(-1), max = new T.Vector3().crossVectors(mpn, mwv).normalize(), mh = new T.Group(),
-        mO = V((mb.min.x + mb.max.x) / 2, mb.min.y - .01, (mb.min.z + mb.max.z) / 2 - .02);
-      hand(mh, mO, max, mpn, -1, .01, mO.clone().addScaledVector(mf, -.42), sl, gl, { pad: MAT.poly2, yaw: 0, top: .03, up: .02, sink: 0, thumb: [-.6, 0, 0, 0], grasp: sphOf(mag), seat: 1, reach: { thumb: [mO.x + .02, mb.min.y + .04, mb.min.z - .004], touch: true } });
+      /* from the reference (the raised cover held at its end): the forearm comes up diagonally from the lower left, the back of the
+         hand faces the eye, the palm lies on the cover's (now upright) top face and the fingers close over its end */
+      var poseH = function (F, PN) { F = F.clone().normalize(); var pn = PN.clone().normalize().addScaledVector(F, -PN.clone().normalize().dot(F)).normalize(); return { F: F, pn: pn, ax: new T.Vector3().crossVectors(pn, F).normalize() }; };
+      cO.add(V(0, 0, .01)); var cH = poseH(LP.cF ? V(LP.cF[0], LP.cF[1], LP.cF[2]) : V(-.25, -.75, -.6), LP.cP ? V(LP.cP[0], LP.cP[1], LP.cP[2]) : V(-1, 0, -.4)), ch = new T.Group(), cOf = LP.cO ? V(LP.cO[0], LP.cO[1], LP.cO[2]) : V(0, 0, 0);
+      cO.add(cOf); hand(ch, cO, cH.ax, cH.pn, -1, LP.cR || .01, cO.clone().addScaledVector(cH.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.cTop == null ? .03 : LP.cTop, up: LP.cUp == null ? .02 : LP.cUp, sink: 0, thumb: [-.6, 0, 0, 0], grasp: covS, seat: 1, graspLo: [-.35, 0, 0] });
+      R.coverHand = new T.Group(); out.add(R.coverHand); R.coverHand.add(mesh2(ch)); R.coverHand.visible = false; R.coverEdge = cE; R.coverOpen = OPEN; grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);   // the hand keeps its forearm's direction and follows the cover's rear edge as it swings up
+      /* the box: taken by its left side (the side facing the eye), back of the hand out, palm on the side, fingers round its front
+         edge; forearm from the lower left behind it */
+      var mH = poseH(LP.mF ? V(LP.mF[0], LP.mF[1], LP.mF[2]) : V(-.7, -.45, -.55), LP.mP ? V(LP.mP[0], LP.mP[1], LP.mP[2]) : V(-.2, -.3, -1)), mh = new T.Group(),
+        mO = V(mb.max.x - .02, (mb.min.y + mb.max.y) / 2 - .02, mb.min.z).add(LP.mO ? V(LP.mO[0], LP.mO[1], LP.mO[2]) : V(0, 0, 0));
+      hand(mh, mO, mH.ax, mH.pn, -1, LP.mR || .01, mO.clone().addScaledVector(mH.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.mTop == null ? .03 : LP.mTop, up: LP.mUp == null ? .02 : LP.mUp, sink: 0, thumb: [-.6, 0, 0, 0], grasp: sphOf(mag), seat: 1, graspLo: [-.35, 0, 0] });
       R.magHand = mesh2(mh); R.magHand.visible = false; mg.attach(R.magHand); grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);
     }
     out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip, grasp: grasp, wrists: wrists, frames: frames, palmGap: palmGap, H: {}, P: {}, lmgR: R };
