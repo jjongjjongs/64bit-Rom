@@ -298,8 +298,34 @@
   function inBox(b, x, z, m) { if (b.rot) { var ex = x - b.ox, ez = z - b.oz, t = ex * b.c - ez * b.s; z = ex * b.s + ez * b.c; x = t; } return x > b.minx - m && x < b.maxx + m && z > b.minz - m && z < b.maxz + m; }
   // One grid of 1 m cells per storey. Storey 1 exists where a box top lies at the map's upper-floor height (map.H). Stairs and
   // ladders are explicit links between two cells (map.links); a path node reached through a link is flagged "jump".
-  function lvl(a) { return nav && nav.H && a.pos.y > nav.H - 1.2 ? 1 : 0; }
+  function lvl(a) { if (nav && nav.hm) return layerAt(a.pos.x, a.pos.z, a.pos.y); return nav && nav.H && a.pos.y > nav.H - 1.2 ? 1 : 0; }
+  // Height mode (map.hnav): every 1 m cell keeps up to two floors (the lowest walkable surfaces with head room over them), each
+  // at its own height. A walker steps to a neighbouring cell's floor when the two heights differ by .5 m or less, so slopes
+  // built of low steps, mounds and passages under them all work without links. Layer 0 / 1 are only "lower" / "upper" here.
+  function layerAt(x, z, y) { var c = cellOf(x, z, 0), best = 0, bd = 1e9; [c, c + nav.N].forEach(function (k, l) { if (nav.blk[k]) return; var d = Math.abs(nav.fy[k] - y); if (d < bd) { bd = d; best = l; } }); return best; }
+  function hStep(a, b) { return !nav.blk[b] && Math.abs(nav.fy[a] - nav.fy[b]) <= .5; }
+  function hNear(c, n2) { var r = []; if (hStep(c, n2)) r.push(n2); if (hStep(c, n2 + nav.N)) r.push(n2 + nav.N); return r; }   // the floors of 2D cell n2 one can step to from node c
+  function buildHNav(map) {
+    var bd = map.bounds, nx = Math.ceil(bd.maxx - bd.minx), nz = Math.ceil(bd.maxz - bd.minz), N = nx * nz, blk = new Uint8Array(N * 2).fill(1), fy = new Float32Array(N * 2), pad = map.navPad || .4, i, j, k, l;
+    for (j = 0; j < nz; j++) for (i = 0; i < nx; i++) {
+      var x = bd.minx + i + .5, z = bd.minz + j + .5, L = boxesNear(x - .1, z - .1, x + .1, z + .1).slice(), tops = [0], fl = [];
+      L.forEach(function (q) { var b = boxes[q]; if (!b.soft && inBox(b, x, z, 0)) tops.push(b.maxy); });
+      tops.sort(function (p, q) { return p - q; });
+      tops.forEach(function (h) { if (fl.length >= 2 || (fl.length && h - fl[fl.length - 1] < .1)) return;
+        if (L.some(function (q) { var b = boxes[q]; return inBox(b, x, z, 0) && b.miny < h + 1.78 && b.maxy > h + .05; })) return;   // something stands on this spot: not a floor
+        fl.push(h); });
+      fl.forEach(function (h, n) { var c = n * N + j * nx + i, W = boxesNear(x - pad - .5, z - pad - .5, x + pad + .5, z + pad + .5);
+        fy[c] = h; blk[c] = W.some(function (q) { var b = boxes[q]; return b.miny < h + 1.78 && b.maxy > h + .46 && inBox(b, x, z, pad); }) ? 1 : 0; });
+    }
+    nav = { hm: true, nx: nx, nz: nz, N: N, H: 1, blk: blk, fy: fy, ox: bd.minx, oz: bd.minz, g: new Float32Array(2 * N), par: new Int32Array(2 * N), stamp: new Int32Array(2 * N), cl: new Int32Array(2 * N), jmp: new Uint8Array(2 * N), run: 0, free: [], links: {}, exact: {} };
+    // close every floor no walker can reach from a spawn
+    var seen = new Uint8Array(2 * N), sp = map.spawns.A[0], st = freeNear(cellOf(sp.x, sp.z, layerAt(sp.x, sp.z, 0))), q = [st]; seen[st] = 1;
+    while (q.length) { var c = q.pop(), cc = c % N, ci = cc % nx, cj = (cc / nx) | 0;
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { var a = ci + d[0], e = cj + d[1]; if (a < 0 || e < 0 || a >= nx || e >= nz) return; hNear(c, e * nx + a).forEach(function (t) { if (!seen[t]) { seen[t] = 1; q.push(t); } }); }); }
+    for (k = 0; k < 2 * N; k++) { if (!seen[k]) blk[k] = 1; if (!blk[k]) nav.free.push(k); }
+  }
   function buildNav(map) {
+    if (map.hnav) return buildHNav(map);
     var bd = map.bounds, nx = Math.ceil(bd.maxx - bd.minx), nz = Math.ceil(bd.maxz - bd.minz), N = nx * nz, H = map.H || 0, blk = new Uint8Array(N * (H ? 2 : 1)), k, b, i;
     function mark(b, base, m, val) {
       var r = b.rot ? Math.hypot(b.maxx, b.maxz) + 1 : 0, x0 = b.rot ? b.ox - r : b.minx - 1, x1 = b.rot ? b.ox + r : b.maxx + 1, z0 = b.rot ? b.oz - r : b.minz - 1, z1 = b.rot ? b.oz + r : b.maxz + 1, i, j;
@@ -332,6 +358,7 @@
   function cellOf(x, z, l) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return (l && nav.H ? nav.N : 0) + j * nav.nx + i; }
   function freeNear(c) {
     if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, r, i, j;
+    if (nav.hm) { var o = cc + (base ? 0 : nav.N); if (!nav.blk[o]) return o; for (r = 1; r < 8; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; var k2 = j * nav.nx + i; if (!nav.blk[base + k2]) return base + k2; if (!nav.blk[(base ? 0 : nav.N) + k2]) return (base ? 0 : nav.N) + k2; } return c; }   // either floor of the nearest open cell
     for (r = 1; r < 8; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) { if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; if (!nav.blk[base + j * nav.nx + i]) return base + j * nav.nx + i; }
     return c;
   }
@@ -341,7 +368,7 @@
     var c = cellOf(x, z, l); if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, y = l ? nav.H : 0, best = -1, bd = 1e9, r, i, j;
     for (r = 1; r < 4 && best < 0; r++) for (i = ci - r; i <= ci + r; i++) for (j = cj - r; j <= cj + r; j++) {
       if (i < 0 || j < 0 || i >= nav.nx || j >= nav.nz) continue; var k = base + j * nav.nx + i; if (nav.blk[k]) continue;
-      var tx = nav.ox + i + .5, tz = nav.oz + j + .5, d = Math.hypot(tx - x, tz - z); if (d < bd && !wallBetween(x, z, tx, tz, y)) { bd = d; best = k; } }
+      var tx = nav.ox + i + .5, tz = nav.oz + j + .5, d = Math.hypot(tx - x, tz - z); if (d < bd && !wallBetween(x, z, tx, tz, nav.hm ? nav.fy[k] : y)) { bd = d; best = k; } }
     return best >= 0 ? best : freeNear(c);
   }
   function wallBetween(x0, z0, x1, z1, y) {
@@ -354,7 +381,12 @@
       if (t0 < t1 && t1 > .05) return true; }
     return false;
   }
-  function lineFree(x0, z0, x1, z1, l) { var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i; for (i = 1; i < n; i++) { var t = i / n; if (nav.blk[cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, l)]) return false; } return true; }
+  function lineFree(x0, z0, x1, z1, l) {
+    var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i, prev = nav.hm ? cellOf(x0, z0, l) : -1;
+    for (i = 1; i < n; i++) { var t = i / n, c = cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, l); if (nav.blk[c]) return false;
+      if (nav.hm) { if (c !== prev && !nav.blk[prev] && Math.abs(nav.fy[c] - nav.fy[prev]) > .5) return false; prev = c; } }   // no shortcut over a drop or up a wall
+    return true;
+  }
   function findPath(x0, z0, l0, x1, z1, l1) {
     var nx = nav.nx, N = nav.N, s = startNear(x0, z0, l0), t = freeNear(cellOf(x1, z1, l1)), run = ++nav.run, heap = [s], hf = {}, ti2 = (t % N) % nx, tj = ((t % N) / nx) | 0, guard = 0;
     nav.g[s] = 0; nav.par[s] = -1; nav.stamp[s] = run; nav.jmp[s] = 0; hf[s] = 0;
@@ -366,6 +398,8 @@
       var base = c >= N ? N : 0, cc = c - base, ci = cc % nx, cj = (cc / nx) | 0, di, dj;
       for (di = -1; di <= 1; di++) for (dj = -1; dj <= 1; dj++) {
         if (!di && !dj) continue; var ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= nx || nj >= nav.nz) continue;
+        if (nav.hm) { if (di && dj && (!hNear(c, cj * nx + ni).length || !hNear(c, nj * nx + ci).length)) continue;
+          hNear(c, nj * nx + ni).forEach(function (n) { if (nav.cl[n] !== run) relax(c, n, nav.g[c] + (di && dj ? 1.414 : 1) + Math.abs(nav.fy[n] - nav.fy[c]), 0); }); continue; }
         var n = base + nj * nx + ni; if (nav.blk[n] || nav.cl[n] === run) continue; if (di && dj && (nav.blk[base + cj * nx + ni] || nav.blk[base + nj * nx + ci])) continue;
         relax(c, n, nav.g[c] + (di && dj ? 1.414 : 1), 0);
       }
@@ -961,7 +995,7 @@
   // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
   var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0], [-5.5, .5], [5, -4.5], [1, 6], [-4, -5.5], [6.5, 3], [-1, -7]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
   var bombMesh = SV.bombParts(), bombLed = bombMesh.userData.led, vmAct = null, useCrouch = false, lastKey = -1; bombMesh.scale.setScalar(1.7); bombMesh.visible = false; scene.add(bombMesh);
-  function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: c >= nav.N ? nav.H : 0 }; }
+  function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: nav.hm ? nav.fy[c] : c >= nav.N ? nav.H : 0 }; }
   function near(a, s, r) { return Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < r && Math.abs(a.pos.y - (s.y || 0)) < 1.2; }
   function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
   // a site is either a 5 m square round its centre or, when the map gives zones, any of several rectangles in the site's own turned frame
@@ -1277,7 +1311,7 @@
   SV.navInfo = function () { return nav; };
   SV.rayTest = function (o, d, max) { return rayWorld(o, d, max); };
   SV.dev = function () { return { scene: scene, cam: cam, renderer: renderer }; };   // for tools (map preview pictures): the live scene and camera
-  SV.pathTest = function (x0, z0, l0, x1, z1, l1) { return findPath(x0, z0, l0, x1, z1, l1).length; };   // for tests: can a bot plan this walk   // for tests: the world ray against the map's boxes
+  SV.pathTest = function (x0, z0, l0, x1, z1, l1, full) { var p = findPath(x0, z0, l0, x1, z1, l1); return full ? p : p.length; };   // for tests: can a bot plan this walk   // for tests: the world ray against the map's boxes
   SV.dropTest = function (o) { return makeDrop(o); };   // for tests: lay a gun on the ground   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
   /* tests: draw the world from any point, without the first-person gun */
