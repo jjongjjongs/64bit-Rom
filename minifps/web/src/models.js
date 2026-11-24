@@ -692,9 +692,18 @@ var SV = window.SV = window.SV || {};
       // The knife: held as in the reference picture: blade up and to the left, the palm on the right of the handle so the back of the
       // hand shows on the right, fingers wrapped round to the left, forearm coming up from the lower right in line with the hand.
       // (gun space here: -X is toward the eye, +Z is screen right, +Y is up)
-      var ax = id === 'kit' ? V(-.044, .252, -.967).normalize() : V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group();
+      var ax = V(.35, .75, -.55).normalize(), eye = V(-1, 0, 0), nn = eye.clone().addScaledVector(ax, -eye.dot(ax)).normalize(), yy = new T.Vector3().crossVectors(nn, ax), hold = new T.Group(), KQ = null;
+      if (id === 'kit') {   /* the hand is worked out from the arm (see CLAUDE.md): forearm direction, its roll, the wrist's ulnar deviation */
+        // from photos of a right hand cutting wire: semi-prone (thumb up-ish), thumb along the top handle toward the pivot, the four
+        // fingers closed round the handles (MCP 83-90, PIP 106-109, DIP 69-72), the lower handle sunk into the palm, 30 deg ulnar deviation
+        var KP = { F: [-.8, -.4, .45], up: [0, .85, .5], uln: 30, r: .017, sink: .03, thumb: [-.1, -.45, -.55, -.7], curl: [[1.45, 1.85, 1.2], [1.5, 1.9, 1.25], [1.55, 1.9, 1.25], [1.57, 1.9, 1.25]] };
+        var Fv = V(KP.F[0], KP.F[1], KP.F[2]).normalize(), up = V(KP.up[0], KP.up[1], KP.up[2]), pnK = up.addScaledVector(Fv, -up.dot(Fv)).normalize(), wvK = Fv.clone().negate(), axH = new T.Vector3().crossVectors(pnK, wvK), ua = KP.uln * PI / 180;
+        ax = axH.clone().multiplyScalar(Math.cos(ua)).addScaledVector(wvK, Math.sin(ua)).normalize();   // ulnar deviation swings the thumb side (the jaws) toward the fingers' way
+        yy = pnK.clone().addScaledVector(ax, -pnK.dot(ax)).normalize(); nn = new T.Vector3().crossVectors(ax, yy);   // the two handles spread across the grip: one in the palm, one in the fingers
+        KQ = { pn: yy.clone(), E: Fv.clone().multiplyScalar(.42), r: KP.r, thumb: KP.thumb, curl: KP.curl, sink: KP.sink, up: KP.a };
+      }
       g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
-      var kc = ax.clone().multiplyScalar(d.grip[0]); if (id === 'kit') hand(g, kc, ax, V(-.315, .915, .253), 1, .0125, kc.clone().add(V(-.336, -.168, .189)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: 0, top: .018, thumb: [-.4, -.6, -.9, -.95] });
+      var kc = ax.clone().multiplyScalar(d.grip[0]); if (KQ) hand(g, kc, ax, KQ.pn, 1, KQ.r, kc.clone().add(KQ.E), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: 0, top: .018, thumb: KQ.thumb, curl: KQ.curl, sink: KQ.sink, up: KQ.up });
       else hand(g, kc, ax, V(-.5, 0, .87), 1, .0125, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
     else if (id === 'pistol') {

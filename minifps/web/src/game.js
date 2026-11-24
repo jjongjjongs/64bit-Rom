@@ -732,7 +732,7 @@
     var act = G.bomb && p.alive && p.useP > 0 && G.bomb.phase === 'live' ? G.bomb.can : null;
     if (act !== vmAct) { vmAct = act; var kb = 'bomb' + p.team, kk = 'kit' + p.team;
       if (act === 'plant' && !vms[kb]) { vms[kb] = SV.bombVM(p.team); vms[kb].rotation.y = PI / 2; vms[kb].position.set(0, -.1, -.4); vmRoot.add(vms[kb]); }
-      if (act === 'defuse' && !vms[kk]) { vms[kk] = SV.viewModel('kit', p.team); vms[kk].rotation.y = PI / 2; vms[kk].position.set(.035, -.055, -.34); vmRoot.add(vms[kk]); }
+      if (act === 'defuse' && !vms[kk]) { vms[kk] = SV.viewModel('kit', p.team); vms[kk].rotation.y = PI / 2; vms[kk].position.set(.035, -.02, -.34); vmRoot.add(vms[kk]); }
       if (vms[kb]) vms[kb].visible = act === 'plant'; if (vms[kk]) vms[kk].visible = act === 'defuse'; if (vmCur) vmCur.visible = !act; }
     if (act) { var rise = Math.min(1, p.useP / .3), snip = act === 'defuse' ? Math.max(0, 1 - ((p.useP / DEFUSE * 3) % 1) * 5) : 0; vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(0, -(1 - rise) * .25 - snip * .012, -snip * .02); vmRoot.visible = true; flash.visible = false;
       var tp = vms['bomb' + p.team] && vms['bomb' + p.team].userData.tap, kp = Math.max(0, 1 - ((p.useP / PLANT * 8) % 1) * 4); if (tp) tp.position.set(.012 * kp, .0, -.03 * kp);   /* the right hand reaches in for each key */
