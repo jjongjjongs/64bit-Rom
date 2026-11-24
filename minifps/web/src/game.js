@@ -1137,7 +1137,7 @@
 
   // ---------- match ----------
   SV.start = function (match) {
-    SV.end(); G.match = match; G.ffa = match.mode === 2 && !match.net; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
+    SV.end(); G.match = match; G.ffa = match.mode === 2; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; indexBoxes(); scene.add(map.group); makeTargets(map);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
@@ -1266,7 +1266,7 @@
     else if (m.t === 'k') { v = byNid(m.v); by = byNid(m.by) || v; if (!v || !v.remote) return; var head = !!m.h;
       v.alive = false; v.dead = .001; v.deaths++; if (v.net) v.net.alive = false; if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; } feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); }
-      if (!G.bomb && G.score[by.team] >= G.match.target) endMatch(); }
+      if (!G.bomb && (G.ffa ? by.kills : G.score[by.team]) >= G.match.target) endMatch(); }
     else if (m.t === 'f') { a = byNid(m.by); if (!a || !a.remote) return; a.fireK = 1; vP.fromArray(m.o); vH.fromArray(m.e); tracer(vP, vH); var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); gunSnd(m.g, clamp(1 - dd / 95, 0, 1) * .8, dd); }
     else if (m.t === 'dp') { if (!findDrop(m.g)) makeDrop(m); }
     else if (m.t === 'pq') { if (!G.net.host) return; v = findDrop(m.g); if (v) { G.net.send({ t: 'pk', g: m.g, by: m.by }); killDrop(v); } }
