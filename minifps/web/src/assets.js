@@ -25,6 +25,7 @@
       /* "Lowpoly Map Asset" by Resoforge (Space_One), CC BY 4.0: reduced (welded, simplified) for phones; its collision boxes are worked out ahead of time */
       total += 2; gl.load(A.base + 'art/maps/junkyard.glb', function (g) { A.maps.junk = g; step(); }, undefined, step);
       fl.load(A.base + 'art/maps/junkyard.boxes.json', function (t) { try { A.maps.junkBox = JSON.parse(t); } catch (e) {} step(); }, undefined, step);   /* a whole level: "Lowpoly FPS TDM Game Map" by Resoforge (Space_One), CC BY 4.0 */
+      total++; gl.load(A.base + 'art/lmg.glb', function (g) { A.lmg = g.scene; step(); }, undefined, step);   /* LM-01: FN Minimi model supplied by the player (source to be confirmed) */
       total++; gl.load(A.base + 'art/c4.glb', function (g) { A.c4 = g.scene; step(); }, undefined, step);   /* the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili, CC BY 4.0 */
       total++; gl.load(A.base + 'art/hand.glb', function (g) { A.hand = g; step(); }, undefined, step);   // a real hand mesh for the first-person gloves
       step();

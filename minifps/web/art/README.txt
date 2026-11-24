@@ -33,3 +33,6 @@ c4.glb — the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili (ht
   Made from the USDZ download with web/tools/c4_usd2glb.py: only the three-charge pack ("Cs_go") is kept; it is laid flat (keypad up),
   scaled so each charge is 28 cm long (an M112 block), textures reduced to 1024/512 px, and the display glass, the lamp button and a short
   piece of each of the three top wires are split off so the game can drive the display, blink the lamp and show wires being cut.
+
+lmg.glb — LM-01, an FN Minimi (M249) light machine gun: model supplied by the player as lmg.zip (FBX + PBR textures, no licence file).
+  Its source and licence are still to be confirmed before release. Converted with web/tools/lmg_fbx2glb (textures 1024 px, AO baked in).

@@ -1,0 +1,9 @@
+<!doctype html><body><script src="three.min.js"></script><script src="fflate.min.js"></script><script src="NURBSUtils.js"></script><script src="NURBSCurve.js"></script><script src="FBXLoader.js"></script><script src="GLTFExporter.js"></script><script>
+var T=THREE;window.go=function(){return new Promise(function(res){var tl=new T.TextureLoader(),n=0,tx={};['c','mr','n'].forEach(function(k){tx[k]=tl.load('tex/'+k+'.jpg',function(){if(++n===3)run()});});
+ function run(){tx.c.encoding=T.sRGBEncoding;var mat=new T.MeshStandardMaterial({name:'minimi',map:tx.c,normalMap:tx.n,roughnessMap:tx.mr,metalnessMap:tx.mr,metalness:1,roughness:1});
+  new T.FBXLoader().load('minimi.fbx',function(o){o.traverse(function(q){if(q.isMesh){q.material=mat;['uv2','color'].forEach(function(a){q.geometry.deleteAttribute(a)})}});
+   /* game gun space: +X muzzle, +Y up, +Z the gun's right; metres */
+   var root=new T.Group();root.name='lmg';o.rotation.y=Math.PI/2;o.scale.setScalar(.01);root.add(o);
+   new T.GLTFExporter().parse(root,function(buf){var b=new Uint8Array(buf),s='';for(var i=0;i<b.length;i+=32768)s+=String.fromCharCode.apply(null,b.subarray(i,i+32768));res(btoa(s))},{binary:true,embedImages:true});
+  })}})};
+</script>
