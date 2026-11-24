@@ -1313,36 +1313,47 @@
     if (/정비|차고/.test(name)) return { wall: ['bench', 'tires', 'locker', 'bench'], mid: ['car', 'barrels'] };
     if (/찻집|식당|잡화/.test(name)) return { wall: ['counter', 'shelf', 'shelf'], mid: ['table', 'table', 'stall'] };
     if (/검문|초소/.test(name)) return { wall: ['sandbag', 'counter', 'locker'], mid: ['sandbagM', 'desk'] };
-    if (/배수/.test(name)) return { wall: ['pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes'], mid: [] };
+    if (/배수|배관|통로/.test(name)) return { wall: ['pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes', 'pipes'], mid: [] };
     return { wall: ['shelf', 'cabinet'], mid: ['crates'] };
   }
-  function planned(D, th) {
-    var b = Builder(), OX = 45, OZ = 28, i;
+  function planned(PLN, th) {
+    var b = Builder(), D = PLN.plan, OX = PLN.W / 2, OZ = PLN.H / 2, HW = OX, HD = OZ, i;
     b.day = false;
     // the sheet in world coordinates
-    var rooms = [], doors = [], covers = [], spawns = [], sites = [], walks = [], stairs = [];
+    var rooms = [], doors = [], covers = [], spawns = [], sites = [], walks = [], stairs = [], bars = [], conts = [], waters = [], decks = [], steps = [], roads = [], lanes = [];
+    function rect(e) { return { x: e[1] - OX, z: e[2] - OZ, w: e[3], d: e[4] }; }
     D.forEach(function (e) {
+      if (e[0] === 'wall') bars.push(rect(e)); else if (e[0] === 'cont') { var c = rect(e); c.lv = e[5] || 1; conts.push(c); } else if (e[0] === 'water') waters.push(rect(e));
+      else if (e[0] === 'bridge' || e[0] === 'ford' || e[0] === 'walk') { var k = rect(e); k.kind = e[0]; decks.push(k); } else if (e[0] === 'stairs') steps.push(rect(e)); else if (e[0] === 'road') roads.push(rect(e));
+      else if (e[0] === 'lane') lanes.push({ kind: e[1], pts: e[2].map(function (q) { return [q[0] - OX, q[1] - OZ]; }) });
       if (e[0] === 'room') rooms.push({ x: e[1] - OX, z: e[2] - OZ, w: e[3], d: e[4], name: e[5], two: !!e[6], open: /지붕만/.test(e[5]) });
       else if (e[0] === 'door') doors.push({ x: e[1] - OX, z: e[2] - OZ, hz: !!e[3], w: e[4] });
       else if (e[0] === 'cover') covers.push({ x: e[1] - OX, z: e[2] - OZ, w: e[3], d: e[4] });
       else if (e[0] === 'spawn') spawns.push({ x: e[1] - OX + e[3] / 2, z: e[2] - OZ + e[4] / 2, team: e[5] });
-      else if (e[0] === 'site') sites.push({ x: e[1] - OX, z: e[2] - OZ, id: e[3] === '1' ? 'A' : 'B' });
+      else if (e[0] === 'site') sites.push({ x: e[1] - OX, z: e[2] - OZ, id: e[3] === '1' || e[3] === 'A' ? 'A' : 'B' });
     });
     function inside(o, r, m) { m = m || 0; return o.x >= r.x - .01 - m && o.z >= r.z - .01 - m && o.x + (o.w || 0) <= r.x + r.w + .01 + m && o.z + (o.d || 0) <= r.z + r.d + .01 + m; }
     function roomOf(x, z) { var best = null; rooms.forEach(function (r) { if (r.name && x > r.x && x < r.x + r.w && z > r.z && z < r.z + r.d && (!best || r.w * r.d < best.w * best.d)) best = r; }); return best; }
-    rooms.forEach(function (r) { r.ht = r.two ? 6.4 : (th.ht || 3.3); r.top = !rooms.some(function (o) { return o !== r && o.w * o.d > r.w * r.d && inside(r, o); }); r.leaf = !!r.name && !rooms.some(function (o) { return o !== r && o.name && inside(o, r); }); });
+    rooms.forEach(function (r) { r.ht = r.two ? 6.4 : (th.ht || 3.3); r.top = !rooms.some(function (o) { return o !== r && o.w * o.d > r.w * r.d && inside(r, o); }); r.leaf = !rooms.some(function (o) { return o !== r && inside(o, r); }); });
     function hit(a, c, m) { m = m || 0; return a.x < c.x + c.w + m && a.x + a.w > c.x - m && a.z < c.z + c.d + m && a.z + a.d > c.z - m; }
     function siteBox(s, m) { return { x: s.x - 3 - m, z: s.z - 3 - m, w: 6 + 2 * m, d: 6 + 2 * m }; }
 
     // ---- ground, the outer wall, the land beyond ----
     b.ghost = true; b.box(0, 0, 220, 180, .3, th.far, -.62, false, th.farT || 'plain'); b.ghost = false;
-    b.box(0, 0, 92, 58, .4, th.ground, -.4, false, th.groundT);
-    [[0, -28.2, 91, .4], [0, 28.2, 91, .4], [-45.2, 0, .4, 56.8], [45.2, 0, .4, 56.8]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], th.outerH || 4.2, th.outer, 0, true, th.outerT || 'conc'); });
-    [[0, -28.2, 91.2, .7], [0, 28.2, 91.2, .7], [-45.2, 0, .7, 57]].concat([[45.2, 0, .7, 57]]).forEach(function (q) { b.box(q[0], q[1], q[2], q[3], .14, 0x6f7270, th.outerH || 4.2, false, 'conc'); });
+    b.box(0, 0, HW * 2 + 2, HD * 2 + 2, .4, th.ground, -.4, false, th.groundT);
+    var OH = th.hall ? th.hall : th.outerH || 4.2;
+    [[0, -HD - .2, HW * 2 + 1, .4], [0, HD + .2, HW * 2 + 1, .4], [-HW - .2, 0, .4, HD * 2 + .8], [HW + .2, 0, .4, HD * 2 + .8]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], OH, th.outer, 0, true, th.outerT || 'conc'); });
+    if (!th.hall) [[0, -HD - .2, HW * 2 + 1.2, .7], [0, HD + .2, HW * 2 + 1.2, .7], [-HW - .2, 0, .7, HD * 2 + 1], [HW + .2, 0, .7, HD * 2 + 1]].forEach(function (q) { b.box(q[0], q[1], q[2], q[3], .14, 0x6f7270, OH, false, 'conc'); });
+    else {   // one big indoor hall: floor, roof on trusses, rows of lamps
+      b.box(0, 0, HW * 2, HD * 2, .03, th.floor || 0xa8acad, 0, false, 'floor'); b.box(0, 0, HW * 2 + 1, HD * 2 + 1, .3, th.roofC || 0x5d666c, OH, true, 'panel');
+      for (var tx = -HW + 4; tx < HW; tx += 6) b.box(tx, 0, .2, HD * 2, .25, 0x4f585e, OH - .3, false, 'metal');
+      for (var lx0 = -HW + 5; lx0 < HW - 2; lx0 += 8) for (var lz0 = -HD + 5; lz0 < HD - 2; lz0 += 8) { b.glow(lx0, OH - .08, lz0, 1.4, .06, .5, C.sky); b.light(lx0, OH - .6, lz0, 0xd6e6f2, 1.3, 14); }
+    }
+    roads.forEach(function (r) { b.box(r.x + r.w / 2, r.z + r.d / 2, r.w, r.d, .02, th.roadC || 0x5a5852, 0, false, 'conc'); });
 
     // ---- walkway and stairs in each two-storey hall: along the longest wall whose strip keeps clear of the bomb sites ----
     rooms.forEach(function (r) {
-      if (!r.two) return; var best = null;
+      if (!r.two || decks.some(function (k) { return k.kind === 'walk' && hit(k, r); })) return; var best = null;
       [['n', r.x, r.z, r.w, 3.1, 1], ['s', r.x, r.z + r.d - 3.1, r.w, 3.1, 1], ['w', r.x, r.z, 3.1, r.d, 0], ['e', r.x + r.w - 3.1, r.z, 3.1, r.d, 0]].forEach(function (c) {
         var band = { x: c[1], z: c[2], w: c[3], d: c[4] }, len = c[5] ? c[3] : c[4]; if (sites.some(function (s) { return hit(band, siteBox(s, 0)); })) return;
         // stairs at one or both ends, running along the wall; an end is refused when a door opens there
@@ -1408,10 +1419,76 @@
         for (px = r.x + 3; px < r.x + r.w - 2; px += 6) { b.glow(px, 4.15, cz, 1.4, .05, .25, C.lamp); b.light(px, 3.8, cz, 0xffe2b8, 1.1, 10); }
         return;
       }
-      if (r.top) { b.box(cx, cz, r.w + .5, r.d + .5, .25, th.roofC || 0x5d666c, r.ht, true, th.roofT || 'panel'); b.box(cx, cz, r.w - .3, r.d - .3, .04, th.ceil || 0xc9c6bd, r.ht - .05, false, 'plain'); }
-      if (!r.leaf) return;
+      if (r.top) { b.box(cx, cz, r.w + .5, r.d + .5, .25, th.roofC || 0x5d666c, r.ht, true, th.roofT || 'corr'); b.box(cx, cz, r.w - .3, r.d - .3, .04, th.ceil || 0xc9c6bd, r.ht - .05, false, 'plain'); }
+      if (!r.leaf) {
+        if (!r.top || r.w * r.d < 100) return; var kids = rooms.filter(function (o) { return o !== r && inside(o, r); }); b.box(cx, cz, r.w - .3, r.d - .3, .02, th.floor || 0x9a9c97, 0, false, 'floor');
+        for (var ax = r.x + 4; ax < r.x + r.w - 2; ax += 8) for (var az = r.z + 4; az < r.z + r.d - 2; az += 8) { if (kids.some(function (o) { return ax > o.x - .5 && ax < o.x + o.w + .5 && az > o.z - .5 && az < o.z + o.d + .5; })) continue; b.glow(ax, r.ht - .1, az, .6, .03, 1.2, 0xfff2d8); b.light(ax, r.ht - .6, az, 0xffe2b8, r.two ? 1.6 : 1.05, r.two ? 14 : 9); }
+        return;
+      }
       var top = r.ht - .08, nx = Math.max(1, Math.round(r.w / 8)), nz = Math.max(1, Math.round(r.d / 8)), ix, iz;
       for (ix = 0; ix < nx; ix++) for (iz = 0; iz < nz; iz++) { var lx = r.x + r.w * (ix + .5) / nx, lz = r.z + r.d * (iz + .5) / nz; b.box(lx, lz, .7, 1.3, .06, 0x3a3f44, top - .02, false, 'metal'); b.glow(lx, top - .05, lz, .6, .03, 1.2, 0xfff2d8); b.light(lx, top - .5, lz, kit.carpet ? 0xf2f0ea : 0xffe2b8, r.two ? 1.9 : 1.05, r.two ? 16 : 9); }
+    });
+
+    // ---- barriers you cannot see over: walls, cliffs, pallet racks, machine rows ----
+    function rackRow(cv, n) {
+      var cx = cv.x + cv.w / 2, cz = cv.z + cv.d / 2, lx = cv.w >= cv.d, L = lx ? cv.w : cv.d, Dp = lx ? cv.d : cv.w;
+      var f2 = Fr(b, cx, cz, lx ? 0 : PI / 2), k, cnt = Math.max(1, Math.round(L / 3)), seg = L / cnt; b.solid(cx, cz, cv.w, cv.d, 3.4, 0, true); b.ghost = true; b.tier = 2;
+      for (k = 0; k <= cnt; k++) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(-L / 2 + k * seg, 0, oz, .09, 3.6, .09, FK.orange, 'metal'); });
+      [.1, 1.3, 2.5].forEach(function (y, li) { if (li) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(0, y - .12, oz, L, .1, .07, FK.blue, 'metal'); });
+        for (k = 0; k < cnt * 2; k++) { var ax = -L / 2 + seg * (k + .5) / 2, q = (k + li + n) % 4; if (q === 3) continue; f2.B(ax, y, 0, seg / 2 - .2, .12, Dp - .25, FK.wood, 'crate'); f2.B(ax, y + .12, 0, seg / 2 - .35, q === 1 ? .7 : .95, Dp - .4, [0xb39a72, 0x8f8468, 0xc9a66e][q], 'crate'); } });
+      b.tier = 0; b.ghost = false;
+    }
+    bars.forEach(function (wl, n) {
+      var cx = wl.x + wl.w / 2, cz = wl.z + wl.d / 2, lx = wl.w >= wl.d, L = lx ? wl.w : wl.d, Dp = lx ? wl.d : wl.w, r = roomOf(cx, cz), kind = r && /공장/.test(r.name) ? 'machine' : (th.wallKind || 'conc');
+      if (kind === 'rack') return rackRow(wl, n);
+      if (kind === 'machine') { var f = Fr(b, cx, cz, lx ? 0 : PI / 2), cnt = Math.max(1, Math.floor(L / 3.6)), gh = b.ghost; b.ghost = true; b.tier = 2; for (var k = 0; k < cnt; k++) FURN.machine[3](f.sub(-L / 2 + (k + .5) * L / cnt, 0, 0), b); b.tier = 0; b.ghost = gh; b.solid(cx, cz, wl.w, wl.d, 2.4); return; }
+      if (kind === 'cliff') {
+        var hc = th.wallH || 5.5; b.box(cx, cz, wl.w, wl.d, hc, th.cliffC || 0x8a7a60, 0, true, 'rock'); var g0 = b.ghost; b.ghost = true;
+        for (var t = -L / 2 + 1; t < L / 2; t += 2.6) { var gg = new T.DodecahedronGeometry(Dp * .55 + (n + t) % 3 * .25, 0); gg.scale(1.3, .8, 1); gg.translate(cx + (lx ? t : 0), hc - .2, cz + (lx ? 0 : t)); b.geo(gg, th.cliffC || 0x8a7a60, 'rock', {}); }
+        if (th.snowCap) b.box(cx, cz, wl.w + .2, wl.d + .2, .25, 0xe8eef4, hc, false, 'snow'); b.ghost = g0; return;
+      }
+      var h = th.wallH || 3.4; b.box(cx, cz, wl.w, wl.d, h, th.barrierC || 0x9a9b98, 0, true, th.barrierT || 'conc'); b.box(cx, cz, wl.w + .12, wl.d + .12, .12, 0x6f7270, h, false, 'conc');
+    });
+    conts.forEach(function (c, n) { var rot = c.d > c.w, L = Math.max(c.w, c.d), cx = c.x + c.w / 2, cz = c.z + c.d / 2; for (var lv = 0; lv < c.lv; lv++) b.cont(cx, cz, rot, th.cont[(n * 2 + lv) % th.cont.length], lv, L, lv === 0); });
+    // water: a surface you cannot walk into, except where a bridge, a ford or a building crosses it
+    waters.forEach(function (wa) {
+      var vert = wa.d >= wa.w, gaps = [], a0 = vert ? wa.z : wa.x, a1 = vert ? wa.z + wa.d : wa.x + wa.w;
+      decks.concat(rooms).forEach(function (k) { if (!hit(k, wa)) return; if (vert && k.x <= wa.x + .1 && k.x + k.w >= wa.x + wa.w - .1) gaps.push([k.z, k.z + k.d]); if (!vert && k.z <= wa.z + .1 && k.z + k.d >= wa.z + wa.d - .1) gaps.push([k.x, k.x + k.w]); });
+      b.box(wa.x + wa.w / 2, wa.z + wa.d / 2, wa.w, wa.d, .02, th.waterC || 0x1f4a5c, 0, false, 'water'); gaps.sort(function (p, q) { return p[0] - q[0]; });
+      var cur = a0; gaps.concat([[a1, a1]]).forEach(function (g) { if (g[0] - cur > .2) { var m = (cur + g[0]) / 2, L = g[0] - cur; if (vert) b.solid(wa.x + wa.w / 2, m, wa.w, L, 1.2, 0, true); else b.solid(m, wa.z + wa.d / 2, L, wa.d, 1.2, 0, true); } cur = Math.max(cur, g[1]); });
+      var gh = b.ghost; b.ghost = true; if (vert) { b.box(wa.x - .15, wa.z + wa.d / 2, .3, wa.d, .25, 0x6b6458, 0, false, 'rock'); b.box(wa.x + wa.w + .15, wa.z + wa.d / 2, .3, wa.d, .25, 0x6b6458, 0, false, 'rock'); } else { b.box(wa.x + wa.w / 2, wa.z - .15, wa.w, .3, .3, 0x8a8c88, 0, false, 'conc'); } b.ghost = gh;
+    });
+    decks.forEach(function (k) {
+      var cx = k.x + k.w / 2, cz = k.z + k.d / 2, lx = k.w >= k.d, L = lx ? k.w : k.d;
+      if (k.kind === 'ford') { b.box(cx, cz, k.w, k.d, .03, 0x5f8fa0, 0, false, 'water'); for (var i2 = 0; i2 < 5; i2++) b.cyl(k.x + 1 + (i2 * 3.7) % (k.w - 2), k.z + 1.5 + (i2 * 2.3) % (k.d - 3), .35, .25, 0x6b6458, 0, false, 'rock', .45, 7); return; }
+      if (k.kind === 'bridge') {
+        b.box(cx, cz, k.w, k.d, .18, 0x6b5a48, 0, false, 'crate');
+        [-1, 1].forEach(function (sd) { var ex = lx ? cx : cx + sd * (k.w / 2 - .1), ez = lx ? cz + sd * (k.d / 2 - .1) : cz; b.box(ex, ez, lx ? L : .08, lx ? .08 : L, .08, 0x3a3f44, 1.05, false, 'metal'); b.solid(ex, ez, lx ? L : .2, lx ? .2 : L, 1.1, 0, true);
+          for (var t = -L / 2 + .2; t <= L / 2; t += 2) b.box(lx ? cx + t : ex, lx ? ez : cz + t, .1, .1, 1.1, 0x3a3f44, 0, false, 'metal'); });
+        return;
+      }
+      // a walkway up at 3 m (players only, like the warehouse catwalk), rails on both long sides except where stairs come up
+      b.box(cx, cz, k.w, k.d, .14, 0x5b656c, 2.86, true, 'metal');
+      [-1, 1].forEach(function (sd) {
+        var e = lx ? cz + sd * (k.d / 2 - .05) : cx + sd * (k.w / 2 - .05), cuts = steps.filter(function (s) { return hit(s, k, .6); }).map(function (s) { return lx ? [s.x - .2, s.x + s.w + .2] : [s.z - .2, s.z + s.d + .2]; }), cur = lx ? k.x : k.z, end = lx ? k.x + k.w : k.z + k.d;
+        cuts.concat([[end, end]]).sort(function (p, q) { return p[0] - q[0]; }).forEach(function (g) {
+          if (g[0] - cur > .3) { var m = (cur + g[0]) / 2, L2 = g[0] - cur; if (lx) { b.box(m, e, L2, .05, .05, C.yellow, 3.95, false); b.solid(m, e, L2, .1, 1, 3, true); } else { b.box(e, m, .05, L2, .05, C.yellow, 3.95, false); b.solid(e, m, .1, L2, 1, 3, true); } }
+          cur = Math.max(cur, g[1]); });
+        for (var t = -L / 2 + .3; t <= L / 2; t += 2.5) b.box(lx ? cx + t : e, lx ? e : cz + t, .14, .14, 2.86, 0x4f585e, 0, true, 'metal');
+      });
+    });
+    // stairs climb toward whatever raised thing they touch: a walkway (3 m) or the top of a container (2.5 m)
+    steps.forEach(function (s) {
+      var tg = null, best = .7;
+      decks.filter(function (k) { return k.kind === 'walk'; }).map(function (k) { return { r: k, top: 3 }; }).concat(conts.map(function (c) { return { r: c, top: 2.5 }; })).forEach(function (o) {
+        var r = o.r, gaps = [[Math.abs(s.z - (r.z + r.d)), 'n'], [Math.abs(s.z + s.d - r.z), 's'], [Math.abs(s.x - (r.x + r.w)), 'w'], [Math.abs(s.x + s.w - r.x), 'e']];
+        gaps.forEach(function (g) { var ovx = Math.min(s.x + s.w, r.x + r.w) - Math.max(s.x, r.x), ovz = Math.min(s.z + s.d, r.z + r.d) - Math.max(s.z, r.z); if (g[0] < best && ((g[1] === 'n' || g[1] === 's') ? ovx > .5 : ovz > .5)) { best = g[0]; tg = { top: o.top, side: g[1] }; } });
+      });
+      if (!tg) return; var alongZ = tg.side === 'n' || tg.side === 's', L = alongZ ? s.d : s.w, n = Math.ceil(tg.top / .4), sl = L / n;
+      for (var i3 = 0; i3 < n; i3++) { var u = (i3 + .5) * sl, top = tg.top * (i3 + 1) / n, px = s.x + s.w / 2, pz = s.z + s.d / 2;
+        if (tg.side === 'n') pz = s.z + s.d - u; else if (tg.side === 's') pz = s.z + u; else if (tg.side === 'w') px = s.x + s.w - u; else px = s.x + u;
+        b.box(px, pz, alongZ ? s.w : sl, alongZ ? sl : s.d, top, th.stairC || 0x6b7075, 0, true, 'metal'); b.box(px, pz, alongZ ? s.w + .02 : .1, alongZ ? .1 : s.d + .02, .03, C.yellow, top - .02, false); }
+      stairs.push(s);
     });
 
     // ---- cover from the plan: racks or machines indoors, containers and theme pieces outside ----
@@ -1421,13 +1498,7 @@
       if (cv.w < .8 || cv.d < .8 || stairs.some(function (s) { return hit(cv, s, .8); })) return;
       var cx = cv.x + cv.w / 2, cz = cv.z + cv.d / 2, lx = cv.w >= cv.d, L = lx ? cv.w : cv.d, Dp = lx ? cv.d : cv.w;
       if (r && /공장/.test(r.name)) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2), gh = b.ghost; b.ghost = true; b.tier = 2; FURN.machine[3](f, b); f.B(0, 0, 0, L, .12, Dp, 0x3a3f44, 'metal'); b.tier = 0; b.ghost = gh; b.solid(cx, cz, cv.w, cv.d, 2.4); return; }
-      if (r) {                                                                   // pallet racking, as in the warehouse
-        var f2 = Fr(b, cx, cz, lx ? 0 : PI / 2), k, cnt = Math.max(1, Math.round(L / 3)), seg = L / cnt; b.solid(cx, cz, cv.w, cv.d, 3.4, 0, true); b.ghost = true; b.tier = 2;
-        for (k = 0; k <= cnt; k++) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(-L / 2 + k * seg, 0, oz, .09, 3.6, .09, FK.orange, 'metal'); });
-        [.1, 1.3, 2.5].forEach(function (y, li) { if (li) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(0, y - .12, oz, L, .1, .07, FK.blue, 'metal'); });
-          for (k = 0; k < cnt * 2; k++) { var ax = -L / 2 + seg * (k + .5) / 2, q = (k + li + n) % 4; if (q === 3) continue; f2.B(ax, y, 0, seg / 2 - .2, .12, Dp - .25, FK.wood, 'crate'); f2.B(ax, y + .12, 0, seg / 2 - .35, q === 1 ? .7 : .95, Dp - .4, [0xb39a72, 0x8f8468, 0xc9a66e][q], 'crate'); } });
-        b.tier = 0; b.ghost = false; return;
-      }
+      if (r && cv.w * cv.d > 6) { rackRow(cv, n); return; }   // big cover indoors: pallet racking, as in the warehouse
       if (L > 5.2) { b.cont(cx, cz, !lx, th.cont[n % th.cont.length], 0, L); if (L < 9 && n % 3 === 0) b.cont(cx, cz, !lx, th.cont[(n + 1) % th.cont.length], 1, L); return; }
       th.cover(b, cv, cx, cz, lx, L, Dp, n);
     });
@@ -1435,7 +1506,7 @@
     // ---- furnishing: wall pieces round the edge, then the middle (offices on a grid with aisles, other rooms a few loose pieces) ----
     rooms.forEach(function (r) {
       if (!r.leaf) return; var K = roomKit(r.name), taken = walks.map(function (w) { return [w.x + w.w / 2, w.z + w.d / 2, w.w / 2, w.d / 2]; }), x = r.x, z = r.z, w = r.w, h = r.d;
-      covers.forEach(function (c) { taken.push([c.x + c.w / 2, c.z + c.d / 2, c.w / 2 + .3, c.d / 2 + .3]); });
+      covers.concat(bars, conts).forEach(function (c) { taken.push([c.x + c.w / 2, c.z + c.d / 2, c.w / 2 + .3, c.d / 2 + .3]); });
       function free(cx, cz, hw, hd, pad, mg) {
         mg = mg == null ? .35 : mg; if (cx - hw < x + mg || cx + hw > x + w - mg || cz - hd < z + mg || cz + hd > z + h - mg) return false; var i;
         for (i = 0; i < doors.length; i++) { var dd = doors[i]; if (dd.hz ? (Math.abs(cx - dd.x) < hw + dd.w / 2 + 1 && Math.abs(cz - dd.z) < hd + 2.2) : (Math.abs(cz - dd.z) < hd + dd.w / 2 + 1 && Math.abs(cx - dd.x) < hw + 2.2)) return false; }
@@ -1469,7 +1540,7 @@
         var blk = new Uint8Array(nx * nz), seen = new Uint8Array(nx * nz), i, j, q = [], lost = 0;
         for (i = 0; i < nx; i++) for (j = 0; j < nz; j++) {
           var px = x + (i + .5) * .5, pz = z + (j + .5) * .5, bad = px < x + .6 || px > x + w - .6 || pz < z + .6 || pz > z + h - .6;
-          if (!bad) bad = placed.some(function (o) { return o !== skip && !o.gone && o.def[2] !== 0 && Math.abs(px - o.cx) < o.hw + .55 && Math.abs(pz - o.cz) < o.hd + .55; }) || covers.some(function (c) { return px > c.x - .55 && px < c.x + c.w + .55 && pz > c.z - .55 && pz < c.z + c.d + .55; }) || stairs.some(function (c) { return px > c.x - .45 && px < c.x + c.w + .45 && pz > c.z - .45 && pz < c.z + c.d + .45; });
+          if (!bad) bad = placed.some(function (o) { return o !== skip && !o.gone && o.def[2] !== 0 && Math.abs(px - o.cx) < o.hw + .55 && Math.abs(pz - o.cz) < o.hd + .55; }) || covers.concat(bars, conts).some(function (c) { return px > c.x - .55 && px < c.x + c.w + .55 && pz > c.z - .55 && pz < c.z + c.d + .55; }) || stairs.some(function (c) { return px > c.x - .45 && px < c.x + c.w + .45 && pz > c.z - .45 && pz < c.z + c.d + .45; });
           blk[j * nx + i] = bad ? 1 : 0;
         }
         myDoors.forEach(function (dd) { var px = dd.hz ? dd.x : (Math.abs(dd.x - x) < .3 ? x + .7 : x + w - .7), pz = dd.hz ? (Math.abs(dd.z - z) < .3 ? z + .7 : z + h - .7) : dd.z, ii = Math.floor((px - x) / .5), jj = Math.floor((pz - z) / .5), c = jj * nx + ii; if (ii >= 0 && jj >= 0 && ii < nx && jj < nz && !blk[c] && !seen[c]) { seen[c] = 1; q.push(c); } });
@@ -1495,14 +1566,15 @@
       return out;
     }
     function clear(x, z, m) {
-      if (Math.abs(x) > 43.5 || Math.abs(z) > 26.5) return false;
+      if (Math.abs(x) > HW - 1.5 || Math.abs(z) > HD - 1.5) return false;
       return !b.boxes.some(function (q) { if (q.maxy <= .5 || q.miny >= 1.6) return false; var lx = x, lz = z; if (q.rot) { var dx = x - q.ox, dz = z - q.oz; lx = dx * q.c - dz * q.s; lz = dx * q.s + dz * q.c; } return lx > q.minx - m && lx < q.maxx + m && lz > q.minz - m && lz < q.maxz + m; });
     }
     function settle(p, from) { for (var k = 0; k < 6; k++) { if (clear(p[0], p[1], 1)) return p; var dx = p[0] - from[0], dz = p[1] - from[1], l = Math.hypot(dx, dz) || 1; p = [p[0] + dx / l, p[1] + dz / l, 0]; } return null; }
-    var S = sites.map(function (s) { var d = siteDef(s.id, s.x, s.z, 0, 0, via(s).map(function (v) { return settle([Math.max(-43, Math.min(43, v[0])), Math.max(-26, Math.min(26, v[1])), 0], [s.x, s.z]); }).filter(Boolean));
+    var S = sites.map(function (s) { var d = siteDef(s.id, s.x, s.z, 0, 0, via(s).map(function (v) { return settle([Math.max(-HW + 2, Math.min(HW - 2, v[0])), Math.max(-HD + 2, Math.min(HD - 2, v[1])), 0], [s.x, s.z]); }).filter(Boolean));
       d.spots = d.spots.filter(function (q, n) { return !n || clear(q.x, q.z, 1); }); return d; }), fw = [];
     S.forEach(function (s) { s.via.forEach(function (v) { fw.push(v); }); });
-    return { name: th.name, b: b, bounds: { minx: -45, maxx: 45, minz: -28, maxz: 28 }, bg: th.bg, fog: th.fog, hemi: th.hemi, sun: th.sun, rain: !!th.rain, sky: th.sky, hdri: th.hdri, dim: th.dim, lod: [40, 80], sites: S, fwd: fw };
+    var routes = lanes.filter(function (l) { return l.kind !== 'conn'; });   // the drawn lanes, A's side to B's: bots pick one to walk
+    return { name: th.name, b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, bg: th.bg, fog: th.fog, hemi: th.hemi, sun: th.sun, rain: !!th.rain, sky: th.sky, hdri: th.hdri, dim: th.dim, lod: [40, 80], indoor: !!th.hall, sites: S.length ? S : undefined, fwd: S.length ? fw : undefined, routes: routes };
   }
   // small outdoor cover, filled from a rectangle on the plan
   function crateRect(b, cv, n, cols) {
@@ -1515,89 +1587,60 @@
     b.ghost = gh; b.solid(cx, cz, lx ? L : .75, lx ? .75 : L, 1.1);
   }
 
-  // 08 세관 야적장 — 컨테이너 야적장(가운데) 위쪽에 세관 사무동·복도·검사실·보관실 한 동, 아래쪽에 2층 물류 창고
-  var PLAN_A = [['spawn', 1, 18, 9, 20, 'A'], ['spawn', 80, 18, 9, 20, 'B'], ['room', 16, 3, 58, 13, '', false], ['room', 16, 3, 18, 13, '세관 사무동', false], ['room', 34, 3, 10, 13, '복도', false], ['room', 44, 3, 14, 13, '검사실', false], ['room', 58, 3, 16, 13, '보관실', false],
-    ['door', 16, 9.5, false, 2.4], ['door', 74, 9.5, false, 2.4], ['door', 34, 9.5, false, 2.4], ['door', 44, 9.5, false, 2.4], ['door', 58, 9.5, false, 2.4], ['door', 26, 16, true, 2.4], ['door', 51, 16, true, 2.4], ['door', 66, 16, true, 2.4],
-    ['room', 20, 38, 50, 15, '물류 창고', true], ['door', 20, 45.5, false, 5], ['door', 70, 45.5, false, 5], ['door', 33, 38, true, 2.4], ['door', 57, 38, true, 2.4],
-    ['cover', 26, 42, 2, 6], ['cover', 32, 46, 6, 2], ['cover', 42, 41, 2, 7], ['cover', 50, 46, 6, 2], ['cover', 58, 44, 2, 6], ['cover', 14, 22, 6, 2.6], ['cover', 24, 28, 2.6, 6], ['cover', 32, 21, 6, 2.6], ['cover', 40, 27, 10, 2.6], ['cover', 41, 30.5, 6, 2.6], ['cover', 56, 22, 2.6, 6], ['cover', 62, 29, 6, 2.6], ['cover', 72, 24, 2.6, 6], ['cover', 30, 33, 3, 2], ['cover', 54, 33, 3, 2], ['cover', 46, 20, 2, 2],
-    ['site', 51, 6.5, '1'], ['site', 45, 50.5, '2']];
-  function customs() {
-    return planned(PLAN_A, { name: '세관 야적장', ground: 0x8d8f8a, groundT: 'conc', far: 0x6f6b5c, outer: 0x9a9b98, wall: 0xc9c4b6, wallT: 'plaster', wall2: 0x8f9aa0, wall2T: 'panel', roofC: 0x6a7074, floor: 0xa2a49f,
-      cont: [0x7a3f30, 0x3f5f7a, 0x596a4a, 0x8a7a52, 0x2f6a6a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (cv.w * cv.d <= 4.5) { b.pallet(cx, cz, 0); b.crate(cx, cz, 1.3, 0xb39058, .14, 1.2); b.solid(cx, cz, 1.4, 1.4, .2); } else crateRect(b, cv, n, [0xb39058, 0x9c8a62, 0xc9a66e]); },
-      extra: function (b) {
-        b.mark('CUSTOMS', 0, 3.2, -12.05, 5, 1.1, 0, '#2f4763'); b.mark('물류 창고', 0, 4.6, 9.83, 4.5, 1.1, PI, '#ecebe4');
-        [[-30, -8], [-10, -8], [10, -8], [30, -8], [-30, 8], [30, 8]].forEach(function (p) { b.lamp(p[0], p[1], 6, 0, p[1] < 0 ? 1 : -1); });
-        [[-38, -6], [-38, 6], [38, -6], [38, 6]].forEach(function (p) { b.jersey(p[0], p[1], 3, true); });
-        b.quad('hazard', -5, .02, -4, 8, .5, 0, { flat: true, rep: [8, .5] }); b.quad('hazard', 5, .02, 4, 8, .5, 0, { flat: true, rep: [8, .5] });
-      },
-      bg: 0x93a7b8, fog: [50, 200], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.6, [-26, 40, 18]], sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: .92 });
-  }
-  // 09 고갯길 검문소 — 길 한가운데 2층 검문소 건물, 경비 막사·초소·정비소, 아래쪽 배수로가 실내 우회로
-  var PLAN_B = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 38, 14, 14, 28, '검문소 건물', true], ['door', 38, 28, false, 5], ['door', 52, 28, false, 5], ['door', 45, 14, true, 2.4], ['door', 45, 42, true, 2.4],
-    ['room', 14, 6, 14, 9, '경비 막사', false], ['door', 21, 15, true, 2.4], ['door', 28, 10.5, false, 2.4], ['room', 62, 41, 14, 9, '차량 정비소', false], ['door', 69, 41, true, 2.4], ['door', 62, 45.5, false, 2.4],
-    ['room', 30, 46, 30, 5, '배수로 (좁은 실내 통로)', false], ['door', 30, 48.5, false, 2.4], ['door', 60, 48.5, false, 2.4], ['room', 58, 4, 18, 8, '초소', false], ['door', 58, 8, false, 2.4], ['door', 67, 12, true, 2.4],
-    ['cover', 18, 22, 5, 2], ['cover', 28, 32, 5, 2], ['cover', 32, 21, 2, 3], ['cover', 56, 32, 2, 3], ['cover', 60, 22, 5, 2], ['cover', 70, 32, 5, 2], ['cover', 22, 38, 3, 3], ['cover', 34, 8, 3, 3], ['cover', 46, 8, 2, 2], ['cover', 54, 18, 3, 2], ['cover', 66, 18, 2, 2], ['cover', 30, 40, 2, 2], ['cover', 16, 44, 4, 2], ['cover', 24, 18, 2, 2],
-    ['site', 71, 7, '1'], ['site', 45, 34, '2']];
-  function pass() {
-    return planned(PLAN_B, { name: '고갯길 검문소', ground: 0x8a7a5e, groundT: 'sand', far: 0x6b5a44, farT: 'sand', outer: 0x8a8070, outerT: 'rock', outerH: 5, wall: 0xa7a39a, wallT: 'block', wall2: 0x9c988e, roofC: 0x5d5a52, floor: 0x8f8c84,
-      cont: [0x596a4a, 0x6a5e44], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (Dp <= 2.1 && L >= 3) bagWall(b, cx, cz, lx, L); else if (n % 2) { crateRect(b, cv, n, [0x5f6a45, 0x6b6a4a, 0x8a7a52]); } else { b.jersey(cx, cz, Math.min(L, 3), !lx); b.barrel(cx + (lx ? 0 : .9), cz + (lx ? .9 : 0), 0x596a4a); } },
-      extra: function (b) {
-        b.box(0, 0, 92, 6, .03, 0x4a4a46, 0, false, 'conc'); for (var x = -42; x < 42; x += 4) b.box(x, 0, 2, .15, .02, 0xd8d2c0, .03, false);          // the road through the pass
-        [-12, 12].forEach(function (x) { b.box(x, -2.6, .3, .3, 1.1, 0xc23b2a, 0, true, 'paint'); b.box(x, 0, .12, 5, .12, 0xe8e2d0, 1, false, 'paint'); for (var i = -2; i <= 2; i++) b.box(x, i, .13, .5, .13, 0xc23b2a, .995, false); });   // boom barriers
-        b.mark('CHECKPOINT', 0, 5.2, -14.2, 6, 1.1, PI, '#ecebe4');
-        [[-20, -6], [20, 6], [-34, 9], [34, -9]].forEach(function (p) { b.lamp(p[0], p[1], 5.5, 0, p[1] < 0 ? 1 : -1); });
-        b.ghost = true; for (var k = 0; k < 18; k++) { var a = k / 18 * PI * 2, R = 100 + (k % 3) * 12, g = new T.DodecahedronGeometry(18 + (k % 4) * 6, 0); g.scale(1.4, .7 + (k % 3) * .25, 1); g.translate(Math.cos(a) * R, 2, Math.sin(a) * R * .75); b.geo(g, 0x6b5e4c, 'rock', {}); } b.ghost = false;   // mountains round the pass
-      },
-      bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], sky: [0x26313f, 0xb9885e], dim: .7, hdri: ['dusk', .42, .75, 6, .85] });
-  }
-  // 10 폐공장 — 가운데 2층 공장 본관(기계 사이 근접전), 위쪽 지붕만 있는 하역장, 아래쪽 제어실
-  var PLAN_C = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 24, 14, 42, 28, '공장 본관', true], ['door', 24, 22, false, 4], ['door', 24, 35, false, 3], ['door', 66, 22, false, 4], ['door', 66, 35, false, 3], ['door', 36, 14, true, 5], ['door', 55, 14, true, 3], ['door', 36, 42, true, 3], ['door', 55, 42, true, 5],
-    ['room', 30, 3, 20, 8, '하역장 (지붕만 있음)', false], ['room', 52, 46, 22, 7, '제어실', false], ['door', 52, 49.5, false, 2.4], ['door', 63, 46, true, 2.4], ['door', 74, 49.5, false, 2.4],
-    ['cover', 30, 20, 6, 3], ['cover', 40, 30, 3, 7], ['cover', 46, 18, 3, 6], ['cover', 52, 31, 6, 3], ['cover', 34, 34, 3, 3], ['cover', 56, 22, 3, 3], ['cover', 44, 27, 2, 2], ['cover', 14, 10, 4, 2], ['cover', 18, 44, 2, 4], ['cover', 14, 30, 2, 3], ['cover', 70, 12, 2, 4], ['cover', 74, 30, 2, 3], ['cover', 56, 6, 5, 2], ['cover', 64, 8, 2, 2], ['cover', 28, 46, 5, 2], ['cover', 38, 48, 2, 3], ['cover', 44, 45, 3, 2], ['cover', 20, 6, 3, 3], ['cover', 76, 42, 3, 2],
-    ['site', 45, 33, '1'], ['site', 40, 50, '2']];
-  function factory() {
-    return planned(PLAN_C, { name: '폐공장', ground: 0x7d7e78, groundT: 'conc', far: 0x5e5d52, outer: 0x8a8b86, wall: 0x9a9690, wallT: 'block', wall2: 0x7b6a5c, wall2T: 'rust', roofC: 0x6a5a4c, roofT: 'corr', floor: 0x8c8d88, stairC: 0x5c6166,
-      cont: [0x6a4a3a, 0x4f5a4a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (n % 3 === 0) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2); b.ghost = true; FURN.machine[3](f, b); b.ghost = false; b.solid(cx, cz, lx ? Math.max(L, 3.4) : Math.max(Dp, 1.8), lx ? Math.max(Dp, 1.8) : Math.max(L, 3.4), 2.4); } else if (n % 3 === 1) { b.jersey(cx, cz, L, !lx); b.barrel(cx + (lx ? -L / 2 + .3 : .9), cz + (lx ? .9 : -L / 2 + .3), 0x7a3f30); } else crateRect(b, cv, n, [0x8a6a45, 0x6a5a44, 0x9c8a62]); },
-      extra: function (b) {
-        b.ghost = true; b.cyl(30, -40, 2.4, 34, 0x8a6a58, 0, false, 'block', 1.8, 16); b.cyl(-26, -42, 2, 28, 0x7a6a5c, 0, false, 'block', 1.5, 16); b.ghost = false;   // chimneys beyond the wall
-        b.mark('공장 본관', 0, 4.8, -14.2, 4.5, 1.1, PI, '#ecebe4'); b.mark('제어실', 18, 2.7, 17.83, 2.4, .8, PI, '#ecebe4');
-        [[-30, 0], [30, 0], [0, -20], [0, 20]].forEach(function (p) { b.lamp(p[0], p[1], 6, p[1] ? 0 : (p[0] < 0 ? 1 : -1), p[1] ? (p[1] < 0 ? 1 : -1) : 0); });
-        [[-21.5, -8], [21.5, 8], [-8, 21.5]].forEach(function (p) { b.tires(p[0], p[1], 3); });
-      },
-      bg: 0x8a96a0, fog: [40, 180], hemi: [0xd0d6da, 0x5a5448, .95], sun: [0xf0e6d6, 1.15, [26, 36, -20]], sky: [0x5a6e84, 0xb9b4a6], hdri: ['day', .7, 1.2, 6, .9], dim: .85 });
-  }
-  // 11 시장 골목 — 큰길을 사이에 둔 두 줄 가게(찻집·식당·여관, 공방·이발소·차고 …). 밤, 가게 불빛
-  var PLAN_D = [['spawn', 1, 20, 9, 16, 'A'], ['spawn', 80, 20, 9, 16, 'B'], ['room', 12, 10, 12, 13, '찻집', false], ['door', 18, 23, true, 2.4], ['door', 24, 16.5, false, 2.4], ['room', 24, 10, 12, 13, '잡화점', false], ['door', 30, 23, true, 2.4], ['door', 36, 16.5, false, 2.4],
-    ['room', 36, 10, 14, 13, '식당', true], ['door', 43, 23, true, 2.4], ['door', 50, 16.5, false, 2.4], ['room', 50, 10, 12, 13, '약국', false], ['door', 56, 23, true, 2.4], ['door', 62, 16.5, false, 2.4], ['room', 62, 10, 16, 13, '여관', true], ['door', 70, 23, true, 2.4], ['door', 18, 10, true, 2.4], ['door', 56, 10, true, 2.4],
-    ['room', 12, 33, 14, 12, '창고', false], ['door', 19, 33, true, 2.4], ['door', 26, 39, false, 2.4], ['room', 26, 33, 14, 12, '공방', true], ['door', 33, 33, true, 2.4], ['room', 40, 33, 14, 12, '빈 가게', false], ['door', 47, 33, true, 2.4], ['door', 54, 39, false, 2.4],
-    ['room', 54, 33, 12, 12, '이발소', false], ['door', 60, 33, true, 2.4], ['door', 66, 39, false, 2.4], ['room', 66, 33, 12, 12, '차고', false], ['door', 72, 33, true, 2.4], ['door', 33, 45, true, 2.4], ['door', 60, 45, true, 2.4],
-    ['cover', 16, 26, 4, 2], ['cover', 26, 30, 4, 2], ['cover', 34, 25, 2, 3], ['cover', 50, 29, 4, 2], ['cover', 58, 25, 4, 2], ['cover', 68, 30, 4, 2], ['cover', 22, 3, 3, 3], ['cover', 40, 4, 5, 2], ['cover', 60, 3, 3, 3], ['cover', 20, 48, 4, 2], ['cover', 44, 49, 3, 3], ['cover', 70, 48, 4, 2], ['cover', 30, 5, 2, 2], ['cover', 52, 50, 2, 2],
-    ['site', 43, 13.2, '1'], ['site', 48, 49.5, '2']];
-  function market() {
-    return planned(PLAN_D, { name: '시장 골목', ht: 3.6, ground: 0x6e6c66, groundT: 'conc', far: 0x3a3a36, outer: 0x8a8680, outerT: 'block', wall: 0xc8bba4, wallT: 'plaster', wall2: 0xb9ab92, wall2T: 'plaster', roofC: 0x7a4a38, roofT: 'roof', floor: 0x8a7a66,
-      cont: [0x3f5f7a, 0x7a3f30], cover: function (b, cv, cx, cz, lx, L, Dp, n) {
-        if (Dp <= 2.1 && L >= 3.5) { var f = Fr(b, cx, cz, lx ? 0 : PI / 2); b.ghost = true; FURN.stall[3](L >= 4.4 ? f.sub(-1.1, 0, 0) : f, b); if (L >= 4.4) FURN.stall[3](f.sub(1.1, 0, 0), b); b.ghost = false; b.solid(cx, cz, cv.w, cv.d, 1); }
-        else if (cv.w * cv.d <= 4.5) { b.barrel(cx - .35, cz, 0x3f5f7a); b.barrel(cx + .35, cz + .2, 0x7a3f30); b.crate(cx, cz - .6, .8, 0x9c8a62); } else crateRect(b, cv, n, [0x9c8a62, 0x8a6a45, 0x6b8a5a]); },
-      extra: function (b, P) {
-        // awnings and shop signs over each front door, lamps and strings of bulbs along the street
-        var cols = [0x8c3b2f, 0x2f5d8a, 0x3f6b3f, 0xc97a2b, 0x6a4a8a];
-        P.doors.forEach(function (dd, i) { if (!dd.hz || Math.abs(Math.abs(dd.z) - 5) > .3) return; var out = dd.z < 0 ? 1 : -1, gh = b.ghost; b.ghost = true;
-          b.box(dd.x, dd.z + out * 1.1, 4, 2, .06, cols[i % cols.length], 2.6, false, 'canvas'); b.ghost = gh; b.glow(dd.x, 2.62, dd.z + out * .2, 1.6, .04, .1, 0xffd28a); b.light(dd.x, 2.3, dd.z + out * 1.2, 0xffc98a, 1.2, 8); });
-        [-36, -24, -12, 0, 12, 24, 36].forEach(function (x, i) { b.lamp(x, i % 2 ? -3.2 : 3.2, 5, 0, i % 2 ? 1 : -1); });
-        for (var x = -32; x < 34; x += 1.6) { b.cyl(x, Math.sin(x * .37) * .3, .06, .06, [0xffd28a, 0xffb070, 0xfff0c0][Math.round(x * 2) % 3 + (Math.round(x * 2) % 3 < 0 ? 3 : 0)], 4.3 + Math.cos(x * .4) * .15, false, 'glow', .06, 6); }
-        b.seg(-33, 4.45, 0, 34, 4.45, 0, .015, 0x222222, 'plain');
-        b.mark('MARKET', 0, 4.4, -27.95, 6, 1.4, 0, '#ffd27a');
-      },
-      bg: 0x1b2832, fog: [24, 120], hemi: [0x9fb6c8, 0x2e2a24, .8], sun: [0xbcd0ea, .55, [34, 58, 22]], sky: [0x05080c, 0x1b2832], hdri: ['night', .05, .08, 2, .6], dim: 1 });
-  }
+  // ---- the eleven match maps, each built from its plan (the approved renewal sheets; data made by the plan drawing tool) ----
+  // A plan keeps rooms, doors, barriers (wall), containers (cont, 1-2 high), low cover, water with bridges and fords, players-only
+  // walkways with stairs, spawns (two per team), bomb sites and the lanes; the lanes become the routes bots choose between.
+  var PLANS = {"dock": {"W": 80, "H": 56, "plan": [["water", 0, 50, 80, 6], ["spawn", 2, 2, 10, 9, "A"], ["spawn", 2, 30, 8, 8, "A"], ["spawn", 66, 40, 12, 8, "B"], ["spawn", 68, 14, 10, 8, "B"], ["room", 16, 2, 30, 10, "창고동", false], ["door", 16, 7.0, false, 2.4], ["door", 24.1, 12, true, 2.4], ["door", 37.9, 12, true, 2.4], ["door", 46, 7.0, false, 2.4], ["room", 52, 2, 14, 9, "항만 사무소", false], ["door", 52, 6.5, false, 2.4], ["door", 59.0, 11, true, 2.4], ["door", 66, 6.5, false, 2.4], ["cont", 14, 17, 12, 2.5, 2], ["cont", 30, 17, 8, 2.5, 1], ["cont", 46, 17, 12, 2.5, 2], ["cont", 62, 17, 2.5, 8, 2], ["cont", 20, 22, 2.5, 9, 2], ["cont", 28, 24, 12, 2.5, 2], ["cont", 44, 22, 2.5, 9, 1], ["cont", 52, 26, 10, 2.5, 2], ["cont", 12, 33, 10, 2.5, 1], ["cont", 26, 31, 2.5, 8, 2], ["cont", 34, 34, 12, 2.5, 2], ["cont", 56, 32, 2.5, 8, 2], ["cont", 62, 34, 8, 2.5, 1], ["stairs", 30, 19.5, 2.4, 3], ["stairs", 12, 35.5, 2.4, 3], ["stairs", 66, 36.5, 2.4, 3], ["cover", 14, 45, 2, 1.5], ["cover", 28, 44, 3, 2], ["cover", 44, 46, 2, 2], ["cover", 56, 44, 3, 1.5], ["cover", 34, 40.5, 6, 2.5], ["cover", 22, 14, 2, 2], ["cover", 40, 14.5, 2, 1.5], ["cover", 58, 13, 2, 2], ["lane", "flank", [[8, 9], [16, 7], [46, 7], [52, 6.5], [66, 6.5], [72, 14]]], ["lane", "main", [[7, 32], [17, 28], [24, 22.5], [42, 21], [50, 29.5], [62, 30], [70, 40]]], ["lane", "flank", [[6, 38], [10, 46], [60, 46.5], [66, 44]]], ["lane", "conn", [[23, 12.5], [24, 16]]], ["lane", "conn", [[38, 12.5], [39, 21]]], ["lane", "conn", [[48, 41], [48, 37]]], ["lane", "conn", [[24, 40], [24, 36]]]]}, "warehouse": {"W": 40, "H": 28, "plan": [["spawn", 1, 21, 7, 6, "A"], ["spawn", 1, 5, 4.5, 6, "A"], ["spawn", 34.5, 5, 4.5, 6, "B"], ["spawn", 33, 22, 6, 5, "B"], ["wall", 8, 8, 8, 2.2], ["wall", 8, 12.5, 8, 2.2], ["wall", 8, 17, 8, 2.2], ["wall", 24, 9.5, 8, 2.2], ["wall", 24, 14, 8, 2.2], ["wall", 24, 18.5, 8, 2.2], ["room", 14, 23, 12, 5, "사무실", false], ["door", 14, 25.5, false, 2.4], ["door", 20.0, 23, true, 2.4], ["door", 26, 25.5, false, 2.4], ["walk", 8, 0.6, 24, 2.2], ["stairs", 8, 2.8, 2.2, 4], ["stairs", 29.8, 2.8, 2.2, 4], ["cover", 19, 11, 2, 2], ["cover", 20.5, 16.5, 1.5, 2.6], ["cover", 3, 14, 2, 2], ["cover", 35, 13, 2, 2], ["cover", 17, 5, 2, 1.5], ["cover", 22, 21, 1.6, 1.6], ["lane", "main", [[5, 21], [5, 11], [12, 5], [18, 7], [18, 21], [12, 21.5], [6, 22]]], ["lane", "main", [[35, 7], [35, 21], [28, 22.5], [22, 21], [22, 6], [30, 6.5], [34, 7]]], ["lane", "flank", [[8, 24.5], [14, 25.5], [26, 25.5], [32, 24.5]]], ["lane", "flank", [[7, 3], [12, 1.7], [30, 1.7], [33, 3]]]]}, "depot": {"W": 100, "H": 70, "plan": [["spawn", 2, 56, 12, 11, "A"], ["spawn", 2, 18, 8, 12, "A"], ["spawn", 86, 2, 12, 10, "B"], ["spawn", 90, 36, 8, 12, "B"], ["wall", 38, 24, 9, 1.2], ["wall", 53, 24, 9, 1.2], ["wall", 38, 46, 9, 1.2], ["wall", 53, 46, 9, 1.2], ["wall", 38, 24, 1.2, 8], ["wall", 38, 39, 1.2, 8], ["wall", 61, 24, 1.2, 8], ["wall", 61, 39, 1.2, 8], ["cover", 42, 28, 4, 4], ["cover", 53, 36, 4, 4], ["cover", 47, 33, 2.5, 2.5], ["cover", 43, 40, 3, 2], ["cover", 55, 28, 2, 3], ["cont", 14, 6, 14, 3, 1], ["cont", 32, 6, 14, 3, 1], ["cont", 50, 6, 14, 3, 1], ["room", 70, 6, 12, 9, "막사 1", false], ["door", 70, 10.5, false, 2.4], ["door", 76.0, 15, true, 2.4], ["room", 70, 18, 12, 8, "막사 2", false], ["door", 70, 22.0, false, 2.4], ["door", 76.0, 18, true, 2.4], ["door", 82, 22.0, false, 2.4], ["room", 12, 50, 22, 14, "격납고", true], ["door", 18.6, 50, true, 2.4], ["door", 34, 57.0, false, 2.4], ["door", 12, 57.0, false, 2.4], ["room", 40, 54, 12, 10, "창고", false], ["door", 46.0, 54, true, 2.4], ["door", 40, 59.0, false, 2.4], ["door", 52, 59.0, false, 2.4], ["cover", 64, 54, 6, 2.5], ["cover", 74, 58, 6, 2.5], ["cover", 80, 50, 2.5, 6], ["cover", 66, 62, 4, 2], ["cover", 24, 30, 3, 3], ["cover", 18, 40, 4, 2], ["cover", 30, 18, 2, 4], ["cover", 72, 32, 3, 3], ["cover", 84, 28, 2, 4], ["cover", 28, 44, 3, 2], ["site", 78, 31, "A"], ["site", 74, 55, "B"], ["lane", "flank", [[8, 22], [12, 12], [48, 12], [68, 12], [80, 26]]], ["lane", "main", [[10, 30], [28, 35], [38, 35.5], [61, 35.5], [75, 33]]], ["lane", "flank", [[12, 58], [34, 57], [40, 59], [52, 59], [70, 56]]], ["lane", "conn", [[50, 16], [50, 24]]], ["lane", "conn", [[50, 52], [50, 47]]], ["lane", "conn", [[24, 48], [26, 40]]]]}, "oldtown": {"W": 84, "H": 60, "plan": [["spawn", 2, 50, 10, 8, "A"], ["spawn", 2, 24, 6, 10, "A"], ["spawn", 72, 1, 10, 7, "B"], ["spawn", 78, 22, 5, 10, "B"], ["room", 8, 6, 14, 10, "여관", true], ["door", 15.0, 16, true, 2.4], ["door", 22, 11.0, false, 2.4], ["room", 26, 4, 12, 10, "종탑 집", true], ["door", 32.0, 14, true, 2.4], ["door", 26, 9.0, false, 2.4], ["room", 54, 8, 12, 10, "상점", false], ["door", 60.0, 18, true, 2.4], ["door", 54, 13.0, false, 2.4], ["door", 66, 13.0, false, 2.4], ["room", 10, 22, 12, 12, "빵집", false], ["door", 16.0, 22, true, 2.4], ["door", 16.0, 34, true, 2.4], ["door", 22, 28.0, false, 2.4], ["room", 56, 24, 12, 12, "카페", true], ["door", 56, 30.0, false, 2.4], ["door", 68, 30.0, false, 2.4], ["door", 62.0, 24, true, 2.4], ["room", 14, 42, 14, 10, "공방", false], ["door", 21.0, 42, true, 2.4], ["door", 28, 47.0, false, 2.4], ["room", 34, 44, 14, 12, "교회", true], ["door", 41.0, 44, true, 2.4], ["door", 34, 50.0, false, 2.4], ["door", 48, 50.0, false, 2.4], ["room", 54, 44, 12, 10, "우체국", false], ["door", 60.0, 44, true, 2.4], ["door", 66, 49.0, false, 2.4], ["room", 70, 34, 12, 12, "시장 창고", false], ["door", 70, 40.0, false, 2.4], ["door", 76.0, 34, true, 2.4], ["door", 76.0, 46, true, 2.4], ["wall", 26, 18, 8, 1.2], ["wall", 44, 14, 1.2, 8], ["wall", 30, 37, 1.2, 7], ["wall", 50, 38, 6, 1.2], ["wall", 66, 20, 8, 1.2], ["wall", 24, 30, 6, 1.2], ["wall", 44, 2, 1.2, 6], ["cover", 41, 28, 4, 4], ["cover", 36, 24, 2, 2], ["cover", 48, 34, 2, 2], ["cover", 30, 20, 2, 1.5], ["cover", 62, 40, 2, 2], ["cover", 20, 38, 2, 2], ["cover", 72, 26, 2, 2], ["site", 62, 4, "A"], ["site", 76, 52, "B"], ["lane", "flank", [[7, 30], [8, 20], [24, 17], [38, 16], [52, 20], [61, 7]]], ["lane", "main", [[8, 30], [16, 28], [24, 32], [36, 30], [50, 30], [68, 30], [76, 28]]], ["lane", "flank", [[9, 50], [20, 54], [32, 54], [48, 50], [68, 52], [74, 52]]], ["lane", "conn", [[16, 34], [16, 41]]], ["lane", "conn", [[41, 44], [41, 33]]], ["lane", "conn", [[60, 24], [60, 18]]]]}, "compound": {"W": 100, "H": 76, "plan": [["spawn", 36, 66, 28, 8, "A"], ["spawn", 2, 64, 10, 10, "A"], ["spawn", 36, 2, 28, 6, "B"], ["spawn", 88, 2, 10, 8, "B"], ["room", 40, 28, 20, 14, "본부", true], ["door", 55.0, 28, true, 2.4], ["door", 45.0, 42, true, 2.4], ["door", 40, 32.2, false, 2.4], ["door", 60, 37.8, false, 2.4], ["room", 10, 10, 16, 10, "막사", false], ["door", 18.0, 20, true, 2.4], ["door", 26, 15.0, false, 2.4], ["room", 74, 10, 16, 10, "정비고", false], ["door", 82.0, 20, true, 2.4], ["door", 74, 15.0, false, 2.4], ["wall", 28, 8, 2, 18], ["wall", 28, 32, 2, 22], ["wall", 70, 8, 2, 18], ["wall", 70, 32, 2, 22], ["wall", 36, 50, 10, 1.2], ["wall", 54, 50, 10, 1.2], ["wall", 36, 18, 8, 1.2], ["wall", 56, 18, 8, 1.2], ["cover", 14, 30, 3, 3], ["cover", 20, 40, 3, 2], ["cover", 12, 50, 2, 3], ["cover", 80, 30, 3, 3], ["cover", 78, 40, 3, 2], ["cover", 86, 50, 2, 3], ["cover", 46, 58, 3, 2], ["cover", 52, 58, 3, 2], ["cover", 47, 22, 6, 2], ["cover", 18, 24, 4, 2], ["cover", 78, 24, 4, 2], ["site", 18, 15, "A"], ["site", 82, 15, "B"], ["lane", "main", [[40, 66], [20, 58], [18, 36], [18, 22]]], ["lane", "main", [[50, 66], [45, 43], [45, 36], [55, 33], [55, 27], [50, 10]]], ["lane", "main", [[60, 66], [80, 58], [82, 36], [82, 22]]], ["lane", "conn", [[30, 29], [39, 34]]], ["lane", "conn", [[70, 29], [61, 34]]], ["lane", "conn", [[29, 57], [36, 56]]], ["lane", "conn", [[71, 57], [64, 56]]]]}, "arctic": {"W": 100, "H": 70, "plan": [["spawn", 2, 56, 10, 11, "A"], ["spawn", 2, 2, 10, 8, "A"], ["spawn", 88, 2, 10, 10, "B"], ["spawn", 88, 30, 10, 8, "B"], ["room", 32, 20, 36, 26, "", true], ["room", 32, 20, 12, 10, "서버실", false], ["door", 44, 25.0, false, 2.4], ["room", 56, 20, 12, 10, "실험실", false], ["door", 56, 25.0, false, 2.4], ["door", 62.0, 30, true, 2.4], ["door", 32, 37, false, 2.4], ["door", 68, 37, false, 2.4], ["door", 50, 20, true, 2.4], ["door", 50, 46, true, 2.4], ["room", 10, 52, 80, 4, "지하 배관 통로", false], ["door", 10, 54.0, false, 2.4], ["door", 90, 54.0, false, 2.4], ["door", 50.0, 52, true, 2.4], ["wall", 18, 12, 14, 3], ["wall", 66, 8, 14, 3], ["wall", 14, 30, 3, 14], ["wall", 82, 22, 3, 14], ["wall", 24, 44, 6, 3], ["wall", 72, 42, 6, 3], ["cover", 40, 40, 2, 2], ["cover", 58, 38, 2, 2], ["cover", 24, 24, 3, 2], ["cover", 76, 30, 2, 3], ["cover", 44, 10, 3, 2], ["cover", 56, 14, 2, 2], ["cover", 30, 60, 3, 2], ["cover", 64, 60, 3, 2], ["site", 62, 25, "A"], ["site", 80, 14, "B"], ["lane", "flank", [[8, 8], [16, 18], [40, 16], [62, 14], [80, 14]]], ["lane", "main", [[10, 36], [31, 37], [50, 33], [69, 37], [88, 34]]], ["lane", "flank", [[8, 58], [10, 54], [90, 54], [92, 40]]], ["lane", "conn", [[50, 52], [50, 47]]], ["lane", "conn", [[50, 19], [50, 14]]]]}, "canyon": {"W": 110, "H": 70, "plan": [["water", 50, 0, 10, 70], ["bridge", 48, 8, 14, 4], ["ford", 50, 30, 10, 10], ["room", 46, 56, 18, 6, "동굴 다리", false], ["door", 46, 59.0, false, 2.4], ["door", 64, 59.0, false, 2.4], ["spawn", 2, 54, 10, 13, "A"], ["spawn", 2, 4, 8, 10, "A"], ["spawn", 98, 2, 10, 10, "B"], ["spawn", 98, 50, 10, 10, "B"], ["wall", 30, 16, 3, 12], ["wall", 36, 44, 10, 3], ["wall", 40, 0, 3, 6], ["wall", 66, 18, 3, 10], ["wall", 68, 46, 10, 3], ["wall", 20, 32, 8, 3], ["room", 10, 10, 14, 10, "서쪽 마을집", false], ["door", 17.0, 20, true, 2.4], ["door", 24, 15.0, false, 2.4], ["room", 16, 40, 12, 10, "우물집", false], ["door", 22.0, 40, true, 2.4], ["door", 28, 45.0, false, 2.4], ["room", 74, 14, 14, 10, "채굴장 사무소", false], ["door", 74, 19.0, false, 2.4], ["door", 81.0, 24, true, 2.4], ["room", 86, 42, 14, 12, "동쪽 창고", true], ["door", 86, 48.0, false, 2.4], ["door", 93.0, 42, true, 2.4], ["cover", 36, 30, 2, 3], ["cover", 42, 22, 3, 2], ["cover", 42, 38, 2, 2], ["cover", 72, 34, 3, 2], ["cover", 78, 28, 2, 3], ["cover", 90, 30, 3, 2], ["cover", 30, 60, 3, 2], ["cover", 78, 60, 3, 2], ["cover", 64, 4, 3, 2], ["site", 80, 28, "A"], ["site", 82, 52, "B"], ["lane", "flank", [[8, 10], [26, 10], [48, 10], [62, 10], [74, 16], [80, 24]]], ["lane", "main", [[10, 50], [34, 36], [50, 35], [60, 35], [76, 31]]], ["lane", "flank", [[10, 62], [46, 59], [64, 59], [84, 56]]], ["lane", "conn", [[34, 30], [34, 18]]], ["lane", "conn", [[72, 42], [72, 34]]]]}, "customs": {"W": 90, "H": 56, "plan": [["spawn", 1, 42, 9, 12, "A"], ["spawn", 1, 2, 8, 8, "A"], ["spawn", 80, 2, 9, 12, "B"], ["spawn", 82, 26, 7, 8, "B"], ["room", 50, 3, 28, 12, "", false], ["room", 50, 3, 10, 12, "검사실", false], ["door", 50, 9.0, false, 2.4], ["door", 55.0, 15, true, 2.4], ["room", 60, 3, 8, 12, "복도", false], ["door", 60, 9.0, false, 2.4], ["door", 68, 9.0, false, 2.4], ["door", 64.0, 15, true, 2.4], ["room", 68, 3, 10, 12, "보관실", false], ["door", 78, 9.0, false, 2.4], ["door", 73.0, 15, true, 2.4], ["room", 52, 38, 28, 14, "물류 창고", true], ["door", 52, 45.0, false, 2.4], ["door", 60.4, 38, true, 2.4], ["door", 71.6, 38, true, 2.4], ["door", 80, 45.0, false, 2.4], ["wall", 32, 18, 0.8, 16], ["cover", 30.4, 25, 1.6, 2.4], ["wall", 38, 18, 0.8, 16], ["cover", 36.4, 25, 1.6, 2.4], ["wall", 44, 18, 0.8, 16], ["cover", 42.4, 25, 1.6, 2.4], ["cover", 30, 36, 3, 2], ["cover", 46, 14, 3, 2], ["cover", 36, 40, 2, 2], ["cont", 10, 14, 10, 2.5, 2], ["cont", 10, 20, 2.5, 8, 2], ["cont", 16, 22, 8, 2.5, 1], ["cont", 14, 30, 10, 2.5, 2], ["cont", 22, 34, 2.5, 8, 2], ["cont", 8, 36, 8, 2.5, 1], ["cont", 24, 12, 2.5, 8, 1], ["cover", 60, 22, 3, 3], ["cover", 70, 28, 2, 4], ["cover", 56, 30, 4, 2], ["cover", 80, 18, 2, 3], ["site", 55, 9, "A"], ["site", 66, 45, "B"], ["lane", "flank", [[7, 8], [20, 8], [40, 9], [50, 9]]], ["lane", "main", [[9, 44], [18, 28], [30, 26], [35, 30], [41, 23], [50, 26], [66, 24]]], ["lane", "flank", [[9, 50], [30, 48], [52, 45]]], ["lane", "conn", [[64, 15], [64, 22]]], ["lane", "conn", [[60, 37], [60, 32]]]]}, "pass": {"W": 90, "H": 56, "plan": [["spawn", 1, 42, 9, 12, "A"], ["spawn", 1, 18, 7, 9, "A"], ["spawn", 80, 2, 9, 10, "B"], ["spawn", 82, 26, 7, 8, "B"], ["road", 8, 44, 26, 6], ["road", 28, 22, 6, 28], ["road", 28, 22, 34, 6], ["road", 56, 8, 6, 20], ["road", 56, 8, 26, 6], ["wall", 10, 36, 16, 3], ["wall", 36, 30, 18, 3], ["wall", 50, 34, 3, 12], ["wall", 38, 14, 16, 3], ["wall", 64, 16, 3, 14], ["wall", 68, 32, 14, 3], ["room", 38, 19, 12, 12, "검문소", true], ["door", 38, 25.0, false, 2.4], ["door", 50, 25.0, false, 2.4], ["door", 44.0, 19, true, 2.4], ["room", 4, 4, 12, 9, "경비 막사", false], ["door", 16, 8.5, false, 2.4], ["door", 10.0, 13, true, 2.4], ["room", 66, 40, 14, 10, "차량 정비소", false], ["door", 66, 45.0, false, 2.4], ["door", 73.0, 40, true, 2.4], ["room", 30, 51, 34, 4, "배수로", false], ["door", 30, 53.0, false, 2.4], ["door", 64, 53.0, false, 2.4], ["door", 50.4, 51, true, 2.4], ["room", 70, 14, 10, 8, "초소", false], ["door", 70, 18.0, false, 2.4], ["door", 75.0, 22, true, 2.4], ["cover", 14, 40, 3, 2], ["cover", 30, 38, 2, 3], ["cover", 58, 22, 2, 3], ["cover", 74, 26, 3, 2], ["cover", 22, 8, 3, 2], ["cover", 46, 6, 3, 2], ["cover", 78, 46, 2, 2], ["cover", 40, 44, 3, 2], ["site", 76, 26, "A"], ["site", 44, 25, "B"], ["lane", "main", [[9, 46], [30, 47], [31, 26], [37, 25], [51, 25], [59, 22], [60, 11], [78, 10]]], ["lane", "flank", [[6, 20], [10, 15], [30, 8], [56, 5], [80, 6]]], ["lane", "flank", [[9, 52], [30, 53], [64, 53], [70, 46], [82, 32]]], ["lane", "conn", [[44, 31], [44, 50]]], ["lane", "conn", [[18, 34], [18, 15]]]]}, "factory": {"W": 90, "H": 56, "plan": [["spawn", 1, 44, 9, 10, "A"], ["spawn", 1, 14, 7, 8, "A"], ["spawn", 80, 2, 9, 10, "B"], ["spawn", 82, 30, 7, 10, "B"], ["room", 20, 14, 50, 28, "공장 본관", true], ["door", 20, 18.2, false, 2.4], ["door", 20, 36.400000000000006, false, 2.4], ["door", 70, 21.0, false, 2.4], ["door", 70, 37.8, false, 2.4], ["door", 30.0, 14, true, 2.4], ["door", 57.5, 14, true, 2.4], ["door", 40.0, 42, true, 2.4], ["door", 62.5, 42, true, 2.4], ["wall", 22, 20, 8, 2.2], ["wall", 22, 33, 8, 2.2], ["wall", 34, 20, 9, 2.2], ["wall", 34, 33, 9, 2.2], ["wall", 47, 20, 9, 2.2], ["wall", 47, 33, 9, 2.2], ["wall", 60, 20, 8, 2.2], ["wall", 60, 33, 8, 2.2], ["walk", 22, 14.6, 30, 2], ["stairs", 52.3, 14.6, 3, 2], ["cont", 8, 5, 14, 3, 1], ["cont", 28, 5, 14, 3, 1], ["cont", 50, 5, 14, 3, 1], ["cover", 24, 46, 4, 4], ["cover", 36, 48, 4, 4], ["cover", 54, 46, 3, 3], ["cover", 66, 48, 4, 4], ["cover", 14, 30, 2, 3], ["cover", 76, 18, 2, 3], ["cover", 40, 26, 2, 2], ["cover", 52, 27, 2, 2], ["wall", 44, 45, 1, 8], ["site", 64, 28, "A"], ["site", 70, 50, "B"], ["lane", "flank", [[6, 16], [8, 10], [40, 10.5], [70, 10], [80, 8]]], ["lane", "main", [[9, 44], [20, 37], [45, 37], [70, 38], [82, 36]]], ["lane", "main", [[20, 25], [45, 27], [70, 24]]], ["lane", "flank", [[9, 50], [30, 52], [60, 52], [78, 46]]], ["lane", "conn", [[32, 14], [32, 9]]], ["lane", "conn", [[40, 42], [40, 46]]]]}, "market": {"W": 90, "H": 56, "plan": [["spawn", 1, 46, 8, 9, "A"], ["spawn", 1, 26, 5, 10, "A"], ["spawn", 81, 1, 8, 9, "B"], ["spawn", 84, 28, 5, 10, "B"], ["room", 34, 20, 22, 16, "지붕 시장", false], ["door", 40.6, 20, true, 2.4], ["door", 34, 24.8, false, 2.4], ["door", 56, 32.0, false, 2.4], ["door", 49.4, 36, true, 2.4], ["cover", 38, 24, 3, 1.5], ["cover", 46, 24, 3, 1.5], ["cover", 40, 30, 3, 1.5], ["cover", 49, 30, 3, 1.5], ["room", 8, 4, 10, 8, "찻집", false], ["door", 13.0, 12, true, 2.4], ["door", 18, 8.0, false, 2.4], ["room", 21, 4, 10, 8, "잡화점", false], ["door", 21, 8.0, false, 2.4], ["door", 26.0, 12, true, 2.4], ["room", 37, 3, 12, 9, "식당", false], ["door", 43.0, 12, true, 2.4], ["door", 49, 7.5, false, 2.4], ["room", 53, 4, 10, 8, "약국", false], ["door", 53, 8.0, false, 2.4], ["door", 58.0, 12, true, 2.4], ["room", 66, 4, 12, 8, "여관", false], ["door", 72.0, 12, true, 2.4], ["door", 78, 8.0, false, 2.4], ["room", 8, 16, 9, 8, "창고", false], ["door", 12.5, 16, true, 2.4], ["door", 17, 20.0, false, 2.4], ["room", 20, 18, 10, 9, "공방", false], ["door", 20, 22.5, false, 2.4], ["door", 25.0, 27, true, 2.4], ["room", 60, 18, 10, 9, "이발소", false], ["door", 65.0, 18, true, 2.4], ["door", 70, 22.5, false, 2.4], ["room", 73, 14, 8, 10, "차고", false], ["door", 73, 19.0, false, 2.4], ["door", 77.0, 24, true, 2.4], ["room", 8, 40, 12, 9, "빵집", false], ["door", 14.0, 40, true, 2.4], ["door", 20, 44.5, false, 2.4], ["room", 24, 42, 10, 9, "철물점", false], ["door", 29.0, 42, true, 2.4], ["door", 24, 46.5, false, 2.4], ["room", 40, 40, 12, 8, "빈 가게", false], ["door", 46.0, 40, true, 2.4], ["door", 46.0, 48, true, 2.4], ["room", 56, 42, 10, 8, "정육점", false], ["door", 56, 46.0, false, 2.4], ["door", 66, 46.0, false, 2.4], ["room", 70, 40, 12, 9, "세탁소", false], ["door", 76.0, 40, true, 2.4], ["door", 70, 44.5, false, 2.4], ["cover", 14, 31, 2, 2], ["cover", 30, 32, 2, 2], ["cover", 60, 32, 2, 2], ["cover", 76, 30, 2, 2], ["cover", 34, 14, 2, 2], ["cover", 64, 38, 2, 1.5], ["cover", 20, 36, 3, 1.5], ["cover", 52, 14, 2, 2], ["site", 45, 28, "A"], ["site", 70, 30, "B"], ["lane", "flank", [[5, 30], [12, 26], [19, 14], [34, 14], [51, 14], [64, 15], [80, 12]]], ["wall", 66, 27, 1.2, 7], ["wall", 58, 36.5, 6, 1.2], ["lane", "main", [[8, 46], [22, 38], [33, 25], [45, 28], [57, 32], [64, 35], [72, 34], [84, 32]]], ["lane", "flank", [[9, 52], [38, 53], [54, 51], [68, 50], [84, 36]]], ["lane", "conn", [[45, 37], [45, 40]]], ["lane", "conn", [[25, 28], [25, 32]]]]}};
+  var LIT = {
+    night: { bg: 0x1b2832, fog: [22, 120], hemi: [0x9fb6c8, 0x2e2a24, .78], sun: [0xbcd0ea, .62, [34, 58, 22]], sky: [0x05080c, 0x1b2832], hdri: ['night', .05, .08, 2, .6], dim: 1 },
+    day: { bg: 0x93a7b8, fog: [50, 200], hemi: [0xe2ebf2, 0x6a5c48, 1], sun: [0xfff0d0, 1.6, [-26, 40, 18]], sky: [0x3a6aa6, 0xd9cdb4], hdri: ['day', .8, 1.5, 8, 1], dim: .92 },
+    dusk: { bg: 0x4a5560, fog: [40, 190], hemi: [0xc4d0da, 0x4a4436, .95], sun: [0xffd9b0, .75, [-30, 38, 24]], sky: [0x26313f, 0xb9885e], hdri: ['dusk', .42, .75, 6, .85], dim: .7 },
+    snow: { bg: 0x2b3b55, fog: [30, 170], hemi: [0xb9cde8, 0x5b6676, .95], sun: [0xa9c4ec, .55, [30, 40, 26]], sky: [0x0c1626, 0x3a5070], hdri: ['night', .14, .22, 2, .9], dim: .8 },
+    indoor: { bg: 0x101315, fog: [28, 90], hemi: [0xc9d2d8, 0x4a4338, .88], sun: [0xfff1dc, .32, [9, 30, 7]], hdri: ['indoor', .3, .3, 4, .6], dim: 1 }
+  };
+  function lit(k, th) { for (var q in LIT[k]) if (th[q] === undefined) th[q] = LIT[k][q]; return th; }
+  function crates(b, cv, cx, cz, lx, L, Dp, n) { if (cv.w * cv.d <= 4.5) { b.pallet(cx, cz, 0); b.crate(cx, cz, 1.3, 0xb39058, .14, 1.2); b.solid(cx, cz, 1.4, 1.4, .2); } else crateRect(b, cv, n, [0xb39058, 0x9c8a62, 0xc9a66e]); }
+  function lamps(b, list, h) { list.forEach(function (p) { b.lamp(p[0], p[1], h || 6, p[2] || 0, p[3] || 0); }); }
+  function mk(key, th) { return function () { return planned(PLANS[key], th); }; }
+  var dockM = mk('dock', lit('night', { name: '컨테이너 부두', ground: 0x4d5053, groundT: 'conc', far: 0x16303b, outer: 0x6a6e70, wall: 0xb7b2a6, wallT: 'block', roofC: 0x5d666c, floor: 0x8e918c, rain: true, waterC: 0x16313d,
+    cont: [0x7a3f30, 0x3f5f7a, 0x596a4a, 0x8a7a52, 0x2f6a6a, 0x6a4a6a, 0x9a5a2a], cover: crates,
+    extra: function (b) { lamps(b, [[-30, -12, 0, 1], [-10, -12, 0, 1], [10, -12, 0, 1], [30, -12, 0, 1], [-26, 16, 0, -1], [0, 16, 0, -1], [26, 16, 0, -1]]); for (var x = -38; x <= 38; x += 6) b.cyl(x, 21.6, .22, .6, 0x2a2e31, 0, true, 'metal', .28, 10); b.mark('PIER 7', 0, 3.4, -18.85, 4, 1, PI, '#ecebe4'); } }));
+  var warehouseM = mk('warehouse', lit('indoor', { name: '물류 창고', hall: 6.2, wallKind: 'rack', ground: 0xa8acad, groundT: 'floor', far: 0x101315, outer: 0x8f9aa0, outerT: 'panel', wall: 0xb4b4ac, wallT: 'block', floor: 0xa8acad, roofC: 0x5d666c,
+    cont: [0x7a3f30], cover: crates, extra: function (b) { [-12, 0, 12].forEach(function (x) { b.box(x, 0, .12, 26, .02, C.yellow, .03, false); }); b.mark('A', -17, .04, 11, 1.6, 1.6, 0, '#ffb347', true); b.mark('B', 17, .04, -11, 1.6, 1.6, 0, '#6cc4e0', true); } }));
+  var depotM = mk('depot', lit('day', { name: '보급기지', ground: 0xa59878, groundT: 'sand', far: 0x8a7a5c, farT: 'sand', outer: 0x9a9b98, wall: 0xb9b5a8, wallT: 'block', roofC: 0x6a7074, floor: 0x9a9c97, wallKind: 'conc', wallH: 3, barrierC: 0x9a9b98,
+    cont: [0x5a6142, 0x6a4a3a, 0x3f5f7a], cover: crates, extra: function (b) { [[-18, -1.5], [7, 1.5]].forEach(function (q) { b.cyl(q[0], q[1], 2, 3.4, 0xc9c4b6, 0, false, 'metal', 2, 18); }); lamps(b, [[-36, -18, 1, 0], [36, 18, -1, 0], [0, -20, 0, 1], [0, 22, 0, -1]]); } }));
+  var oldtownM = mk('oldtown', lit('day', { name: '구시가지', ground: 0x9a9488, groundT: 'conc', far: 0x6f7a52, outer: 0xc8bba4, outerT: 'plaster', wall: 0xd6c7a8, wallT: 'plaster', wall2: 0xcbb995, wall2T: 'plaster', roofC: 0x9a5a40, roofT: 'roof', floor: 0x8a7a66,
+    wallKind: 'conc', wallH: 2.6, barrierC: 0xcdbb98, barrierT: 'plaster', cont: [0x7a3f30], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (cv.w >= 4 && cv.d >= 4) { b.cyl(cx, cz, 2, .7, 0xb9b2a2, 0, true, 'conc', 2.1, 20); b.cyl(cx, cz, .35, 1.6, 0xb9b2a2, 0, true, 'conc', .45, 10); b.cyl(cx, cz, 1.8, .03, 0x4a7a8a, .68, false, 'water', 1.8, 20); } else crates(b, cv, cx, cz, lx, L, Dp, n); } }));
+  var compoundM = mk('compound', lit('day', { name: '전술 기지', ground: 0x83847e, groundT: 'conc', far: 0x5b5a3e, outer: 0x9a9b98, wall: 0x9a9b98, wallT: 'conc', roofC: 0x5d666c, floor: 0x9a9c97, wallKind: 'conc', wallH: 3.6, outerH: 4.8,
+    cont: [0x596a4a, 0x8a7a52], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (Dp <= 2.1 && L >= 3) bagWall(b, cx, cz, lx, L); else crates(b, cv, cx, cz, lx, L, Dp, n); } }));
+  var arcticM = mk('arctic', lit('snow', { name: '설산 연구기지', roofT: 'snow', ground: 0xdfe6ee, groundT: 'snow', far: 0xc9d3dd, farT: 'snow', outer: 0x8a96a2, outerT: 'conc', wall: 0xc4ccd4, wallT: 'block', wall2: 0xaab4be, wall2T: 'block', roofC: 0xd8e0e8, floor: 0x8e979e,
+    wallKind: 'cliff', cliffC: 0x6f7884, snowCap: true, wallH: 5, cont: [0x3f5f7a, 0x7a3f30], cover: crates, extra: function (b) { lamps(b, [[-30, -20, 1, 0], [30, -24, -1, 0], [-20, 22, 0, -1], [20, 22, 0, -1]], 5.5); } }));
+  var canyonM = mk('canyon', lit('dusk', { name: '사막 협곡', roofT: 'roof', ground: 0xb89a6e, groundT: 'sand', far: 0x9a7a52, farT: 'sand', outer: 0x9a6e4c, outerT: 'rock', outerH: 7, wall: 0xc8a978, wallT: 'plaster', roofC: 0x7a5a3a, floor: 0x9a8a6a, waterC: 0x24464c,
+    wallKind: 'cliff', cliffC: 0x9a6e4c, wallH: 6, cont: [0x6a4a3a], cover: crates, extra: function (b) { lamps(b, [[-20, -12, 1, 0], [20, 10, -1, 0], [-28, 20, 0, -1], [28, -20, 0, 1]], 5.5); } }));
+  var customsM = mk('customs', lit('day', { name: '세관 야적장', ground: 0x8d8f8a, groundT: 'conc', far: 0x6f6b5c, outer: 0x9a9b98, wall: 0xc9c4b6, wallT: 'plaster', wall2: 0x8f9aa0, wall2T: 'panel', roofC: 0x6a7074, floor: 0xa2a49f, wallKind: 'conc', wallH: 2.8,
+    cont: [0x7a3f30, 0x3f5f7a, 0x596a4a, 0x8a7a52, 0x2f6a6a], cover: crates, extra: function (b) { var gh = b.ghost; b.ghost = true; b.box(-7, -2, 16, 18, .2, 0x4f585e, 4.6, false, 'corr'); [-14, -7, 0].forEach(function (x) { [-10, 6].forEach(function (z) { b.box(x, z, .25, .25, 4.6, 0x3a4046, 0, false, 'metal'); }); }); b.ghost = gh; b.mark('CUSTOMS', 19, 3.4, -13.1, 5, 1.1, PI, '#2f4763'); } }));
+  var passM = mk('pass', lit('dusk', { name: '고갯길 검문소', ground: 0x8a7a5e, groundT: 'sand', far: 0x6b5a44, farT: 'sand', outer: 0x8a8070, outerT: 'rock', outerH: 6, wall: 0xa7a39a, wallT: 'block', wall2: 0x9c988e, roofC: 0x5d5a52, floor: 0x8f8c84, roadC: 0x4a4a46,
+    wallKind: 'cliff', cliffC: 0x7a6a54, wallH: 5.5, cont: [0x596a4a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (Dp <= 2.1 && L >= 3) bagWall(b, cx, cz, lx, L); else crates(b, cv, cx, cz, lx, L, Dp, n); },
+    extra: function (b) { b.ghost = true; for (var k = 0; k < 18; k++) { var a = k / 18 * PI * 2, R = 100 + (k % 3) * 12, g = new T.DodecahedronGeometry(18 + (k % 4) * 6, 0); g.scale(1.4, .7 + (k % 3) * .25, 1); g.translate(Math.cos(a) * R, 2, Math.sin(a) * R * .75); b.geo(g, 0x6b5e4c, 'rock', {}); } b.ghost = false; lamps(b, [[-14, 19, 0, -1], [-14, -3, 1, 0], [14, -17, 0, 1]], 5.5); } }));
+  var factoryM = mk('factory', lit('day', { name: '폐공장', ground: 0x7d7e78, groundT: 'conc', far: 0x5e5d52, outer: 0x8a8b86, wall: 0x9a9690, wallT: 'block', wall2: 0x7b6a5c, wall2T: 'rust', roofC: 0x6a5a4c, roofT: 'corr', floor: 0x8c8d88, stairC: 0x5c6166, wallKind: 'conc', wallH: 3,
+    cont: [0x6a4a3a, 0x4f5a4a, 0x5a4a3a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (cv.w >= 3 && cv.d >= 3) { b.cyl(cx, cz, Math.min(cv.w, cv.d) / 2, 3.2, 0xb7b0a0, 0, true, 'metal', Math.min(cv.w, cv.d) / 2, 18); b.cyl(cx, cz, .12, 1.4, 0x8c3b2f, 3.2, false, 'plain', .12, 8); } else crates(b, cv, cx, cz, lx, L, Dp, n); },
+    extra: function (b) { b.ghost = true; b.cyl(30, -40, 2.4, 34, 0x8a6a58, 0, false, 'block', 1.8, 16); b.ghost = false; for (var x = -44; x < 44; x += 1.2) b.box(x, -21.5, .25, 2.4, .08, 0x4a3a2a, 0, false, 'crate'); [-22.3, -20.7].forEach(function (z) { b.box(0, z, 88, .08, .1, 0x6b7075, .08, false, 'metal'); }); } }));
+  var marketM = mk('market', lit('night', { name: '시장 골목', ht: 3.6, ground: 0x6e6c66, groundT: 'conc', far: 0x3a3a36, outer: 0x8a8680, outerT: 'block', wall: 0xc8bba4, wallT: 'plaster', wall2: 0xb9ab92, wall2T: 'plaster', roofC: 0x7a4a38, roofT: 'roof', floor: 0x8a7a66,
+    wallKind: 'conc', wallH: 3, barrierC: 0xb9ab92, barrierT: 'plaster', cont: [0x3f5f7a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (cv.w * cv.d <= 4.5) { b.barrel(cx - .35, cz, 0x3f5f7a); b.barrel(cx + .35, cz + .2, 0x7a3f30); } else { var f = Fr(b, cx, cz, lx ? 0 : PI / 2); b.ghost = true; FURN.stall[3](f, b); b.ghost = false; b.solid(cx, cz, cv.w, cv.d, 1); } },
+    extra: function (b, P) {   // awning and a warm lamp over every shop door that opens onto an alley
+      var cols = [0x8c3b2f, 0x2f5d8a, 0x3f6b3f, 0xc97a2b, 0x6a4a8a];
+      P.doors.forEach(function (dd, i) { if (!dd.hz) return; var inR = function (x, z) { return P.rooms.some(function (r) { return x > r.x && x < r.x + r.w && z > r.z && z < r.z + r.d; }); }, out = inR(dd.x, dd.z - .6) ? 1 : inR(dd.x, dd.z + .6) ? -1 : 0; if (!out || inR(dd.x, dd.z + out * 1.5)) return;
+        var gh = b.ghost; b.ghost = true; b.box(dd.x, dd.z + out * 1, 3.4, 1.8, .06, cols[i % cols.length], 2.6, false, 'canvas'); b.ghost = gh; b.glow(dd.x, 2.62, dd.z + out * .2, 1.4, .04, .1, 0xffd28a); b.light(dd.x, 2.3, dd.z + out * 1.1, 0xffc98a, 1.1, 8); });
+      lamps(b, [[-30, 3, 0, -1], [-12, 3, 0, -1], [12, 3, 0, -1], [30, 3, 0, -1]], 5); b.mark('MARKET', 0, 4.4, -27.95, 6, 1.4, 0, '#ffd27a');
+    } }));
 
-  var MAKERS = [dock, warehouse, depot, oldtown, compound, arctic, canyon, customs, pass, factory, market, range];
+  var MAKERS = [dockM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, range];
   SV.RANGE = 11;   // the practice range: not in the match list, opened from the lobby's practice button
-  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '통로가 얽힌 야간 부두' }, { name: '물류 창고', info: '소형 · 실내', hint: '실내 근접전' }, { name: '보급기지', info: '대형 · 야외', hint: '폭파 미션 가능', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 계단과 사다리', bomb: true },
-    { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 좌우 대칭 세 갈래', bomb: true },
-    { name: '설산 연구기지', info: '대형 · 실내', hint: '폭파 미션 가능 · 실내 근접전과 하역장', bomb: true },
-    { name: '사막 협곡', info: '대형 · 협곡', hint: '폭파 미션 가능 · 다리, 둑길, 지하 터널', bomb: true },
-    { name: '세관 야적장', info: '대형 · 실내외', hint: '폭파 미션 가능 · 사무동과 2층 창고', bomb: true }, { name: '고갯길 검문소', info: '대형 · 실내외', hint: '폭파 미션 가능 · 2층 검문소와 배수로', bomb: true },
-    { name: '폐공장', info: '대형 · 실내외', hint: '폭파 미션 가능 · 기계 사이 근접전', bomb: true }, { name: '시장 골목', info: '대형 · 야간', hint: '폭파 미션 가능 · 가게 안팎을 오가는 골목', bomb: true }];
+  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '컨테이너 미로와 부두 · 출발점 대각선' }, { name: '물류 창고', info: '소형 · 실내', hint: '선반 두 블록을 도는 8자 순환' },
+    { name: '보급기지', info: '대형 · 낮', hint: '폭파 미션 가능 · 가운데 연료 저장소와 외곽 순환로', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 굽은 골목과 집 관통', bomb: true },
+    { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 세 갈래와 연결로', bomb: true }, { name: '설산 연구기지', info: '대형 · 야간', hint: '폭파 미션 가능 · 연구동 관통과 지하 통로', bomb: true },
+    { name: '사막 협곡', info: '대형 · 해질녘', hint: '폭파 미션 가능 · 철교 · 여울 · 동굴 다리', bomb: true }, { name: '세관 야적장', info: '대형 · 낮', hint: '폭파 미션 가능 · 검사 차선과 컨테이너 블록', bomb: true },
+    { name: '고갯길 검문소', info: '대형 · 해질녘', hint: '폭파 미션 가능 · 지그재그 산길', bomb: true }, { name: '폐공장', info: '대형 · 낮', hint: '폭파 미션 가능 · 기계 사이 격자 실내전', bomb: true },
+    { name: '시장 골목', info: '대형 · 야간', hint: '폭파 미션 가능 · 골목 그물망과 지붕 시장', bomb: true }];
   SV.buildMap = function (i) { var m = MAKERS[i](); m.group = m.b.finish(); m.lights = m.b.lights; if (m.sky) { var sd = skyDome(m.sky[0], m.sky[1]); sd.userData.sky = 1; m.group.add(sd); } m.boxes = m.b.boxes; m.spawns = m.b.spawns; return m; };
 })();

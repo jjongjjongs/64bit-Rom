@@ -405,7 +405,7 @@
     for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
     a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) { a.primary = G.match.primary; a.ads = false; if (SV.resetAds) SV.resetAds(); } a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
-    a.ai.wantDrop = null; a.ai.skipDrop = {}; a.ai.swapped = false; equipped(a);
+    a.ai.wantDrop = null; a.ai.skipDrop = {}; a.ai.swapped = false; a.ai.route = null; equipped(a);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
@@ -826,8 +826,24 @@
   // ---------- bots ----------
   var HOT = null;
   function canSee(a, e) { eye(a, vO); vH.set(e.pos.x, e.pos.y + (e.crouch ? .8 : 1.2), e.pos.z).sub(vO); var d = vH.length(); if (d > 75) return 0; vH.multiplyScalar(1 / d); return rayWorld(vO, vH, d) >= d - .4 && !smokeHit(vO, vH, d) ? d : 0; }
+  // Lanes: each map lists its lanes (main and side), drawn from A's side to B's. A bot with nothing to chase picks one, the main
+  // lanes twice as often, and walks it toward the enemy's side point by point; at the end it rests a few seconds and picks again.
+  // So bots spread over the map and come round the sides instead of all walking the straight line between the spawns.
+  function routeGoal(a) {
+    var ai = a.ai, R = G.map.routes, i, p; if (!R || !R.length) return null;
+    if (!ai.route) {
+      if ((ai.routeRest || 0) > G.elapsed) return null;
+      var bag = []; R.forEach(function (r, k) { bag.push(k); if (r.kind === 'main') bag.push(k); }); var pts = R[bag[(Math.random() * bag.length) | 0]].pts.slice();
+      if (a.team !== 'A') pts.reverse(); if (Math.hypot(pts[pts.length - 1][0] - a.pos.x, pts[pts.length - 1][1] - a.pos.z) < Math.hypot(pts[0][0] - a.pos.x, pts[0][1] - a.pos.z)) pts.reverse();
+      var ri = 0, bd = 1e9; for (i = 0; i < pts.length; i++) { var d = Math.hypot(pts[i][0] - a.pos.x, pts[i][1] - a.pos.z); if (d < bd) { bd = d; ri = i; } }
+      ai.route = pts; ai.ri = ri;
+    }
+    p = ai.route[ai.ri]; while (p && Math.hypot(p[0] - a.pos.x, p[1] - a.pos.z) < 3.5) { ai.ri++; p = ai.route[ai.ri]; }
+    if (!p) { ai.route = null; ai.routeRest = G.elapsed + 3 + Math.random() * 4; return null; }
+    return { x: p[0], z: p[1], l: 0 };
+  }
   function think(a) {
-    var ai = a.ai, best = null, bd = 1e9, i, e, d;
+    var ai = a.ai, best = null, bd = 1e9, i, e, d, rg;
     for (i = 0; i < G.actors.length; i++) {
       e = G.actors[i]; if (!e.alive || e.team === a.team) continue;
       var dx = e.pos.x - a.pos.x, dz = e.pos.z - a.pos.z, dist = Math.hypot(dx, dz), facing = Math.abs(angd(Math.atan2(-dx, -dz), a.yaw)) < 1.75;
@@ -844,6 +860,7 @@
     else if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
+    else if (!G.bomb && (rg = routeGoal(a))) want = rg;   // no enemy in mind: walk one of the map's lanes toward the other side
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; var c2 = c % nav.N; want = { x: nav.ox + (c2 % nav.nx) + .5, z: nav.oz + ((c2 / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0 }; } ai.goal = null; }
     if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.goal.l !== (want.l || 0) || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z, l: want.l || 0 }; ai.path = findPath(a.pos.x, a.pos.z, lvl(a), want.x, want.z, want.l || 0); ai.pathT = 0; }
     var g = a.guns[a.slot]; if (!best && g.reload <= 0 && g.mag < W[g.id].mag * .4) reload(a);
