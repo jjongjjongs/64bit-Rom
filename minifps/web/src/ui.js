@@ -36,7 +36,7 @@
     if (id === 's-match') {
       var om = $('o-map'), keep = om.childNodes.length ? om.scrollTop : -1;
       seg(om, SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; if (!SV.MAPS[v].bomb) match.mode = 0; setTimeout(function () { refresh('s-match'); }, 0); });
-      SV.MAPS.forEach(function (m, n) { var t = $('o-map-' + n), no = document.createElement('b'); no.className = 'no'; no.textContent = (n < 9 ? '0' : '') + (n + 1); t.appendChild(no); if (m.bomb) { var tg = document.createElement('i'); tg.textContent = '폭파'; t.appendChild(tg); } });
+      SV.MAPS.forEach(function (m, n) { var t = $('o-map-' + n), no = document.createElement('b'); t.classList.add('pic'); t.style.backgroundImage = 'url(a/art/ui/maps/m' + n + '.jpg)'; no.className = 'no'; no.textContent = (n < 9 ? '0' : '') + (n + 1); t.appendChild(no); if (m.bomb) { var tg = document.createElement('i'); tg.textContent = '폭파'; t.appendChild(tg); } });
       if (keep >= 0) om.scrollTop = keep; else { var cur = $('o-map-' + match.map); om.scrollTop = Math.max(0, cur.offsetTop - om.offsetTop - om.clientHeight / 2 + cur.offsetHeight / 2); }
       $('map-note').textContent = (match.map + 1) + ' / ' + SV.MAPS.length + ' · 위아래로 넘겨 더 보기';
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });

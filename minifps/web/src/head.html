@@ -54,6 +54,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .seg.cube::-webkit-scrollbar { display: none; }
 .seg.cube .opt { aspect-ratio: 1 / 1; min-height: auto; display: flex; flex-direction: column; justify-content: flex-end; text-align: left; padding: 8px 10px; position: relative; font-size: 15px; line-height: 1.15; word-break: keep-all; }
 .seg.cube .opt small { margin-top: 3px; font-size: 11px; }
+/* the map's own picture (a view from above, made by the build tools) under a dark fade, so the name stays readable */
+.seg.cube .opt.pic { isolation: isolate; background: var(--ink) center / cover no-repeat; color: #f4f1e8; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, .8); }
+.seg.cube .opt.pic small { opacity: .9; }
+.seg.cube .opt.pic::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(11, 13, 15, .25) 0%, rgba(11, 13, 15, 0) 35%, rgba(11, 13, 15, .82) 100%); pointer-events: none; }
+.seg.cube .opt.pic > * { position: relative; }
+.seg.cube .opt.pic .no, .seg.cube .opt.pic i { position: absolute; opacity: .9; }
+.seg.cube .opt.pic[aria-pressed="true"] { color: var(--bone); border-color: var(--signal); box-shadow: inset 0 0 0 2px var(--signal), inset 0 -4px 0 var(--signal); }
+.seg.cube .opt.pic[aria-pressed="true"]::before { background: linear-gradient(180deg, rgba(11, 13, 15, 0) 40%, rgba(11, 13, 15, .78) 100%); }
+.seg.cube .opt.pic:not([aria-pressed="true"])::before { background: linear-gradient(180deg, rgba(11, 13, 15, .45) 0%, rgba(11, 13, 15, .2) 35%, rgba(11, 13, 15, .92) 100%); }
 .seg.cube .opt .no { position: absolute; top: 7px; left: 9px; font-family: var(--f-mono); font-size: 11px; font-weight: 400; opacity: .55; }
 .seg.cube .opt i { position: absolute; top: 7px; right: 7px; font-style: normal; font-size: 9px; font-weight: 900; letter-spacing: .04em; padding: 1px 5px; border: 1px solid currentColor; opacity: .7; }
 .mside { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }

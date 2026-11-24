@@ -22,3 +22,6 @@ maps/junkyard.glb — the "폐차 야적장" map: "Lowpoly Map Asset by Resoforg
   Reduced for phones with glTF-Transform (normals and UVs dropped, vertices welded, meshoptimizer simplify at 1% error, duplicates merged).
 maps/junkyard.boxes.json — its collision boxes, worked out ahead of time from the reduced model: a box turned about the vertical per
   small connected part, column boxes (0.5 m) for the big parts, nothing beyond the fence.
+
+ui/maps/m<N>.jpg — the match screen's map pictures, one per entry of SV.MAPS (same order): a view from above taken inside this game
+  (walls cut at 2.75 m so rooms show), by the scratch tool that drives the game page. Re-take them when a map changes or moves.

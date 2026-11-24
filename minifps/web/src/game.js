@@ -1276,6 +1276,7 @@
   SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };
   SV.rayTest = function (o, d, max) { return rayWorld(o, d, max); };
+  SV.dev = function () { return { scene: scene, cam: cam, renderer: renderer }; };   // for tools (map preview pictures): the live scene and camera
   SV.pathTest = function (x0, z0, l0, x1, z1, l1) { return findPath(x0, z0, l0, x1, z1, l1).length; };   // for tests: can a bot plan this walk   // for tests: the world ray against the map's boxes
   SV.dropTest = function (o) { return makeDrop(o); };   // for tests: lay a gun on the ground   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
