@@ -796,7 +796,7 @@ var SV = window.SV = window.SV || {};
     shotgun: { f: 'mauler', tpk: .8, ay: .0265, len: .98, muzzle: [.12, -.13, -.84], rl: [.02, -.07, -.24], clips: { fire: [0, .43], pump: [.43, 1.1], shellStart: [1.1, 1.45], shellIn: [1.45, 2.1], shellEnd: [2.1, 3.0], idle: [4.25, 5.25] } },
     pistol: { f: 'striker', ay: .0186, len: .19, muzzle: [.09, -.088, -.42], clips: { fire: [0, .43], reload: [.43, 2.73], reloadEmpty: [3.1, 6.0], idle: [7.8, 8.83] } },
     /* "LMG animated" by DJMaesen (CC BY 4.0), the same series: one track, cut by its parts' keys (trigger, feed cover, box, bolt) */
-    lmg: { f: 'lmg', ay: .0155, len: 1.04, muzzle: [.12, -.14, -1.0], clips: { fire: [0, .38], reloadEmpty: [1.2, 6.1], reload: [6.3, 10.6], idle: [12.6, 14.1] } },
+    lmg: { f: 'lmg', ay: .0155, len: 1.04, repaint: 'carbine', muzzle: [.12, -.14, -1.0], clips: { fire: [0, .38], reloadEmpty: [1.2, 6.1], reload: [6.3, 10.6], idle: [12.6, 14.1] } },
     pistol2: { f: 'kestrel', ax: .0033, ay: .014, len: .205, muzzle: [.09, -.092, -.44], clips: { fire: [0, .3], reloadEmpty: [.3, 2.27], reload: [2.27, 4.4], idle: [5.87, 6.73] } } };
   var PKC = {}, PKW = { lmg: [.3, .6], rifle: [.31, .62], rifle2: [.31, .62], smg: [.36, .86], sniper: [.3, .52], shotgun: [.3, .62], pistol: [.14, 0], pistol2: [.14, 0] };
   SV.packVM = function (id0) {
@@ -807,6 +807,21 @@ var SV = window.SV = window.SV || {};
       var pa = o.geometry.attributes.position; if (pa.normalized) { var den = pa.array instanceof Int16Array ? 32767 : pa.array instanceof Int8Array ? 127 : pa.array instanceof Uint16Array ? 65535 : 255, fa = new Float32Array(pa.count * 3); for (var i = 0; i < pa.count; i++) { fa[i * 3] = Math.max(pa.getX(i) / den, -1); fa[i * 3 + 1] = Math.max(pa.getY(i) / den, -1); fa[i * 3 + 2] = Math.max(pa.getZ(i) / den, -1); } o.geometry.setAttribute('position', new T.BufferAttribute(fa, 3)); }   /* the files store positions as packed integers; unpack once so sizes can be measured */
       var sw = o.geometry.attributes.skinWeight; if (sw && sw.normalized) { var d2 = sw.array instanceof Uint16Array ? 65535 : 255, fw = new Float32Array(sw.count * 4); for (var k = 0; k < fw.length; k++) fw[k] = sw.array[k] / d2; o.geometry.setAttribute('skinWeight', new T.BufferAttribute(fw, 4)); }
     });
+    /* repaint: this pack's arms were drawn differently (bare forearms, fingerless gloves); they are painted over with the gloves and
+       sleeves the other packs share, taken from that pack's own texture. Each triangle goes to the glove or the sleeve by the bone that
+       moves it most: the hand and wrist bones are glove, the forearm and upper arm are sleeve. */
+    if (c.repaint && SV.assets.fp[c.repaint] && !c.painted) { var srcM = null; SV.assets.fp[c.repaint].scene.traverse(function (o) { if (o.isSkinnedMesh && !srcM) srcM = o.material; });
+      var im0 = srcM && srcM.map && srcM.map.image; armM.forEach(function (o) { if (!im0 || !o.isSkinnedMesh || !o.material.map) return;
+        var N = 1024, cv = document.createElement('canvas'); cv.width = cv.height = N; var x = cv.getContext('2d'), pat = function (sx, sy, sw, sh) { var pc = document.createElement('canvas'); pc.width = sw; pc.height = sh; pc.getContext('2d').drawImage(im0, sx * im0.width / N, sy * im0.height / N, sw * im0.width / N, sh * im0.height / N, 0, 0, sw, sh); return x.createPattern(pc, 'repeat'); };
+        var P = { glove: pat(660, 40, 340, 200), sleeve: pat(700, 560, 300, 340) }, g = o.geometry, uv = g.attributes.uv, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, ix = g.index, bn = o.skeleton.bones;
+        var cls = function (i) { var b = si.getX(i), w = sw.getX(i); [[si.getY(i), sw.getY(i)], [si.getZ(i), sw.getZ(i)], [si.getW(i), sw.getW(i)]].forEach(function (q) { if (q[1] > w) { w = q[1]; b = q[0]; } }); return /arm_01|elbow|root|Joint_00/.test(bn[b].name) ? 'sleeve' : 'glove'; };
+        x.fillStyle = P.sleeve; x.fillRect(0, 0, N, N);
+        ['sleeve', 'glove'].forEach(function (k) { x.fillStyle = P[k]; x.strokeStyle = P[k]; x.lineWidth = 3; x.beginPath();
+          for (var t = 0; t < ix.count; t += 3) { var a = ix.getX(t), b = ix.getX(t + 1), d = ix.getX(t + 2), n = (cls(a) === 'glove') + (cls(b) === 'glove') + (cls(d) === 'glove'); if ((n >= 2) !== (k === 'glove')) continue;
+            x.moveTo(uv.getX(a) * N, uv.getY(a) * N); x.lineTo(uv.getX(b) * N, uv.getY(b) * N); x.lineTo(uv.getX(d) * N, uv.getY(d) * N); x.closePath(); }
+          x.fill(); x.stroke(); });
+        var tx = new T.CanvasTexture(cv); tx.flipY = false; tx.encoding = T.sRGBEncoding; tx.anisotropy = 4; var m2 = o.material.clone(); m2.map = tx; m2.normalMap = srcM.normalMap || null; m2.roughness = srcM.roughness; m2.metalness = srcM.metalness; m2.color.copy(srcM.color); o.material = m2; });
+      c.painted = true; }
     var clipA = G.animations[0];
     if (c.multi && !c.clips.idle) { var tr = {}, off = 0; Object.keys(c.multi).forEach(function (key) { var a = G.animations.filter(function (q) { return q.name.slice(-c.multi[key].length) === c.multi[key]; })[0]; if (!a) return;
         a.tracks.forEach(function (t) { var e = tr[t.name] || (tr[t.name] = { t: [], v: [], C: t.constructor }), i; for (i = 0; i < t.times.length; i++) e.t.push(t.times[i] + off); for (i = 0; i < t.values.length; i++) e.v.push(t.values[i]); });
