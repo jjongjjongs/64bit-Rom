@@ -706,7 +706,21 @@
   function sm(a, b, x) { x = clamp((x - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); }
   var AWAY = new T.Vector3(-.1, -.42, -.1), DOWN = new T.Vector3(-.04, -.4, 0);
   function hp(h, pres) { if (!h) return; h.visible = pres > .02; h.position.copy(AWAY).multiplyScalar(1 - pres); }
+  /* LM-01, after the reference videos: the left hand lets go of the handguard, lifts the feed cover by its rear edge (hinged at the
+     front, it swings up), takes the empty ammunition box off downward, brings a full one up, then shuts the cover and goes back.
+     The gun is turned a little so its top and left side face the eye; the right hand stays on the grip throughout. */
+  var ZAX = new T.Vector3(0, 0, 1), vEdge = new T.Vector3(), vE2 = new T.Vector3();
+  function lmgReload(r, R) {
+    var RL = (window.RP && window.RP.lmg) || [.1, .2, .3, -.06, .04, -.25], tilt = r < 0 ? 0 : sm(0, .1, r) - sm(.88, .98, r);
+    var offK = r < 0 ? 1 : 1 - sm(.02, .08, r) + sm(.9, .97, r); hp(R.off, offK);
+    var open = r < 0 ? 0 : sm(.12, .24, r) - sm(.74, .86, r); if (R.cover) R.cover.rotation.z = -open * R.coverOpen;
+    var chK = r < 0 ? 0 : r < .5 ? sm(.05, .12, r) - sm(.24, .31, r) : sm(.66, .74, r) - sm(.86, .92, r); if (R.coverHand) { hp(R.coverHand, chK); R.coverHand.position.add(vEdge.copy(R.coverEdge).applyAxisAngle(ZAX, R.cover.rotation.z)).sub(vE2.copy(R.coverEdge).applyAxisAngle(ZAX, -R.coverOpen)); }   /* the hand follows the cover's rear edge, its forearm keeping its direction */
+    var mhK = r < 0 ? 0 : sm(.28, .34, r) - sm(.62, .68, r); if (R.magHand) hp(R.magHand, mhK);
+    var far = r < 0 ? 0 : r < .48 ? sm(.34, .46, r) : 1 - sm(.5, .62, r); if (R.mag) { R.mag.position.copy(DOWN).multiplyScalar(far * 1.2); R.mag.position.z -= .12 * far; }   /* down and out to the left, out of the picture */
+    vmRoot.rotation.x += RL[0] * tilt; vmRoot.rotation.y += RL[1] * tilt; vmRoot.rotation.z += RL[2] * tilt; vmRoot.position.x += RL[3] * tilt; vmRoot.position.y += RL[4] * tilt; vmRoot.position.z += RL[5] * tilt;
+  }
   function reloadPose(id, r, U, gs) {
+    if (U.lmgR) { lmgReload(r, U.lmgR); return; }
     var H = U.H || {}, P = U.P || {}, k, kind = id.replace(/2$/, '');
     for (k in P) { P[k].position.set(0, P[k].userData.py || 0, 0); P[k].rotation.set(0, 0, 0); } if (P.shell) P.shell.visible = false;
     hp(H.off, 1); hp(H.rh, 0); hp(H.ph, 0); if (r < 0) return;

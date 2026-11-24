@@ -527,9 +527,15 @@ var SV = window.SV = window.SV || {};
     // reach: a finger (or the thumb) that has a place to go rather than a grip to close on, such as the index finger on a trigger
     // inside its guard: every pose in its range of motion is tried, and of those that touch nothing the one whose tip comes
     // nearest that place is kept
-    function seek(ch, mk, lo, hi, st, rads, goal) {
+    function gapOf(a, b, rad) {   // how far the capsule a-b (radius rad) is from the object (negative: inside)
+      var ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, L2 = ux * ux + uy * uy + uz * uz, best = 1;
+      for (var i = 0; i < obs.length; i++) { var s = obs[i], wx = s[0] - a.x, wy = s[1] - a.y, wz = s[2] - a.z, t = L2 ? Math.max(0, Math.min(1, (wx * ux + wy * uy + wz * uz) / L2)) : 0, dx = wx - ux * t, dy = wy - uy * t, dz = wz - uz * t, d = Math.sqrt(dx * dx + dy * dy + dz * dz) - s[3] - rad; if (d < best) best = d; }
+      return best; }
+    function seek(ch, mk, lo, hi, st, rads, goal, touch) {
       var best = null, bd = 1e9, a = lo.slice(), G0 = new T.Vector3(goal[0], goal[1], goal[2]);
-      (function rec(j) { if (j === lo.length) { var p = chain(ch, mk(a)); for (var q = 0; q < rads.length; q++) if (hit(p[q], p[q + 1], rads[q])) { if (window.GRASPDBG && ch[0] === 'thumb-metacarpal') SV.seekHit = (SV.seekHit || [0, 0, 0]), SV.seekHit[q]++; return; } var dd = p[p.length - 1].distanceTo(G0); if (dd < bd) { bd = dd; best = a.slice(); } return; }
+      (function rec(j) { if (j === lo.length) { var p = chain(ch, mk(a)); for (var q = 0; q < rads.length; q++) if (hit(p[q], p[q + 1], rads[q])) { if (window.GRASPDBG && ch[0] === 'thumb-metacarpal') SV.seekHit = (SV.seekHit || [0, 0, 0]), SV.seekHit[q]++; return; } var dd = p[p.length - 1].distanceTo(G0);
+          if (touch) { var gmin = 1; for (q = 1; q < rads.length; q++) gmin = Math.min(gmin, gapOf(p[q], p[q + 1], rads[q])); dd += Math.max(0, gmin - .0015) * 4; }   /* touch: it must lie on the object, not stand off it in the air */
+          if (dd < bd) { bd = dd; best = a.slice(); } return; }
         for (a[j] = lo[j]; a[j] <= hi[j] + 1e-6; a[j] += st[j]) rec(j + 1); })(0);
       if (window.GRASPDBG) console.log('seek', ch[0], 'best', best && best.map(function (x) { return +x.toFixed(2); }), 'dist', bd.toFixed(3), JSON.stringify(SV.seekHit || null)); SV.seekHit = null;
       return best;
@@ -542,7 +548,7 @@ var SV = window.SV = window.SV || {};
     var tc = ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'], td = H.pos[H.ix['thumb-tip']].clone().sub(H.pos[H.ix['thumb-metacarpal']]).normalize(), tax = new T.Vector3().crossVectors(td, H.ex).normalize();
     // the thumb swings in across the palm from wide open (opposition, at most 60), then bends at MCP (55) and IP (80)
     var ta = null, skT = null;
-    if (reach && reach.thumb) { var sw0 = th0[0]; for (var sw = .17; sw >= -.79 && !skT; sw -= .12) { th0 = [sw].concat(th0.slice(1)); skT = seek(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [-1.05, 0, 0], [1.05, .96, 1.4], [.12, .12, .15], GTR, reach.thumb); } if (skT) ta = skT; else th0 = [sw0].concat(th0.slice(1)); }   /* CMC flexion 0-45 tried from least */
+    if (reach && reach.thumb) { var sw0 = th0[0]; for (var sw = .17; sw >= -.79 && !skT; sw -= .12) { th0 = [sw].concat(th0.slice(1)); skT = seek(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [-1.05, 0, 0], [1.05, .96, 1.4], [.12, .12, .15], GTR, reach.thumb, reach.touch); } if (skT) ta = skT; else th0 = [sw0].concat(th0.slice(1)); }   /* CMC flexion 0-45 tried from least */
     if (!ta) ta = close(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [1.05, .96, 1.4], [1, .8, .8], GTR, 0, [-.7, 0, 0]);
     var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], GFR[k] - .001); }); });
     var tp = chain(tc, [[0, H.ez, th0[0]], [0, H.ex, -ta[0]], [1, tax, -ta[1]], [2, tax, -ta[2]]]); all.push([0, 1, 2].some(function (k) { return hit(tp[k], tp[k + 1], GTR[k] - .001); }));
@@ -842,10 +848,32 @@ var SV = window.SV = window.SV || {};
     hand(rh, gO, HR.ax, HR.pn, 1, LP.rr || .024, gO.clone().addScaledVector(HR.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.rtop == null ? .01 : LP.rtop, up: LP.rup == null ? .01 : LP.rup, sink: 0, thumb: [LP.rth == null ? -.3 : LP.rth, 0, 0, 0], grasp: near(gO, .15), graspLo: LP.rlo || [.5, .6, .3], seat: LP.noseat ? 0 : 1, reach: { index: d.trig, thumb: LP.rthumb || [gO.x + .06, gO.y + .04, .04] } });
     grasp.push(SV.lastGrasp); var wrists = [SV.lastWrist], frames = [SV.lastHandFrame], palmGap = [SV.lastPalmGap];
     var hO = V(d.hguard[0], d.hguard[1], 0), HL = armHand(Fl, V(1, 0, 0), -1);
-    hand(lh, hO, HL.ax, HL.pn, -1, d.hguard[2], hO.clone().addScaledVector(HL.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), seat: LP.noseat ? 0 : 1, reach: { thumb: LP.lthumb || [hO.x + .07, hO.y + .005, -.035] } });
+    hand(lh, hO, HL.ax, HL.pn, -1, d.hguard[2], hO.clone().addScaledVector(HL.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: LP.ltop == null ? .03 : LP.ltop, up: LP.lup == null ? .02 : LP.lup, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near(hO, .15), seat: LP.noseat ? 0 : 1, reach: { thumb: LP.lthumb || [hO.x + .09, hO.y - .005, -.03], touch: true } });   /* the thumb along the handguard's left side, pointing ahead, lying on it */
     grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist); frames.push(SV.lastHandFrame); palmGap.push(SV.lastPalmGap);
-    [rh, lh].forEach(function (hh) { out.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); out.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); });
-    out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip, grasp: grasp, wrists: wrists, frames: frames, palmGap: palmGap, H: {}, P: {} };
+    var mesh2 = function (hh) { var o2 = new T.Group(); o2.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); o2.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); return o2; };
+    out.add(mesh2(rh)); var lhM = mesh2(lh); out.add(lhM);
+    /* Reloading, after the reference videos: the left hand lifts the feed cover by its rear edge (it is hinged at the front and
+       swings up), takes the ammunition box off underneath and puts a full one on, then shuts the cover. The cover and the box are
+       given their own pivots here; the hand for each is fitted to it like the others (forearm first, then contact). */
+    var cov = null, mag = null; fp.traverse(function (q) { if (q.name === 'cover') cov = q; if (q.name === 'mag') mag = q; });
+    var R = { off: lhM }; out.updateMatrixWorld(true);
+    if (cov && mag) {
+      var hinge = new T.Vector3().setFromMatrixPosition(cov.matrixWorld), cp = new T.Group(); cp.position.copy(hinge); out.add(cp); cp.updateMatrixWorld(true); cp.attach(cov); R.cover = cp;
+      var mg = new T.Group(); out.add(mg); mg.attach(mag); R.mag = mg; out.updateMatrixWorld(true);
+      var cb = new T.Box3().setFromObject(cov), mb = new T.Box3().setFromObject(mag), sphOf = function (o) { return surfSpheres(o, new T.Matrix4(), .004); };
+      /* the hand is fitted to the cover as it is when lifted (open), against the cover alone: that is where it holds it */
+      var OPEN = 1.3, cE = V(cb.min.x + .012, cb.max.y - .008, (cb.min.z + cb.max.z) / 2).sub(hinge); cp.rotation.z = -OPEN; out.updateMatrixWorld(true);
+      var cO = cE.clone().applyAxisAngle(V(0, 0, 1), -OPEN).add(hinge), covS = sphOf(cov); cp.rotation.z = 0; out.updateMatrixWorld(true);
+      var cH = armHand(LP.cF ? V(LP.cF[0], LP.cF[1], LP.cF[2]) : V(-.05, -.95, -.3), V(0, 0, 1), -1), ch = new T.Group();
+      hand(ch, cO, cH.ax, cH.pn, -1, .008, cO.clone().addScaledVector(cH.F, .42), sl, gl, { pad: MAT.poly2, yaw: 0, top: .03, up: .02, sink: 0, thumb: [-.6, 0, 0, 0], grasp: covS, seat: 1, reach: { thumb: [cO.x + .03, cO.y + .02, cO.z], touch: true } });
+      R.coverHand = new T.Group(); out.add(R.coverHand); R.coverHand.add(mesh2(ch)); R.coverHand.visible = false; R.coverEdge = cE; R.coverOpen = OPEN; grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);   // the hand keeps its forearm's direction and follows the cover's rear edge as it swings up grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);
+      /* the box is carried on the palm from underneath, fingers across its bottom toward the gun's right, forearm in line from the lower left */
+      var mf = V(.25, .3, 1).normalize(), mpn = V(0, -1, 0).addScaledVector(mf, mf.y).normalize(), mwv = mf.clone().multiplyScalar(-1), max = new T.Vector3().crossVectors(mpn, mwv).normalize(), mh = new T.Group(),
+        mO = V((mb.min.x + mb.max.x) / 2, mb.min.y - .01, (mb.min.z + mb.max.z) / 2 - .02);
+      hand(mh, mO, max, mpn, -1, .01, mO.clone().addScaledVector(mf, -.42), sl, gl, { pad: MAT.poly2, yaw: 0, top: .03, up: .02, sink: 0, thumb: [-.6, 0, 0, 0], grasp: sphOf(mag), seat: 1, reach: { thumb: [mO.x + .02, mb.min.y + .04, mb.min.z - .004], touch: true } });
+      R.magHand = mesh2(mh); R.magHand.visible = false; mg.attach(R.magHand); grasp.push(SV.lastGrasp); wrists.push(SV.lastWrist);
+    }
+    out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip, grasp: grasp, wrists: wrists, frames: frames, palmGap: palmGap, H: {}, P: {}, lmgR: R };
     return out;
   }
   SV.viewModel = function (id0, team) {
