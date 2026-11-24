@@ -385,6 +385,7 @@
     var d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .4), i, prev = nav.hm ? cellOf(x0, z0, l) : -1;
     for (i = 1; i < n; i++) { var t = i / n, c = cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, l); if (nav.blk[c]) return false;
       if (nav.hm) { if (c !== prev && !nav.blk[prev] && Math.abs(nav.fy[c] - nav.fy[prev]) > .5) return false; prev = c; } }   // no shortcut over a drop or up a wall
+    if (nav.hm && wallBetween(x0, z0, x1, z1, nav.fy[cellOf(x0, z0, l)] || 0)) return false;   // nor one that clips a corner of raised ground
     return true;
   }
   function findPath(x0, z0, l0, x1, z1, l1) {
@@ -934,7 +935,7 @@
     }
     p = ai.route[ai.ri]; while (p && Math.hypot(p[0] - a.pos.x, p[1] - a.pos.z) < 3.5) { ai.ri++; p = ai.route[ai.ri]; }
     if (!p) { ai.route = null; ai.routeRest = G.elapsed + 3 + Math.random() * 4; return null; }
-    return { x: p[0], z: p[1], l: 0 };
+    return { x: p[0], z: p[1], l: p[2] || 0 };
   }
   function think(a) {
     var ai = a.ai, best = null, bd = 1e9, i, e, d, rg;
