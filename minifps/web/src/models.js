@@ -218,7 +218,13 @@ var SV = window.SV = window.SV || {};
   };
   // wire cutters for defusing: steel jaws, red dipped handles
   GUN.kit = function () {
-    var g = new T.Group(), k = kit(g), m = MAT;
+    var g = new T.Group(), k = kit(g), m = MAT, src = SV.assets && SV.assets.model.pliers;
+    if (src) {   /* the real thing: Poly Haven "Pliers" (CC0), combination pliers with a wire-cutting edge, 18 cm. Its long axis is +Y
+                    (jaws) with the pivot at the origin and the handles spread along X; turned so the jaws run along the tool's +X */
+      var o = src.clone(true), sg = new T.Group(); o.matrixAutoUpdate = false; o.matrix.set(0, 1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1); sg.add(o);
+      o.traverse(function (q) { if (/pliers_a|pliers_b/.test(q.name)) sg.userData[q.name] = q; });
+      return { g: g, grip: [-.075, 0], fore: null, muzzle: [.05, 0], sight: 0, scan: sg };
+    }
     ex(k, [[0, -.004], [.05, -.004], [.075, -.001], [.075, .0], [.05, .003], [0, .003]], -.004, .004, m.bright, .001); ex(k, [[0, .004], [.05, .004], [.075, .001], [.075, .0], [.05, -.003], [0, -.003]], -.004, .004, m.steel, .001);
     k.cz(.006, .011, m.dark, .004, 0, 0, 10); k.b(.105, .011, .009, m.red, -.055, .012, 0, 0, 0, -.1); k.b(.105, .011, .009, m.red, -.055, -.012, 0, 0, 0, .1);
     return { g: g, grip: [-.06, 0], fore: null, muzzle: [.075, 0], sight: 0 };
@@ -702,7 +708,7 @@ var SV = window.SV = window.SV || {};
         yy = pnK.clone().addScaledVector(ax, -pnK.dot(ax)).normalize(); nn = new T.Vector3().crossVectors(ax, yy);   // the two handles spread across the grip: one in the palm, one in the fingers
         KQ = { pn: yy.clone(), E: Fv.clone().multiplyScalar(.42), r: KP.r, thumb: KP.thumb, curl: KP.curl, sink: KP.sink, up: KP.a };
       }
-      g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold;
+      g.matrixAutoUpdate = false; g.matrix.makeBasis(ax, yy, nn); hold.add(g); g = hold; if (d.scan) { d.scan.matrixAutoUpdate = false; d.scan.matrix.makeBasis(ax, yy, nn); }
       var kc = ax.clone().multiplyScalar(d.grip[0]); if (KQ) hand(g, kc, ax, KQ.pn, 1, KQ.r, kc.clone().add(KQ.E), sl, gl, { pad: MAT.poly2, thumbWrap: true, yaw: 0, top: .018, thumb: KQ.thumb, curl: KQ.curl, sink: KQ.sink, up: KQ.up });
       else hand(g, kc, ax, V(-.5, 0, .87), 1, .0125, kc.clone().add(V(-.17, -.44, .18)), sl, gl, { pad: MAT.poly2, thumbWrap: true, wrap: [58, 110, 158, 196], yaw: .3, top: .018, thumb: [-.6, .2, .5, -.6] });
     }
@@ -720,6 +726,7 @@ var SV = window.SV = window.SV || {};
     var out = new T.Group(); out.add(new T.Mesh(merge(g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(g, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft));
     out.add(new T.Mesh(mergeUV(g, function (m) { return !!m.userData.sleeve; }), sl));
     if (d.scan) out.add(d.scan); out.userData = { muzzle: d.muzzle, sight: d.sight, grip: d.grip };
+    if (d.scan && d.scan.userData.pliers_a) { var pa = d.scan.userData.pliers_a, pb = d.scan.userData.pliers_b; out.userData.jaw = function (t) { pa.rotation.z = t; pb.rotation.z = -t; }; }   // the two halves turn about the pin
     /* Hands are posed by numbers, not by contact, so each one is fitted once to the thing it holds: the supporting hand to the
        fore-end, a second hand to the magazine (or a shell), a third to the cocking handle or bolt knob. A reload shows one at a time. */
     function mh(grp) { var o2 = new T.Group(); o2.add(new T.Mesh(merge(grp, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); o2.add(new T.Mesh(merge(grp, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); var su = mergeUV(grp, function (m) { return !!m.userData.sleeve; }); if (su.attributes.position.count) o2.add(new T.Mesh(su, sl)); return o2; }

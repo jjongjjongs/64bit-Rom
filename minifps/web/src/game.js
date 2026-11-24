@@ -1091,7 +1091,8 @@
     if (act && !useCrouch && !p.crouch) { p.crouch = true; useCrouch = true; } else if (!act && useCrouch) { p.crouch = false; useCrouch = false; }
     if (act === 'plant') { p.pitch += (-.55 - p.pitch) * Math.min(1, dt * 6); step2 = Math.min(7, Math.floor(p.useP / PLANT * 8)); SV.bombText('*******'.slice(0, step2) + '_______'.slice(step2), '#ffb347'); if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) sndTone(1500 + (step2 % 3) * 180, .04, .1, 'square'); } }
     else if (act === 'defuse') { var bx = B.planted.x - p.pos.x, bz = B.planted.z - p.pos.z, wy = Math.atan2(-bx, -bz), dy2 = angd(wy, p.yaw), hd = Math.max(.25, Math.hypot(bx, bz)); p.yaw += dy2 * Math.min(1, dt * 6); p.pitch += (-Math.atan2(EYEC - .1, hd) - p.pitch) * Math.min(1, dt * 6);
-      step2 = Math.floor(p.useP / DEFUSE * 3); if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) { tick(0, 3800, .3, 5); tick(.03, 1800, .2, 3); } } bombMesh.userData.cut(step2); }
+      step2 = Math.floor(p.useP / DEFUSE * 3); var kv = vms['kit' + p.team]; if (kv && kv.userData.jaw) kv.userData.jaw(-.1 + .15 * Math.min(1, (p.useP / DEFUSE * 3 % 1) * 1.25));   /* jaws open, then squeeze shut on each wire */
+      if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) { tick(0, 3800, .3, 5); tick(.03, 1800, .2, 3); } } bombMesh.userData.cut(step2); }
     else { lastKey = -1; bombMesh.userData.cut(0); }
     if (act !== 'plant') SV.bombText(B.planted ? '0:' + ('0' + Math.ceil(B.planted.t)).slice(-2) : '--:--', '#ff4a2e');
     s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + .012, s.z);

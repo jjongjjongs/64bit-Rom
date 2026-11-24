@@ -19,7 +19,8 @@ TEXTURES = {'conc': 'concrete_pavement', 'floor': 'garage_floor', 'block': 'conc
 MODELS = ['Barrel_01', 'barrel_03', 'concrete_road_barrier', 'old_military_crate', 'wooden_military_crate', 'wooden_crate_02', 'ammo_box', 'metal_jerrycan_green', 'old_tyre', 'street_lamp_01',
           'cement_bag', 'portable_generator', 'old_military_compressor', 'tool_cart', 'covered_car', 'metal_toolbox', 'hand_truck', 'utility_box_01',
           'service_pistol', 'bolt_action_rifle_7_62', 'stick_grenade', 'steel_frame_shelves_01', 'metal_tool_chest', 'exterior_aircon_unit', 'flood_lights', 'propane_tank',
-          'fire_hydrant', 'metal_trash_can', 'metal_office_desk', 'overhead_crane', 'security_light']
+          'fire_hydrant', 'metal_trash_can', 'metal_office_desk', 'overhead_crane', 'security_light',
+          'pliers']   # 폭탄 해제에 쓰는 펜치(절단날 포함)
 # 맵마다 쓰는 하늘 사진(HDRI). 눈에 보이는 야외 하늘은 2k, 반사에만 쓰는 실내는 1k
 HDRIS = {'night': 'qwantani_night_puresky', 'dusk': 'qwantani_dusk_2_puresky', 'day': 'kloofendal_43d_clear_puresky', 'indoor': 'empty_warehouse_01'}
 THREE = 'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/'
