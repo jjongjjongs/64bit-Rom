@@ -415,7 +415,7 @@ var SV = window.SV = window.SV || {};
   // Grasping, with the hand and the thing held both solid: each finger closes from the knuckle outward (within its range of
   // motion) and a joint stops the moment the bone after it touches the object; the joints beyond it go on closing. The thumb's
   // two bending joints close the same way. obs: spheres [x, y, z, r] in the frame the hand is placed in.
-  var FR = [.0105, .0095, .0085], TR = [.0115, .0105, .0095];   // finger and thumb bones with the glove on: proximal, middle, distal
+  var GFR = [.0105, .0095, .0085], GTR = [.0115, .0105, .0095];   // finger and thumb bones with the glove on: proximal, middle, distal
   function graspClear(H, X, obs, th0) {   // the open hand (fingers straight, thumb out) must not sink into the object either
     var g0 = graspSolve(H, X, obs, th0, true); return !g0; }
   function graspSolve(H, X, obs, th0, openOnly) {
@@ -428,7 +428,8 @@ var SV = window.SV = window.SV || {};
       for (var i = 0; i < obs.length; i++) { var s = obs[i], wx = s[0] - a.x, wy = s[1] - a.y, wz = s[2] - a.z, t = L2 ? Math.max(0, Math.min(1, (wx * ux + wy * uy + wz * uz) / L2)) : 0, dx = wx - ux * t, dy = wy - uy * t, dz = wz - uz * t;
         if (dx * dx + dy * dy + dz * dz < (s[3] + rad) * (s[3] + rad)) return true; }
       return false; }
-    // close joints j0.. of a chain together; bone k (from joint k to k+1) touching freezes every joint up to k
+    // all joints of a chain close together (the way a hand closes on a bar); when bone k (joint k to k+1) touches, it and every joint
+    // before it stop, and the joints beyond go on closing, so the finger folds round the object
     function close(ch, mk, max, rate, rads, j0, lo) {
       var a = (lo || max.map(function () { return 0; })).slice(), fz = a.map(function () { return 0; }), d = .02, it, j, k;
       for (it = 0; it < 400; it++) {
@@ -444,14 +445,14 @@ var SV = window.SV = window.SV || {};
       return [0, 1, 2].some(function (k) { return hit(kb[k], kb[k + 1], .012); });   // the thumb moves out of the way by itself
     }
     var curl = ['index', 'middle', 'ring', 'pinky'].map(function (f) {
-      return close(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }),
-        function (a) { return [[0, H.ez, -a[0]], [1, H.ez, -a[1]], [2, H.ez, -a[2]]]; }, [1.57, 1.92, 1.4], [1, 1.15, .8], FR, 0, [-.35, 0, 0]);   // MCP 90, PIP 110, DIP 80 at most
+      var chF = ['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), mkF = function (a) { return [[0, H.ez, -a[0]], [1, H.ez, -a[1]], [2, H.ez, -a[2]]]; };
+      return close(chF, mkF, [1.57, 1.92, 1.4], [1, 1.15, .8], GFR, 0, [-.35, 0, 0]);   // MCP 90, PIP 110, DIP 80 at most   // MCP 90, PIP 110, DIP 80 at most
     });
     var tc = ['thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'], td = H.pos[H.ix['thumb-tip']].clone().sub(H.pos[H.ix['thumb-metacarpal']]).normalize(), tax = new T.Vector3().crossVectors(td, H.ex).normalize();
     // the thumb swings in across the palm from wide open (opposition, at most 60), then bends at MCP (55) and IP (80)
-    var ta = close(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [1.05, .96, 1.4], [1, .8, .8], TR, 0, [-.7, 0, 0]);
-    var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], FR[k] - .001); }); });
-    var tp = chain(tc, [[0, H.ez, th0[0]], [0, H.ex, -ta[0]], [1, tax, -ta[1]], [2, tax, -ta[2]]]); all.push([0, 1, 2].some(function (k) { return hit(tp[k], tp[k + 1], TR[k] - .001); }));
+    var ta = close(tc, function (a) { return [[0, H.ez, th0[0]], [0, H.ex, -a[0]], [1, tax, -a[1]], [2, tax, -a[2]]]; }, [1.05, .96, 1.4], [1, .8, .8], GTR, 0, [-.7, 0, 0]);
+    var all = ['index', 'middle', 'ring', 'pinky'].map(function (f, n) { var p = chain(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map(function (j) { return f + '-finger-' + j; }), [[0, H.ez, -curl[n][0]], [1, H.ez, -curl[n][1]], [2, H.ez, -curl[n][2]]]); return [0, 1, 2].some(function (k) { return hit(p[k], p[k + 1], GFR[k] - .001); }); });
+    var tp = chain(tc, [[0, H.ez, th0[0]], [0, H.ex, -ta[0]], [1, tax, -ta[1]], [2, tax, -ta[2]]]); all.push([0, 1, 2].some(function (k) { return hit(tp[k], tp[k + 1], GTR[k] - .001); }));
     return { curl: curl, th: [th0[0], -ta[1], -ta[2], -ta[0]], overlap: all };   // overlap: does any bone still sink into the object (should all be false)
   }
   function realHand(g, O, ax, pn, wv, sg, r, E, sleeve, glove, o) {
@@ -751,7 +752,7 @@ var SV = window.SV = window.SV || {};
         var Fv = V(KP.F[0], KP.F[1], KP.F[2]).normalize(), up = V(KP.up[0], KP.up[1], KP.up[2]), pnK = up.addScaledVector(Fv, -up.dot(Fv)).normalize(), wvK = Fv.clone().negate(), axH = new T.Vector3().crossVectors(pnK, wvK), ua = KP.uln * PI / 180;
         ax = axH.clone().multiplyScalar(Math.cos(ua)).addScaledVector(wvK, Math.sin(ua)).normalize();   // ulnar deviation swings the thumb side (the jaws) toward the fingers' way
         yy = pnK.clone().addScaledVector(ax, -pnK.dot(ax)).normalize(); nn = new T.Vector3().crossVectors(ax, yy);   // the two handles spread across the grip: one in the palm, one in the fingers
-        KQ = { pn: yy.clone(), E: Fv.clone().multiplyScalar(.42), r: KP.r, thumb: KP.thumb, curl: KP.curl, sink: KP.sink, up: KP.a == null ? .006 : KP.a };   // up: the handle lies across the palm just below the finger roots
+        KQ = { pn: yy.clone(), E: Fv.clone().multiplyScalar(.42), r: KP.r, thumb: KP.thumb, curl: KP.curl, sink: KP.sink, up: KP.a == null ? -.01 : KP.a };   // up: the handles lie across the palm just at the finger roots   // up: the handle lies across the palm just below the finger roots
         var psrc = SV.assets && SV.assets.model.pliers;
         if (psrc) {   /* the pliers as a solid: each half sliced every 4 mm along its length into spheres (centre, widest reach) */
           var Mt = new T.Matrix4().set(0, 1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1), Mb = new T.Matrix4().makeBasis(ax, yy, nn).multiply(Mt), obs = [], palmR = 0;
