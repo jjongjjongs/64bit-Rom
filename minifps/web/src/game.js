@@ -731,7 +731,7 @@
     /* planting or defusing: the gun gives way to the bomb held in both hands, or to the wire cutters */
     var act = G.bomb && p.alive && p.useP > 0 && G.bomb.phase === 'live' ? G.bomb.can : null;
     if (act !== vmAct) { vmAct = act; var kb = 'bomb' + p.team, kk = 'kit' + p.team;
-      if (act === 'plant' && !vms[kb]) { vms[kb] = SV.bombVM(p.team); vms[kb].rotation.y = PI / 2; vms[kb].position.set(0, -.1, -.4); vmRoot.add(vms[kb]); }
+      if (act === 'plant' && !vms[kb]) { vms[kb] = SV.bombVM(p.team); vms[kb].rotation.y = PI / 2; vms[kb].position.set(0, -.15, -.6); vmRoot.add(vms[kb]); }
       if (act === 'defuse' && !vms[kk]) { vms[kk] = SV.viewModel('kit', p.team); vms[kk].rotation.y = PI / 2; vms[kk].position.set(.035, -.02, -.34); vmRoot.add(vms[kk]); }
       if (vms[kb]) vms[kb].visible = act === 'plant'; if (vms[kk]) vms[kk].visible = act === 'defuse'; if (vmCur) vmCur.visible = !act; }
     if (act) { var rise = Math.min(1, p.useP / .3), snip = act === 'defuse' ? Math.max(0, 1 - ((p.useP / DEFUSE * 3) % 1) * 5) : 0; vmRoot.rotation.set(0, 0, 0); vmRoot.position.set(0, -(1 - rise) * .25 - snip * .012, -snip * .02); vmRoot.visible = true; flash.visible = false;
@@ -1004,6 +1004,7 @@
   // unless a defender holds "use" on it for 5 s. G.score counts rounds won. Sides swap after four rounds.
   var POSTS = [[-2.2, -2.2], [2.2, 2.2], [-2.2, 2.2], [2.2, -2.2], [0, 3.2], [3.2, 0], [-5.5, .5], [5, -4.5], [1, 6], [-4, -5.5], [6.5, 3], [-1, -7]], PLANT = 3, DEFUSE = 5, FUSE = 40, ROUND = 150;
   var bombMesh = SV.bombParts(), bombLed = bombMesh.userData.led, vmAct = null, useCrouch = false, lastKey = -1; bombMesh.scale.setScalar(1.7); bombMesh.visible = false; scene.add(bombMesh);
+  function bombReal() { if (bombMesh.userData.real || !(SV.assets && SV.assets.c4)) return; scene.remove(bombMesh); bombMesh = SV.bombParts(); bombLed = bombMesh.userData.led; bombMesh.visible = false; scene.add(bombMesh); }   /* the real model once the files have loaded; it is life size */
   function snap(x, z, l) { var c = freeNear(cellOf(x, z, l)), cc = c % nav.N; return { x: nav.ox + (cc % nav.nx) + .5, z: nav.oz + ((cc / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0, y: nav.hm ? nav.fy[c] : c >= nav.N ? nav.H : 0 }; }
   function near(a, s, r) { return Math.hypot(a.pos.x - s.x, a.pos.z - s.z) < r && Math.abs(a.pos.y - (s.y || 0)) < 1.2; }
   function aliveOf(team) { var n = 0, i; for (i = 0; i < G.actors.length; i++) if (G.actors[i].alive && G.actors[i].team === team) n++; return n; }
@@ -1095,7 +1096,7 @@
       if (step2 !== lastKey) { lastKey = step2; if (step2 > 0) { tick(0, 3800, .3, 5); tick(.03, 1800, .2, 3); } } bombMesh.userData.cut(step2); }
     else { lastKey = -1; bombMesh.userData.cut(0); }
     if (act !== 'plant') SV.bombText(B.planted ? '0:' + ('0' + Math.ceil(B.planted.t)).slice(-2) : '--:--', '#ff4a2e');
-    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + .012, s.z);
+    s = B.planted || B.drop; bombMesh.visible = !!s; if (s) bombMesh.position.set(s.x, (s.y || 0) + (bombMesh.userData.real ? .002 : .012), s.z);
     var na = aliveOf(B.atk), nd = aliveOf(def);
     if (B.planted) {
       s = B.planted; s.t -= dt; s.beep -= dt; bombLed.visible = s.beep > .12 || s.beep < .06;
@@ -1154,6 +1155,7 @@
 
   // ---------- match ----------
   SV.start = function (match) {
+    bombReal();
     SV.end(); G.match = match; G.ffa = match.mode === 2; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; indexBoxes(); scene.add(map.group); makeTargets(map);

@@ -27,3 +27,9 @@ maps/junkyard.boxes.json — its collision boxes, worked out ahead of time from 
 
 ui/maps/m<N>.jpg — the match screen's map pictures, one per entry of SV.MAPS (same order): a view from above taken inside this game
   (walls cut at 2.75 m so rooms show), by the scratch tool that drives the game page. Re-take them when a map changes or moves.
+
+c4.glb — the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili (https://sketchfab.com/Fevzi_Beydili), CC BY 4.0.
+  https://sketchfab.com/3d-models/c4-explosive-device-detonator-pack-595e719f03d84412b34dc720f31233ef
+  Made from the USDZ download with web/tools/c4_usd2glb.py: only the three-charge pack ("Cs_go") is kept; it is laid flat (keypad up),
+  scaled so each charge is 28 cm long (an M112 block), textures reduced to 1024/512 px, and the display glass, the lamp button and a short
+  piece of each of the three top wires are split off so the game can drive the display, blink the lamp and show wires being cut.

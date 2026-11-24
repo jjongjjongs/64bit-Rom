@@ -230,13 +230,34 @@ var SV = window.SV = window.SV || {};
     k.cz(.006, .011, m.dark, .004, 0, 0, 10); k.b(.105, .011, .009, m.red, -.055, .012, 0, 0, 0, -.1); k.b(.105, .011, .009, m.red, -.055, -.012, 0, 0, 0, .1);
     return { g: g, grip: [-.06, 0], fore: null, muzzle: [.075, 0], sight: 0 };
   };
-  // the bomb ready to place in a scene: merged body, a live display, a lamp and three wires that can be cut one by one
+  // the bomb ready to place in a scene: body, a live display, a lamp and three wires that can be cut one by one
   var bombCv = document.createElement('canvas'), bombTex = null, bombStr = null; bombCv.width = 128; bombCv.height = 56;
   SV.bombText = function (str, col) {
-    if (str + col === bombStr) return; bombStr = str + col; var x = bombCv.getContext('2d'); x.fillStyle = '#0b1210'; x.fillRect(0, 0, 128, 56); x.fillStyle = col || '#ff4a2e'; x.font = '900 34px monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(str, 64, 30);
+    var lcd = !!(SV.assets && SV.assets.c4); if (str + col + lcd === bombStr) return; bombStr = str + col + lcd;
+    if (lcd && bombCv.width !== 256) { bombCv.width = 256; bombCv.height = 60; }   // the real unit's display: a wide green LCD
+    var x = bombCv.getContext('2d'), W = bombCv.width, H = bombCv.height;
+    if (lcd) { x.fillStyle = '#a7cf2c'; x.fillRect(0, 0, W, H); x.fillStyle = '#1c2a06'; x.font = '700 46px monospace'; }
+    else { x.fillStyle = '#0b1210'; x.fillRect(0, 0, W, H); x.fillStyle = col || '#ff4a2e'; x.font = '900 34px monospace'; }
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(str, W / 2, H * .54);
     if (!bombTex) { bombTex = new T.CanvasTexture(bombCv); bombTex.encoding = T.sRGBEncoding; } bombTex.needsUpdate = true;
   };
+  /* The real thing: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili (Sketchfab, CC BY 4.0), the three-charge pack, made
+     ready by the build tools (web/tools/c4_usd2glb.py): laid flat, keypad up, the wires at the far end (-Z), the display read from
+     +Z; sized so each charge is as long as an M112 block (28 cm); 24 x 32 x 10 cm in all, its underside on y = 0. The file keeps
+     the parts that change apart: the display glass ("screen"), the lamp button ("led"), and a short piece of each of the three
+     wires to the charges ("wireN_cut") that disappears when that wire is cut. */
+  function bombReal(src) {
+    SV.bombText('--:--'); var out = new T.Group(), o = src.clone(true), cuts = [], bx = null, lb = null; out.add(o); o.updateMatrixWorld(true);
+    o.traverse(function (q) { var m = /^wire(\d)_cut$/.exec(q.name); if (m) cuts[+m[1]] = q;
+      if (q.name === 'screen') { bx = new T.Box3().setFromObject(q); q.visible = false; } if (q.name === 'led') lb = new T.Box3().setFromObject(q); });
+    var sz = bx.getSize(new T.Vector3()), sc = new T.Mesh(new T.PlaneGeometry(sz.x, sz.z), new T.MeshBasicMaterial({ map: bombTex, fog: false }));
+    sc.rotation.x = -PI / 2; sc.position.set((bx.min.x + bx.max.x) / 2, bx.max.y + .0004, (bx.min.z + bx.max.z) / 2); out.add(sc);
+    var led = new T.Mesh(new T.SphereGeometry(.0034, 10, 8), new T.MeshBasicMaterial({ color: new T.Color(3, .35, .2), fog: false })); led.position.set((lb.min.x + lb.max.x) / 2, lb.max.y, (lb.min.z + lb.max.z) / 2); out.add(led);
+    out.userData = { real: true, led: led, wires: cuts, cut: function (n) { cuts.forEach(function (w, i) { w.visible = i >= n; }); } };
+    return out;
+  }
   SV.bombParts = function () {
+    if (SV.assets && SV.assets.c4) return bombReal(SV.assets.c4);
     SV.bombText('--:--'); var d = GUN.bomb(), out = new T.Group(), sc = d.screen;
     out.add(new T.Mesh(merge(d.g, false, function (m) { return !m.userData.soft; }), SV.gunMetal)); out.add(new T.Mesh(merge(d.g, false, function (m) { return !!m.userData.soft; }), SV.gunSoft));
     var scr = new T.Mesh(new T.PlaneGeometry(sc[3], sc[4]), new T.MeshBasicMaterial({ map: bombTex, fog: false })); scr.rotation.x = -PI / 2; scr.position.set(sc[0], sc[1], sc[2]); out.add(scr);
@@ -250,9 +271,42 @@ var SV = window.SV = window.SV || {};
     out.userData = { led: led, wires: wires, cut: function (n) { wires.forEach(function (w, i) { w.userData.mid.visible = i >= n; }); } };
     return out;
   };
+  /* The bomb as a solid for the hands: its real surface, kept as one small sphere per 4 mm cell it passes through. */
+  function surfSpheres(root, M0, cell) {
+    var seen = {}, out = [], a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), p = new T.Vector3(); root.updateMatrixWorld(true);
+    root.traverse(function (q) { if (!q.isMesh || !q.visible) return; var pa = q.geometry.attributes.position, ix = q.geometry.index, n = ix ? ix.count : pa.count, Mq = new T.Matrix4().multiplyMatrices(M0, q.matrixWorld), i, u, v;
+      for (i = 0; i + 2 < n; i += 3) {
+        a.fromBufferAttribute(pa, ix ? ix.getX(i) : i).applyMatrix4(Mq); b.fromBufferAttribute(pa, ix ? ix.getX(i + 1) : i + 1).applyMatrix4(Mq); c.fromBufferAttribute(pa, ix ? ix.getX(i + 2) : i + 2).applyMatrix4(Mq);
+        var st = Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / (cell * .5)));
+        for (u = 0; u <= st; u++) for (v = 0; v <= st - u; v++) { p.copy(a).multiplyScalar(1 - (u + v) / st).addScaledVector(b, u / st).addScaledVector(c, v / st);
+          var k = Math.round(p.x / cell) + ',' + Math.round(p.y / cell) + ',' + Math.round(p.z / cell); if (!seen[k]) { seen[k] = 1; out.push([p.x, p.y, p.z, cell * .5]); } }
+      } });
+    return out;
+  }
   // first person, planting: the bomb held flat in both hands, tilted up so the display and keypad face the eye
   SV.bombVM = function (team) {
     var out = new T.Group(), hold = new T.Group(), b = SV.bombParts(), sl = sleeveMat(team), V = function (x, y, z) { return new T.Vector3(x, y, z); };
+    if (b.userData.real) {
+      /* From the game reference (CS2, first person, holding the C4 before it goes down): the pack lies along the line of sight, wires
+         away, tilted up so the keypad faces the eye; the two hands take its left and right sides at the near half, palms on the sides,
+         thumbs over the top edge, fingers along the side and round under the bottom edge; forearms come in from the lower corners.
+         Here (gun space): +X ahead, +Y up, +Z screen right. Nothing is posed by hand: each hand is laid against the side, backed off
+         until it does not sink into the pack, and its fingers and thumb close until they touch it (graspSolve on the pack's surface). */
+      var TILT = .8; b.rotation.y = -PI / 2; hold.add(b); out.add(hold); b.updateMatrixWorld(true);
+      var obs = surfSpheres(b, new T.Matrix4(), .004), Rinv = new T.Matrix4().makeRotationZ(-TILT), W = .121, grasp = [];
+      [[1, 1], [-1, -1]].forEach(function (q) {
+        // the palm cupped round the near lower corner (facing up and in, the edge across its middle), fingers pointing in and ahead
+        // under the pack (SPLAY off the line across it), the thumb against the side; the forearm runs on from the hand, out and back
+        var sg = q[0], sd = q[1], SPLAY = .75, CUP = .6, pn = V(0, -1, sd * CUP).normalize(), f = V(Math.sin(SPLAY), 0, -sd * Math.cos(SPLAY)), wv, ax;
+        f.addScaledVector(pn, -f.dot(pn)).normalize(); wv = f.clone().multiplyScalar(sg); ax = new T.Vector3().crossVectors(pn, wv).normalize();
+        var O = V(-.07, 0, sd * W).addScaledVector(pn, -.012), E = O.clone().addScaledVector(f, -.42), near = obs.filter(function (s) { return Math.hypot(s[0] - O.x, s[1] - O.y, s[2] - O.z) < .16; }), hh = new T.Group();
+        hand(hh, O, ax, pn, sg, .01, E, sl, MAT.glove, { pad: MAT.poly2, yaw: 0, top: .03075, up: .03, sink: 0, thumb: [-.78, 0, 0, 0], grasp: near });
+        grasp.push(SV.lastGrasp);
+        var hm = new T.Group(); hm.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); hm.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); hold.add(hm);
+      });
+      hold.rotation.z = TILT; out.userData.grasp = grasp;
+      out.userData.muzzle = [0, 0]; out.userData.sight = 0; out.userData.parts = b; return out;
+    }
     b.rotation.y = -PI / 2; hold.add(b); hold.rotation.z = .95; out.add(hold); hold.updateMatrixWorld(true);
     [[-1, -.118], [1, .118]].forEach(function (q) { var hh = new T.Group(), O = hold.localToWorld(V(.005, .02, q[1])), ax = V(1, 0, 0).applyEuler(hold.rotation); hand(hh, O, ax, V(0, 0, q[0]), q[0], .022, V(O.x - .3, O.y - .2, q[0] * .26), sl, MAT.glove, { pad: MAT.poly2, thumbWrap: true, yaw: .5 });
       var hm = new T.Group(); hm.add(new T.Mesh(merge(hh, false, function (m) { return !!m.userData.soft && !m.userData.sleeve; }), SV.gunSoft)); hm.add(new T.Mesh(mergeUV(hh, function (m) { return !!m.userData.sleeve; }), sl)); out.add(hm); if (q[0] > 0) out.userData.tap = hm; });
