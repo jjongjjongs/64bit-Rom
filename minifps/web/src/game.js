@@ -289,7 +289,9 @@
     if (ls) for (i = 0; i < ls.length; i++) if (a.pos.y < ls[i].y1 + .05 && Math.abs(a.pos.x - ls[i].x) < .55 && Math.abs(a.pos.z - ls[i].z) < .55) lad = ls[i];
     // ladder: pushing into it climbs, anything else slides down slowly
     if (lad && vx * lad.dx + vz * lad.dz > .5) a.vy = 3.4; else { a.vy -= 20 * dt; if (lad && a.vy < -3) a.vy = -3; } a.pos.y += a.vy * dt; var g = groundAt(a);
-    if (a.pos.y <= g) { a.pos.y = g; a.vy = 0; a.ground = true; } else a.ground = a.pos.y - g < .05;
+    if (a.pos.y <= g) { a.pos.y = g; a.vy = 0; a.ground = true; }
+    else if (a.ground && a.vy <= 0 && !lad && a.pos.y - g < .55) { a.pos.y = g; a.vy = 0; }   // walking down a step: keep the feet on it instead of dropping off each one
+    else a.ground = a.pos.y - g < .05;
     var vd = G.map && G.map.voids; if (vd && a.alive && a.pos.y < G.map.H - 2.6) for (i = 0; i < vd.length; i++) if (a.pos.x > vd[i][0] && a.pos.x < vd[i][2] && a.pos.z > vd[i][1] && a.pos.z < vd[i][3]) { a.prot = 0; hurt(a, 999, a); break; }   // fell into the gorge
   }
 
@@ -509,6 +511,7 @@
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
   }
   function seenFrom(q) { for (var j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (!o.alive) continue; eye(o, vO); vH.set(q.x, (q.y || 0) + 1.2, q.z).sub(vO); var d = vH.length(); if (d > 50) continue; vH.multiplyScalar(1 / d); if (rayWorld(vO, vH, d) >= d - .4) return true; } return false; }
+  function nextLead(v) { var c = G.actors.filter(function (a) { return a !== v && a.alive && a.team === G.bomb.atk && !a.gone; }), bots = c.filter(function (a) { return !a.isPlayer && !a.remote; }); c = bots.length ? bots : c; return c.length ? c[(Math.random() * c.length) | 0] : null; }
   function feed(k, v, head) { G.feed.unshift({ k: k, v: v, head: head, t: 5 }); if (G.feed.length > 4) G.feed.pop(); G.feedDirty = true; }
   function hurt(v, dmg, by, head, wid) {
     if (G.net && v.remote) {   /* someone else's soldier: tell its owner; they decide and announce the result */
@@ -521,7 +524,7 @@
     if (v.hp <= 0) {
       v.alive = false; v.respawn = G.ffa ? 2 : 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds(); dropGun(v, v.slot, false, true);
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
-      if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z, lvl(v)); }
+      if (G.bomb && G.bomb.carrier === v && !(G.net && !G.net.host)) G.bomb.carrier = nextLead(v);   // every attacker has a bomb: another one leads the way to the site
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
@@ -1031,7 +1034,7 @@
     if (a.ai.via && !(B.carrier && B.carrier.isPlayer)) { if (Math.hypot(a.ai.via[0] - a.pos.x, a.ai.via[1] - a.pos.z) < 4 && (a.ai.via[2] || 0) === lvl(a)) a.ai.via = null; else return snap(a.ai.via[0], a.ai.via[1], a.ai.via[2]); }   // this round's route
     if (B.carrier === a) { var sp = B.spot || s; return { x: sp.x, z: sp.z, l: sp.l, use: near(a, sp, 1.4) && !!siteAt(a.pos), force: a.useP > 1.5 }; }
     if (B.carrier && B.carrier.isPlayer) return snap(B.carrier.pos.x + off[0] * .9, B.carrier.pos.z + off[1] * .9, lvl(B.carrier));   // escort the player
-    o = snap(s.x + off[0], s.z + off[1], s.l); o.look = far; return o;
+    o = snap(s.x + off[0], s.z + off[1], s.l); o.look = far; if (near(a, o, 1.4) && siteAt(a.pos)) o.use = true; return o;   // on the site with a bomb of its own: plants it
   }
   // a place to stand near s, changing every few seconds, and something to watch from there that changes more often
   function hold(a, s, scale, looks) {
@@ -1054,10 +1057,10 @@
     // spread out: the attackers split over two of the routes to the chosen site, and every third defender pushes forward
     var vs = G.map.sites[B.plan].via || [], v1 = vs[(Math.random() * vs.length) | 0], v2 = vs[(Math.random() * vs.length) | 0], fw = G.map.fwd || [];
     G.actors.forEach(function (a) { a.ai.via = a.team === B.atk ? (a.idx % 2 ? v1 : v2) || null : null; a.ai.fwd = a.team !== B.atk && a.idx % 3 === 2 && fw.length ? fw[(Math.random() * fw.length) | 0] : null; });
-    showMsg('라운드 ' + B.round + (B.swapped && B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2);
+    showMsg('라운드 ' + B.round + (B.swapped && B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? '공격: 모두 폭탄을 들었습니다 · A 또는 B에 설치' : '수비: 설치를 막으세요'), 3.2);
   }
   function bombState(b) {   /* guest: the host's snapshot of the round */
-    var B = G.bomb; if (b[2] === 0 && (B.phase !== 'live' || b[0] !== B.cur)) { newRound(b); showMsg('라운드 ' + B.round + (B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? (B.carrier === G.player ? '공격: 폭탄을 들었습니다' : '공격: 운반조를 엄호하세요') : '수비: 설치를 막으세요'), 3.2); }
+    var B = G.bomb; if (b[2] === 0 && (B.phase !== 'live' || b[0] !== B.cur)) { newRound(b); showMsg('라운드 ' + B.round + (B.round === 5 ? ' · 공수 교대' : '') + ' · ' + (G.player.team === B.atk ? '공격: 모두 폭탄을 들었습니다 · A 또는 B에 설치' : '수비: 설치를 막으세요'), 3.2); }
     if (B.phase !== 'live') return;
     var c = b[3] < 0 ? null : byNid(b[3]); if (c !== B.carrier) { if (c === G.player && B.carrier !== G.player && B.drop) showMsg('폭탄을 주웠습니다', 1.6); B.carrier = c; }
     B.drop = b[5] ? { x: b[5][0], y: b[5][1], z: b[5][2], l: b[5][3] } : null;
@@ -1074,7 +1077,7 @@
       if (!guest && B.drop && a.team === B.atk && near(a, B.drop, 1.5)) { B.carrier = a; B.drop = null; if (a.isPlayer) showMsg('폭탄을 주웠습니다', 1.6); }
       if (B.carrier === a && a.ground && !nav.blk[cellOf(a.pos.x, a.pos.z, lvl(a))]) a.lastFree = { x: a.pos.x, z: a.pos.z, y: a.pos.y, l: lvl(a) };   // if the carrier dies the bomb lands where bots can walk
       kind = null; s = null;
-      if (!B.planted) { if (B.carrier === a && (s = siteAt(a.pos))) kind = 'plant'; }
+      if (!B.planted) { if (a.team === B.atk && (s = siteAt(a.pos))) kind = 'plant'; }   // every attacker carries a bomb
       else if (a.team === def && near(a, B.planted, 1.7)) kind = 'defuse';
       if (a.isPlayer) B.can = kind;
       want = a.isPlayer ? inp.use : a.ai.use;
@@ -1230,7 +1233,7 @@
     if (msgT > 0) { msgT -= dt; if (msgT <= 0 && p.alive) $('msg').hidden = true; }
     if (!p.alive && G.state === 'play' && !(G.bomb && G.bomb.phase === 'post')) { $('msg').hidden = false; $('msg').textContent = (G.killer && G.killer !== p ? G.killer.name + '에게 당했습니다 · ' : '') + (G.bomb ? (G.specName ? G.specName + ' 관전 중 · 사격 버튼으로 전환' : '다음 라운드까지 관전') : Math.ceil(p.respawn) + '초 뒤 다시 투입'); msgT = .1; }
     var B = G.bomb, can = B && p.alive && B.phase === 'live' ? B.can : null, ot = '', ut = can === 'plant' ? '설치' : can === 'defuse' ? '해제' : '', up = can ? Math.round(p.useP / (can === 'plant' ? PLANT : DEFUSE) * 100) : 0, red = !!(B && B.planted);
-    if (B) ot = B.planted ? (p.team === B.atk ? B.planted.site + ' 지점 설치 완료 · 폭탄을 지키세요' : B.planted.site + ' 지점에 폭탄 · 해제하세요') : p.team === B.atk ? (B.carrier === p ? '폭탄 소지 · A 또는 B에 설치' : B.drop ? '폭탄이 떨어져 있습니다 · 주우세요' : '공격 · ' + (B.carrier ? B.carrier.name + ' 이(가) 폭탄 운반 중' : '')) : '수비 · A, B 지점 방어';
+    if (B) ot = B.planted ? (p.team === B.atk ? B.planted.site + ' 지점 설치 완료 · 폭탄을 지키세요' : B.planted.site + ' 지점에 폭탄 · 해제하세요') : p.team === B.atk ? '공격 · 폭탄 소지 · A 또는 B에 설치' : '수비 · A, B 지점 방어';
     set('obj', ot); if (last.objh !== !B) { last.objh = !B; $('obj').hidden = !B; }
     if (last.use !== ut) { last.use = ut; $('b-use').hidden = !ut; $('use-t').textContent = ut; if (!ut) inp.use = false; }
     if (last.up !== up) { last.up = up; $('usef').style.width = up + '%'; $('b-use').classList.toggle('busy', up > 0); }
@@ -1284,7 +1287,7 @@
     else if (m.t === 'h') { v = byNid(m.v); by = byNid(m.by); if (v && !v.remote) hurt(v, m.d, by || v, !!m.h); }
     else if (m.t === 'k') { v = byNid(m.v); by = byNid(m.by) || v; if (!v || !v.remote) return; var head = !!m.h;
       v.alive = false; v.dead = .001; v.deaths++; if (v.net) v.net.alive = false; if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; } feed(by, v, head);
-      if (G.bomb && G.net.host && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = snap(v.pos.x, v.pos.z, lvl(v)); }
+      if (G.bomb && G.net.host && G.bomb.carrier === v) G.bomb.carrier = nextLead(v);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); }
       if (!G.bomb && (G.ffa ? by.kills : G.score[by.team]) >= G.match.target) endMatch(); }
     else if (m.t === 'f') { a = byNid(m.by); if (!a || !a.remote) return; a.fireK = 1; vP.fromArray(m.o); vH.fromArray(m.e); tracer(vP, vH); var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); gunSnd(m.g, clamp(1 - dd / 95, 0, 1) * .8, dd); }
@@ -1309,8 +1312,11 @@
     if (G.net) netTick(dt);
     for (i = 0; i < G.actors.length; i++) updModel(dt, G.actors[i]);
     updNades(dt); updSmokes(dt); updDrops(dt);
-    if (!p.alive) { G.eyeH = null; inp.nadeHold = false; nadeArc(false); }
-    if (p.alive) { G.deadT = 0; G.specName = ''; var eyT = p.crouch ? EYEC : EYE; G.eyeH = G.eyeH == null ? eyT : G.eyeH + clamp((eyT - G.eyeH) * 14, -2.6, 2.6) * dt; cam.position.set(p.pos.x, p.pos.y + G.eyeH, p.pos.z);   /* ease the view down and up instead of snapping */ cam.rotation.set(p.pitch, p.yaw, 0); }
+    if (!p.alive) { G.eyeH = null; G.footY = null; inp.nadeHold = false; nadeArc(false); }
+    if (p.alive) { G.deadT = 0; G.specName = ''; var eyT = p.crouch ? EYEC : EYE; G.eyeH = G.eyeH == null ? eyT : G.eyeH + clamp((eyT - G.eyeH) * 14, -2.6, 2.6) * dt;
+      /* stairs: the feet go up or down a step at once, the eye follows over a moment, so a flight of steps reads as one smooth climb */
+      if (G.footY == null || !p.ground || Math.abs(p.pos.y - G.footY) > .9) G.footY = p.pos.y; else G.footY += (p.pos.y - G.footY) * Math.min(1, dt * 11);
+      cam.position.set(p.pos.x, G.footY + G.eyeH, p.pos.z);   /* ease the view down and up instead of snapping */ cam.rotation.set(p.pitch, p.yaw, 0); }
     else if (G.bomb && (G.deadT += dt) > 1.6 && (a = watch(p))) { if (inp.fire && !G.specHeld) G.specI = (G.specI || 0) + 1; G.specHeld = inp.fire; a = watch(p); G.specName = a.team === p.team ? a.name : ''; cam.position.set(a.pos.x + Math.sin(a.yaw) * 2.4, a.pos.y + 2.3, a.pos.z + Math.cos(a.yaw) * 2.4); cam.rotation.set(-.24, a.yaw, 0); }   // no respawn: follow a teammate
     else { cam.rotation.x += (-.5 - cam.rotation.x) * dt * 2; cam.position.y = Math.max(.5, cam.position.y - dt * 1.2); }
     if (G.shake > 0) { G.shake -= dt; cam.position.x += rnd(-1, 1) * G.shake * .12; cam.position.y += rnd(-1, 1) * G.shake * .12; }
