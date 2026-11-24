@@ -1761,15 +1761,42 @@
     // spawns: open floor inside each end building (and the yard by A's ramp)
     [[-20.6, 3.6], [-20.6, 6.4], [-19.4, 9.2], [-19, -9.6], [-18.2, -9.4]].forEach(function (q) { b.spawns.A.push({ x: q[0], z: q[1] }); });
     [[18.5, -2.5], [19.6, -2.6], [18.5, 8.5], [19.6, 9.1], [20.6, 8.4]].forEach(function (q) { b.spawns.B.push({ x: q[0], z: q[1] }); });
-    var routes = [{ kind: 'main', pts: [[-18.5, 4], [-14.1, -.1], [-8.1, -1.6], [-2.1, -1.6], [4.9, -.1], [13.6, -.1], [18.5, -2.5]] },   // through the middle building
+    var routes = [{ kind: 'main', pts: [[-20.5, 4.5], [-14.1, -.1], [-8.1, -1.6], [-2.1, -1.6], [4.9, -.1], [13.6, -.1], [18.5, -2.5]] },   // through the middle building
       { kind: 'flank', pts: [[-19, -9.5], [-13.9, -7.1], [-9.4, -8.9], [-4.1, -7.9], [4.1, -7.9], [8.1, -6.9], [13.9, -2.6], [18.5, -2.5]] },
       { kind: 'flank', pts: [[-19.4, 9], [-13.4, 7.1], [-8.1, 7.1], [-3.1, 7.6], [2.9, 7.6], [8.1, 6.9], [15.4, 4.4], [19, 8.5]] }];
     return lit('day', { name: '오렌지 야드', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [40, 80], H: H, navPad: .3, navDeck: .05, navPrune: true, links: links, ladders: [], routes: routes });
   }
 
-  var MAKERS = [dockM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, yardM, range];
+  // 01 폐차 야적장 — a ready-made level ("Lowpoly Map Asset" by Resoforge / Space_One, CC BY 4.0), laid lengthwise along x:
+  // a fenced yard of containers, scrapped cars, tyre stacks and sheds. Drawn through the builder like the orange yard; small
+  // pieces fade out with distance (tiers), and the collision boxes come worked out ahead of time (art/maps/junkyard.boxes.json).
+  function junkM() {
+    var b = Builder(), A = SV.assets && SV.assets.maps || {}, src = A.junk, HW = 101, HD = 50, i;
+    b.day = true;
+    var LOOK = { PLANE: ['conc', 0x3c3e40, .85], YELLOW: ['plaster', 0xe8902c, .92], 'WHITE-EF': ['plain', 0xdedcd6], 'DARK-2': ['plain', 0x1d1e20], BLUE: ['plain', 0x2e6fd2], RED: ['plain', 0xd12b22],   // flat paint like the original
+      WOOD: ['crate', 0xc98a45], DARK: ['plain', 0x232427], ORANGE: ['plain', 0xee6a24], 'D-W-50': ['conc', 0x76787a, .85] };
+    b.ghost = true; b.box(0, 0, 420, 300, .3, 0x8f8a76, -.62, false, 'sand'); b.ghost = false;
+    if (src) {
+      var root = src.scene.clone(true); root.rotation.y = PI / 2; root.updateMatrixWorld(true);
+      root.traverse(function (o) { if (!o.isMesh) return; var lk = LOOK[o.material.name], g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.index) g = g.toNonIndexed(); g.computeVertexNormals();   /* flat shading: the reduced model keeps no normals */
+        g.computeBoundingBox(); var q = g.boundingBox, ext = Math.max(q.max.x - q.min.x, q.max.y - q.min.y, q.max.z - q.min.z); b.tier = ext < 2.6 ? 1 : ext < 7 ? 2 : 0;
+        b.geo(g, lk ? lk[1] : o.material.color.getHex(), lk ? lk[0] : 'plain', { pass: true, keep: lk && lk[2] }); });
+      b.tier = 0;
+    }
+    (A.junkBox || []).forEach(function (q) { b.boxes.push(Object.assign({}, q)); });
+    // the fence ring keeps everyone in (the concrete blocks along it can be climbed from the stacks beside them)
+    [[0, -HD - .6, HW * 2 + 2, 1.2], [0, HD + .6, HW * 2 + 2, 1.2], [-HW - .6, 0, 1.2, HD * 2 + 2], [HW + .6, 0, 1.2, HD * 2 + 2]].forEach(function (w) { b.solid(w[0], w[1], w[2], w[3], 12, 0); });
+    [[-94.2, -6.1], [-94.2, -2], [-94.2, 2], [-94.2, 5.9], [-91, 0]].forEach(function (q) { b.spawns.A.push({ x: q[0], z: q[1] }); });
+    [[91.8, -6.6], [91.8, .4], [93.3, 1.9], [87.8, 3.4]].forEach(function (q) { b.spawns.B.push({ x: q[0], z: q[1] }); });
+    var routes = [{ kind: 'main', pts: [[-89.5, .5], [-80.2, -.1], [-56.7, -.1], [-30.2, -.1], [-.2, -2.6], [29.8, 1.4], [54.8, -2.6], [79.8, -.1], [90.5, .5]] },   // under the scaffold in the middle
+      { kind: 'flank', pts: [[-89.5, -3.5], [-80.2, -35.1], [-55.2, -35.1], [-30.2, -35.1], [-.2, -35.1], [29.8, -36.1], [54.8, -35.1], [79.8, -35.1], [89.5, -4.5]] },
+      { kind: 'flank', pts: [[-89.5, 4.5], [-80.2, 36.4], [-55.2, 34.9], [-31.7, 39.4], [-.2, 38.9], [29.8, 38.9], [58.8, 34.9], [78.5, 41.5], [88.5, 3.5]] }];
+    return lit('day', { name: '폐차 야적장', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [45, 90], navPad: .35, navStep: .44, navHead: 1.8, navPrune: true, routes: routes });
+  }
+
+  var MAKERS = [junkM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, yardM, range];
   SV.RANGE = 12;   // the practice range: not in the match list, opened from the lobby's practice button
-  SV.MAPS = [{ name: '컨테이너 부두', info: '중형 · 야간', hint: '컨테이너 미로와 부두 · 출발점 대각선' }, { name: '물류 창고', info: '소형 · 실내', hint: '선반 두 블록을 도는 8자 순환' },
+  SV.MAPS = [{ name: '폐차 야적장', info: '대형 · 낮', hint: '컨테이너·폐차 더미·타이어 더미 사이 세 갈래' }, { name: '물류 창고', info: '소형 · 실내', hint: '선반 두 블록을 도는 8자 순환' },
     { name: '보급기지', info: '대형 · 낮', hint: '폭파 미션 가능 · 가운데 연료 저장소와 외곽 순환로', bomb: true }, { name: '구시가지', info: '대형 · 2층', hint: '폭파 미션 가능 · 굽은 골목과 집 관통', bomb: true },
     { name: '전술 기지', info: '대형 · 대칭', hint: '폭파 미션 가능 · 세 갈래와 연결로', bomb: true }, { name: '설산 연구기지', info: '대형 · 야간', hint: '폭파 미션 가능 · 연구동 관통과 지하 통로', bomb: true },
     { name: '사막 협곡', info: '대형 · 해질녘', hint: '폭파 미션 가능 · 철교 · 여울 · 동굴 다리', bomb: true }, { name: '세관 야적장', info: '대형 · 낮', hint: '폭파 미션 가능 · 검사 차선과 컨테이너 블록', bomb: true },

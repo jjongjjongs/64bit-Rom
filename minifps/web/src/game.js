@@ -211,6 +211,26 @@
 
   // ---------- collision ----------
   var boxes = [];
+  // a grid over the map (4 m cells) listing the boxes that reach into each cell: movement, grenades and rays only look at the
+  // boxes near them, so a level with thousands of pieces costs about what a small one does
+  var BG = { cs: 4, ox: 0, oz: 0, nx: 1, nz: 1, cells: [[]], stamp: new Int32Array(0), run: 0, list: [] };
+  function indexBoxes() {
+    var x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, ext = [], i, b, e, cs = BG.cs;
+    for (i = 0; i < boxes.length; i++) { b = boxes[i];
+      if (b.rot) { var r = Math.hypot(Math.max(-b.minx, b.maxx), Math.max(-b.minz, b.maxz)); e = [b.ox - r, b.oz - r, b.ox + r, b.oz + r]; } else e = [b.minx, b.minz, b.maxx, b.maxz];
+      ext.push(e); x0 = Math.min(x0, e[0]); z0 = Math.min(z0, e[1]); x1 = Math.max(x1, e[2]); z1 = Math.max(z1, e[3]); }
+    if (!boxes.length) { x0 = z0 = -1; x1 = z1 = 1; }
+    BG.ox = x0 - 1; BG.oz = z0 - 1; BG.nx = Math.ceil((x1 - x0 + 2) / cs); BG.nz = Math.ceil((z1 - z0 + 2) / cs); BG.cells = []; for (i = 0; i < BG.nx * BG.nz; i++) BG.cells.push([]);
+    for (i = 0; i < boxes.length; i++) { e = ext[i]; var i0 = Math.floor((e[0] - BG.ox) / cs), i1 = Math.floor((e[2] - BG.ox) / cs), j0 = Math.floor((e[1] - BG.oz) / cs), j1 = Math.floor((e[3] - BG.oz) / cs);
+      for (var gi = i0; gi <= i1; gi++) for (var gj = j0; gj <= j1; gj++) BG.cells[gj * BG.nx + gi].push(i); }
+    BG.stamp = new Int32Array(boxes.length); BG.run = 0;
+  }
+  // the boxes whose footprint may reach the rectangle x0..x1, z0..z1 (each once); the list is reused by the next call
+  function boxesNear(x0, z0, x1, z1) {
+    var L = BG.list, run = ++BG.run, st = BG.stamp, cs = BG.cs, i0 = Math.max(0, Math.floor((x0 - BG.ox) / cs)), i1 = Math.min(BG.nx - 1, Math.floor((x1 - BG.ox) / cs)), j0 = Math.max(0, Math.floor((z0 - BG.oz) / cs)), j1 = Math.min(BG.nz - 1, Math.floor((z1 - BG.oz) / cs)), i, j, k, c;
+    L.length = 0; for (j = j0; j <= j1; j++) for (i = i0; i <= i1; i++) { c = BG.cells[j * BG.nx + i]; for (k = 0; k < c.length; k++) if (st[c[k]] !== run) { st[c[k]] = run; L.push(c[k]); } }
+    return L;
+  }
   var rbAx = -1, rbSg = 1, hitNrm = new T.Vector3(0, 1, 0);   // which face the last rayBox entered through; rayWorld turns it into a world normal
   function rayBox(ox, oy, oz, dx, dy, dz, b) {
     var t0 = 0, t1 = 1e9, a, c, inv, s, ax = -1;
@@ -221,9 +241,19 @@
   }
   function rayWorld(o, d, max) {
     var best = max, i, t, b, ex, ez, hb = null, hax = 1, hsg = 1; if (d.y < -1e-6) { t = -o.y / d.y; if (t >= 0 && t < best) best = t; }
-    for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.soft) continue;
-      if (b.rot) { ex = o.x - b.ox; ez = o.z - b.oz; t = rayBox(ex * b.c - ez * b.s, o.y, ex * b.s + ez * b.c, d.x * b.c - d.z * b.s, d.y, d.x * b.s + d.z * b.c, b); } else t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b);
-      if (t >= 0 && t < best) { best = t; hb = b; hax = rbAx; hsg = rbSg; } }
+    // walk the grid cells the ray crosses, nearest first, and stop once the next cell starts beyond the nearest hit so far
+    var cs = BG.cs, run = ++BG.run, st = BG.stamp, gx = Math.floor((o.x - BG.ox) / cs), gz = Math.floor((o.z - BG.oz) / cs), sx = d.x > 0 ? 1 : -1, sz = d.z > 0 ? 1 : -1;
+    var tx = Math.abs(d.x) < 1e-9 ? Infinity : ((gx + (d.x > 0 ? 1 : 0)) * cs + BG.ox - o.x) / d.x, tz = Math.abs(d.z) < 1e-9 ? Infinity : ((gz + (d.z > 0 ? 1 : 0)) * cs + BG.oz - o.z) / d.z;
+    var dtx = Math.abs(d.x) < 1e-9 ? Infinity : cs / Math.abs(d.x), dtz = Math.abs(d.z) < 1e-9 ? Infinity : cs / Math.abs(d.z), te = 0, guard = 0, cl, k;
+    while (te <= best && guard++ < 4000) {
+      if (gx >= 0 && gz >= 0 && gx < BG.nx && gz < BG.nz) { cl = BG.cells[gz * BG.nx + gx];
+        for (k = 0; k < cl.length; k++) { i = cl[k]; if (st[i] === run) continue; st[i] = run; b = boxes[i]; if (b.soft) continue;
+          if (b.rot) { ex = o.x - b.ox; ez = o.z - b.oz; t = rayBox(ex * b.c - ez * b.s, o.y, ex * b.s + ez * b.c, d.x * b.c - d.z * b.s, d.y, d.x * b.s + d.z * b.c, b); } else t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b);
+          if (t >= 0 && t < best) { best = t; hb = b; hax = rbAx; hsg = rbSg; } } }
+      else if ((gx < 0 && sx < 0) || (gz < 0 && sz < 0) || (gx >= BG.nx && sx > 0) || (gz >= BG.nz && sz > 0) || (tx === Infinity && tz === Infinity)) break;   // outside the grid and leaving it
+      if (tx === Infinity && tz === Infinity) break;
+      if (tx < tz) { te = tx; tx += dtx; gx += sx; } else { te = tz; tz += dtz; gz += sz; }
+    }
     if (!hb || hax < 0) hitNrm.set(0, 1, 0); else if (hax === 1) hitNrm.set(0, hsg, 0); else { ex = hax === 0 ? hsg : 0; ez = hax === 2 ? hsg : 0; if (hb.rot) hitNrm.set(ex * hb.c + ez * hb.s, 0, -ex * hb.s + ez * hb.c); else hitNrm.set(ex, 0, ez); }
     return best;
   }
@@ -239,8 +269,9 @@
   function height(a) { return a.crouch ? 1.25 : TALL; }
   function collide(a) {
     var h = height(a), f = a.pos.y, it, i, b, cx, cz, dx, dz, d2, d, px, pz;
-    for (it = 0; it < 2; it++) for (i = 0; i < boxes.length; i++) {
-      b = boxes[i]; if (b.maxy <= f + .45 || b.miny >= f + h) continue;
+    var L = boxesNear(a.pos.x - 1, a.pos.z - 1, a.pos.x + 1, a.pos.z + 1).slice();
+    for (it = 0; it < 2; it++) for (i = 0; i < L.length; i++) {
+      b = boxes[L[i]]; if (b.maxy <= f + .45 || b.miny >= f + h) continue;
       px = a.pos.x; pz = a.pos.z; if (b.rot) { dx = px - b.ox; dz = pz - b.oz; px = dx * b.c - dz * b.s; pz = dx * b.s + dz * b.c; }   // into the box's own frame
       cx = clamp(px, b.minx, b.maxx); cz = clamp(pz, b.minz, b.maxz); dx = px - cx; dz = pz - cz; d2 = dx * dx + dz * dz;
       if (d2 >= RAD * RAD) continue;
@@ -250,7 +281,7 @@
     }
   }
   function groundAt(a) {
-    var g = 0, f = a.pos.y, i, b; for (i = 0; i < boxes.length; i++) { b = boxes[i]; if (b.maxy <= f + .46 && b.maxy > g && inBox(b, a.pos.x, a.pos.z, .2)) g = b.maxy; }
+    var g = 0, f = a.pos.y, i, b, L = boxesNear(a.pos.x - .5, a.pos.z - .5, a.pos.x + .5, a.pos.z + .5); for (i = 0; i < L.length; i++) { b = boxes[L[i]]; if (b.maxy <= f + .46 && b.maxy > g && inBox(b, a.pos.x, a.pos.z, .2)) g = b.maxy; }
     return g;
   }
   function moveActor(a, vx, vz, dt) {
@@ -275,8 +306,9 @@
       var i0 = Math.max(0, Math.floor(x0 - bd.minx)), i1 = Math.min(nx - 1, Math.floor(x1 - bd.minx)), j0 = Math.max(0, Math.floor(z0 - bd.minz)), j1 = Math.min(nz - 1, Math.floor(z1 - bd.minz));
       for (i = i0; i <= i1; i++) for (j = j0; j <= j1; j++) if (inBox(b, bd.minx + i + .5, bd.minz + j + .5, m)) blk[base + j * nx + i] = val;
     }
-    var pad = map.navPad || .5, deck = map.navDeck || -.15;   // a level with narrow lanes keeps more of its cells open (bots still slide along walls)
-    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > .5 && b.miny < 1.6) mark(b, 0, pad, 1); }
+    var pad = map.navPad || .5, deck = map.navDeck || -.15, stepH = map.navStep || .5, headH = map.navHead || 1.6;   // a level with narrow lanes keeps more of its cells open (bots still slide along walls);
+    // a level of loose props needs the exact step (.45 m, what a walker climbs) and head room (a walker's height) so no cell looks open that a body can't pass
+    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (b.maxy > stepH && b.miny < headH) mark(b, 0, pad, 1); }
     if (H) {
       blk.fill(1, N);
       for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (!b.soft && Math.abs(b.maxy - H) < .15) mark(b, N, deck, 0); }
@@ -313,7 +345,8 @@
     return best >= 0 ? best : freeNear(c);
   }
   function wallBetween(x0, z0, x1, z1, y) {
-    for (var k = 0; k < boxes.length; k++) { var b = boxes[k]; if (b.maxy <= y + .45 || b.miny >= y + 1.6) continue;
+    var L = boxesNear(Math.min(x0, x1) - 1, Math.min(z0, z1) - 1, Math.max(x0, x1) + 1, Math.max(z0, z1) + 1);
+    for (var k = 0; k < L.length; k++) { var b = boxes[L[k]]; if (b.maxy <= y + .45 || b.miny >= y + 1.6) continue;
       var ax = x0, az = z0, bx = x1, bz = z1; if (b.rot) { var ex = x0 - b.ox, ez = z0 - b.oz; ax = ex * b.c - ez * b.s; az = ex * b.s + ez * b.c; ex = x1 - b.ox; ez = z1 - b.oz; bx = ex * b.c - ez * b.s; bz = ex * b.s + ez * b.c; }
       var t0 = 0, t1 = 1, dx = bx - ax, dz = bz - az, m = .2;
       if (Math.abs(dx) < 1e-9) { if (ax < b.minx - m || ax > b.maxx + m) continue; } else { var u = (b.minx - m - ax) / dx, v = (b.maxx + m - ax) / dx; if (u > v) { var q = u; u = v; v = q; } t0 = Math.max(t0, u); t1 = Math.min(t1, v); }
@@ -557,7 +590,8 @@
   function nadeStep(n, dt) {
     var px = n.pos.x, py = n.pos.y, pz = n.pos.z, k, b, hit = false; n.vel.y -= 18 * dt; n.pos.addScaledVector(n.vel, dt);
     if (n.pos.y < .06) { n.pos.y = .06; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; }
-    for (k = 0; k < boxes.length; k++) { b = boxes[k]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
+    var L = boxesNear(n.pos.x - .5, n.pos.z - .5, n.pos.x + .5, n.pos.z + .5);
+    for (k = 0; k < L.length; k++) { b = boxes[L[k]]; if (n.pos.y > b.miny && n.pos.y < b.maxy && inBox(b, n.pos.x, n.pos.z, 0)) { hit = true; break; } }
     if (hit) { if (py >= b.maxy) { n.pos.y = b.maxy + .01; n.vel.y *= -.35; n.vel.x *= .6; n.vel.z *= .6; } else { n.pos.set(px, py, pz); if (b.rot) { n.vel.x *= -.45; n.vel.z *= -.45; } else { if (px <= b.minx || px >= b.maxx) n.vel.x *= -.45; if (pz <= b.minz || pz >= b.maxz) n.vel.z *= -.45; } } }
   }
   /* while the throw button is held: the path the grenade would take from here, and a ring where it will go off */
@@ -1065,7 +1099,7 @@
   SV.start = function (match) {
     SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
-    var map = G.map = SV.buildMap(match.map); boxes = map.boxes; scene.add(map.group); makeTargets(map);
+    var map = G.map = SV.buildMap(match.map); boxes = map.boxes; indexBoxes(); scene.add(map.group); makeTargets(map);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
     if (verb) verb.buffer = map.indoor ? irIn : irOut;
     var photo = setSky(map); if (!photo) setEnv(map.sky ? map.sky[0] : map.bg, map.sky ? map.sky[1] : 0x5a6268, map.hemi[1]);
@@ -1241,6 +1275,8 @@
   // weapon chosen from the pause menu: stored for the next spawn; on the practice range it is put in your hands at once
   SV.setPrimary = function (id, side, nade) { if (!G.match || G.state === 'menu') return; G.match.primary = id; G.match.side = side; G.match.nade = nade || 'frag'; var p = G.player; if (G.match.practice && p && p.alive) { p.primary = id; p.guns = guns(id, false, side); p.slot = 0; p.ads = false; setVm(); } };
   SV.navInfo = function () { return nav; };
+  SV.rayTest = function (o, d, max) { return rayWorld(o, d, max); };
+  SV.pathTest = function (x0, z0, l0, x1, z1, l1) { return findPath(x0, z0, l0, x1, z1, l1).length; };   // for tests: can a bot plan this walk   // for tests: the world ray against the map's boxes
   SV.dropTest = function (o) { return makeDrop(o); };   // for tests: lay a gun on the ground   // for tests: lets a script check that every walkable cell can be reached
   SV.curVm = function () { return vmCur; };
   /* tests: draw the world from any point, without the first-person gun */
