@@ -1,9 +1,9 @@
 // ui.js — menus, settings, touch and keyboard input.
 (function () {
   var $ = function (id) { return document.getElementById(id); }, G = SV.G, inp = SV.inp, cfg = SV.cfg, W = SV.W;
-  var match = { mode: 0, map: 0, perTeam: 5, target: 40, diff: 1, team: 'A', primary: 'rifle', side: 'pistol', minutes: 10 };
+  var match = { mode: 0, map: 0, perTeam: 5, target: 40, ffaTarget: 25, diff: 1, team: 'A', primary: 'rifle', side: 'pistol', minutes: 10 };
   try { var m0 = JSON.parse(localStorage.getItem('minifps.match') || 'null'); if (m0) for (var k0 in match) if (typeof m0[k0] === typeof match[k0]) match[k0] = m0[k0]; } catch (e) {}
-  if (!SV.MAPS[match.map]) match.map = 0; if (match.mode !== 1 || !SV.MAPS[match.map].bomb) match.mode = 0;
+  if (!SV.MAPS[match.map]) match.map = 0; if (match.mode === 1 && !SV.MAPS[match.map].bomb || match.mode > 2 || match.mode < 0) match.mode = 0;
   var stats = { w: 0, l: 0, k: 0, d: 0 }; try { var s0 = JSON.parse(localStorage.getItem('minifps.stats') || 'null'); if (s0) for (var k1 in stats) if (typeof s0[k1] === 'number') stats[k1] = s0[k1]; } catch (e) {}
   function save() { try { localStorage.setItem('minifps.stats', JSON.stringify(stats)); } catch (e) {} try { localStorage.setItem('minifps.cfg', JSON.stringify(cfg)); localStorage.setItem('minifps.match', JSON.stringify(match)); } catch (e) {} }
   var SCR = ['s-title', 's-lobby', 's-multi', 's-room', 's-match', 's-team', 's-load', 's-pause', 's-set', 's-res', 's-upd'], from = { 's-load': 's-team', 's-set': 's-lobby' };
@@ -32,7 +32,7 @@
         seg($('rm-bots'), [['봇으로 채움', '팀당 3명', 1], ['사람만', '', 0]], function () { return net.cfg.bots; }, function (v) { net.cfg.bots = v; netRoom(); });
       } else $('rm-sum').textContent = SV.MAPS[net.cfg.map].name + ' · ' + net.cfg.target + '킬 · ' + (net.cfg.bots ? '빈자리는 봇' : '사람만');
     }
-    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [match.mode ? '폭파 미션' : '팀 데스매치', match.perTeam + ' 대 ' + match.perTeam, match.mode ? '5라운드 선승' : '목표 ' + match.target + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ' + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
+    if (id === 's-lobby') { $('lb-map').textContent = SV.MAPS[match.map].name; var c = $('lb-chips'); c.textContent = ''; [['팀 데스매치', '폭파 미션', '개인전'][match.mode], match.mode === 2 ? match.perTeam * 2 + '명' : match.perTeam + ' 대 ' + match.perTeam, match.mode === 1 ? '5라운드 선승' : '목표 ' + (match.mode === 2 ? match.ffaTarget : match.target) + '킬', '봇 ' + ['쉬움', '보통', '어려움', '지옥'][match.diff], (match.mode === 2 ? '' : (match.team === 'A' ? 'ALPHA' : 'BRAVO') + ' · ') + W[match.primary].name].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.appendChild(s); }); $('lb-wl').textContent = stats.w + '승 ' + stats.l + '패'; $('lb-kd').textContent = stats.d ? (stats.k / stats.d).toFixed(2) : stats.k ? stats.k + '.00' : '–'; $('lb-gun').textContent = W[match.primary].name; }
     if (id === 's-match') {
       var om = $('o-map'), keep = om.childNodes.length ? om.scrollTop : -1;
       seg(om, SV.MAPS.map(function (m, n) { return [m.name, m.info, n]; }), function () { return match.map; }, function (v) { match.map = v; if (!SV.MAPS[v].bomb) match.mode = 0; setTimeout(function () { refresh('s-match'); }, 0); });
@@ -40,9 +40,10 @@
       if (keep >= 0) om.scrollTop = keep; else { var cur = $('o-map-' + match.map); om.scrollTop = Math.max(0, cur.offsetTop - om.offsetTop - om.clientHeight / 2 + cur.offsetHeight / 2); }
       $('map-note').textContent = (match.map + 1) + ' / ' + SV.MAPS.length + ' · 위아래로 넘겨 더 보기';
       seg($('o-diff'), [['쉬움', '', 0], ['보통', '', 1], ['어려움', '', 2], ['지옥', '', 3]], function () { return match.diff; }, function (v) { match.diff = v; });
-      $('pt').textContent = match.perTeam + ' 대 ' + match.perTeam; $('tk').textContent = match.target;
-      $('md-0').setAttribute('aria-pressed', match.mode ? 'false' : 'true'); $('md-1').setAttribute('aria-pressed', match.mode ? 'true' : 'false'); $('tk-box').hidden = !!match.mode;
-      $('mt-foot').textContent = match.mode ? '5라운드 선승 · 라운드 2분 30초 · 부활 없음 · 4라운드 뒤 공수 교대' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
+      var ffa = match.mode === 2; $('pt').textContent = ffa ? match.perTeam * 2 + '명' : match.perTeam + ' 대 ' + match.perTeam; $('pt-l').textContent = ffa ? '전체 인원 (나 포함)' : '한 팀 인원 (나 포함)'; $('tk').textContent = ffa ? match.ffaTarget : match.target;
+      [0, 1, 2].forEach(function (k) { $('md-' + k).setAttribute('aria-pressed', match.mode === k ? 'true' : 'false'); }); $('tk-box').hidden = match.mode === 1;
+      $('mt-foot').textContent = match.mode === 1 ? '5라운드 선승 · 라운드 2분 30초 · 부활 없음 · 4라운드 뒤 공수 교대' : ffa ? '제한 시간 10분 · 나 말고 모두가 적 · 죽으면 2초 뒤 아무 곳에서나 투입' : '제한 시간 10분 · 죽으면 3초 뒤 다시 투입';
+      $('mt-step').textContent = ffa ? '1 / 2' : '1 / 3'; var gt = $('go-team'); gt.textContent = ffa ? '다음 · 무기 선택' : '다음 · 팀 선택'; gt.setAttribute('data-go', ffa ? 's-load' : 's-team'); if (ffa) gt.setAttribute('data-from', 's-match'); else gt.removeAttribute('data-from');
     }
     if (id === 's-team') { $('tm-A-s').textContent = match.mode ? '주황 · 먼저 공격 (폭탄 설치)' : '주황 팀'; $('tm-B-s').textContent = match.mode ? '하늘 · 먼저 수비 (설치 저지)' : '하늘 팀'; }
     if (id === 's-team') ['A', 'B'].forEach(function (t) { $('tm-' + t).setAttribute('aria-pressed', match.team === t ? 'true' : 'false'); var ro = $('ro-' + t), mine = match.team === t, n = mine ? match.perTeam - 1 : match.perTeam, i; ro.textContent = ''; function row(a, b2, me) { var r = document.createElement('span'), x = document.createElement('span'), y = document.createElement('span'); if (me) r.className = 'me'; x.textContent = a; y.textContent = b2; r.appendChild(x); r.appendChild(y); ro.appendChild(r); } if (mine) row('나', W[match.primary].name, true); for (i = 0; i < n; i++) row('봇 · ' + NAMES[t][i], W[SV.botGun(mine ? i + 1 : i, match.map)].name); });
@@ -51,7 +52,7 @@
       if (!W[match.side] || !W[match.side].side) match.side = 'pistol'; seg($('o-side'), [['세이버', '12발 · 빠름', 'pistol'], ['스펙터', '9발 · 강함', 'pistol2']], function () { return match.side; }, function (v) { match.side = v; }); seg($('o-nade'), [['수류탄', '범위 폭발', 'frag'], ['연막탄', '시야 차단', 'smoke']], function () { return match.nade || 'frag'; }, function (v) { match.nade = v; });
       var g = GUNS.filter(function (x) { return x[0] === match.primary; })[0]; $('gn').textContent = W[g[0]].name; $('gd').textContent = g[1]; $('ga').textContent = W[g[0]].mag + ' / ' + W[g[0]].res + '발';
       var gb = $('gb'); gb.textContent = ''; ['위력', '연사', '정확도', '사거리', '기동성'].forEach(function (l, n) { var a = document.createElement('div'); a.textContent = l; var b = document.createElement('div'); b.className = 'bar'; var f = document.createElement('i'); f.style.width = g[2][n] + '%'; b.appendChild(f); gb.appendChild(a); gb.appendChild(b); });
-      var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? (lastPractice ? '바로 적용' : '다음 투입부터 적용') : from['s-load'] === 's-lobby' ? '' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
+      var inGame = from['s-load'] === 's-pause'; $('ld-step').textContent = inGame ? (lastPractice ? '바로 적용' : '다음 투입부터 적용') : from['s-load'] === 's-lobby' ? '' : from['s-load'] === 's-match' ? '2 / 2' : '3 / 3'; $('go-fight').textContent = inGame ? '확인' : from['s-load'] === 's-lobby' ? '확인' : '전투 투입';
     }
     if (id === 's-pause') board();
     if (id === 's-set') {
@@ -61,6 +62,11 @@
   }
   function board() {
     var host = $('board'), me = G.player; host.textContent = '';
+    if (G.ffa) {   /* free-for-all: one ranking */
+      var col = document.createElement('div'), h = document.createElement('h3'); col.style.gridColumn = '1 / -1'; h.className = 'tA'; var a = document.createElement('span'); a.textContent = '개인전 순위'; var b = document.createElement('span'); b.textContent = '목표 ' + G.match.target + '킬'; h.appendChild(a); h.appendChild(b); col.appendChild(h);
+      SV.board().forEach(function (x, n) { var r = document.createElement('div'); r.className = 'row' + (x === me ? ' me' : ''); [(n + 1) + '. ' + x.name, x.kills, x.deaths].forEach(function (v) { var s = document.createElement('span'); s.textContent = v; r.appendChild(s); }); col.appendChild(r); });
+      host.appendChild(col); return;
+    }
     ['A', 'B'].forEach(function (t) {
       var col = document.createElement('div'), h = document.createElement('h3'); h.className = 't' + t; var a = document.createElement('span'); a.textContent = t === 'A' ? 'ALPHA' : 'BRAVO'; var b = document.createElement('span'); b.textContent = G.score[t]; h.appendChild(a); h.appendChild(b); col.appendChild(h);
       SV.board().filter(function (x) { return x.team === t; }).forEach(function (x) { var r = document.createElement('div'); r.className = 'row' + (x === me ? ' me' : ''); [x.name, x.kills, x.deaths].forEach(function (v) { var s = document.createElement('span'); s.textContent = v; r.appendChild(s); }); col.appendChild(r); });
@@ -79,7 +85,7 @@
   var practice = false;
   $('go-practice').addEventListener('click', function () { practice = true; begin(); });
   $('tm-auto').addEventListener('click', function () { match.team = Math.random() < .5 ? 'A' : 'B'; save(); refresh('s-team'); });
-  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 0; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
+  function begin() { SV.audio(); var el = document.documentElement; try { if (window.matchMedia('(pointer: coarse)').matches && el.requestFullscreen) { var p = el.requestFullscreen(); if (p && p.catch) p.catch(function () {}); } } catch (e) {} show(null); var m = match; if (match.mode === 2 && !practice) { m = JSON.parse(JSON.stringify(match)); m.target = m.ffaTarget; m.team = 'A'; } if (practice) { m = JSON.parse(JSON.stringify(match)); m.practice = true; m.mode = 0; m.map = SV.RANGE; m.perTeam = 1; m.enemies = 0; m.target = 999; m.minutes = 99; m.diff = 0; } lastPractice = practice; practice = false; SV.start(m); applyCfg(); }
   var lastPractice = false;
   // ---------- multiplayer: one phone hosts a small relay, the others connect to its address (same Wi-Fi or Tailscale) ----------
   var net = { ws: null, bridge: false, on: false, id: 0, host: false, players: [], cfg: { map: 0, target: 30, bots: 1, perTeam: 3 }, addrs: [], port: 8770 };
@@ -135,8 +141,11 @@
   $('tm-A').addEventListener('click', function () { match.team = 'A'; save(); refresh('s-team'); }); $('tm-B').addEventListener('click', function () { match.team = 'B'; save(); refresh('s-team'); });
   function stepper(id, key, lo, hi, st) { $(id + '-').addEventListener('click', function () { match[key] = Math.max(lo, match[key] - st); save(); refresh('s-match'); }); $(id + '+').addEventListener('click', function () { match[key] = Math.min(hi, match[key] + st); save(); refresh('s-match'); }); }
   $('md-0').addEventListener('click', function () { match.mode = 0; save(); refresh('s-match'); });
+  $('md-2').addEventListener('click', function () { match.mode = 2; save(); refresh('s-match'); });
   $('md-1').addEventListener('click', function () { match.mode = 1; if (!SV.MAPS[match.map].bomb) for (var i = SV.MAPS.length - 1; i >= 0; i--) if (SV.MAPS[i].bomb) match.map = i; save(); refresh('s-match'); });
-  stepper('pt', 'perTeam', 2, 6, 1); stepper('tk', 'target', 10, 100, 10);
+  stepper('pt', 'perTeam', 2, 6, 1);
+  $('tk-').addEventListener('click', function () { if (match.mode === 2) match.ffaTarget = Math.max(10, match.ffaTarget - 5); else match.target = Math.max(10, match.target - 10); save(); refresh('s-match'); });
+  $('tk+').addEventListener('click', function () { if (match.mode === 2) match.ffaTarget = Math.min(50, match.ffaTarget + 5); else match.target = Math.min(100, match.target + 10); save(); refresh('s-match'); });
   function pause() { if (G.state !== 'play') return; G.state = 'pause'; inp.fire = inp.ads = inp.use = false; inp.mx = inp.mz = 0; if (document.exitPointerLock) document.exitPointerLock(); show('s-pause'); }
   function resume() { if (G.state !== 'pause') return; show(null); G.state = 'play'; }
   ['b-pause', 'b-score'].forEach(function (id) { $(id).addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); pause(); }); }); $('p-resume').addEventListener('click', resume);
@@ -144,8 +153,8 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); });
   SV.onEnd = function (r) {
     if (document.exitPointerLock) document.exitPointerLock();
-    $('r-eye').textContent = r.map + (r.mode ? ' · 폭파 미션' : ' · 팀 데스매치'); $('r-title').textContent = r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.score.A; $('r-b').textContent = r.score.B;
-    var u = Math.round(r.used); $('r-time').textContent = ('0' + ((u / 60) | 0)).slice(-2) + ':' + ('0' + (u % 60)).slice(-2) + ' 소요';
+    $('r-eye').textContent = r.map + (r.ffa ? ' · 개인전 · ' + r.n + '명' : r.mode ? ' · 폭파 미션' : ' · 팀 데스매치'); $('r-title').textContent = r.ffa ? (r.draw ? '공동 1위' : r.rank + '위' + (r.win ? ' · 승리' : '')) : r.draw ? '무승부' : r.win ? '승리' : '패배'; $('r-a').textContent = r.ffa ? r.mine : r.score.A; $('r-b').textContent = r.ffa ? r.lead : r.score.B;
+    var u = Math.round(r.used); $('r-time').textContent = (r.ffa ? '내 킬 : ' + (r.rank === 1 ? '2위' : '1위') + ' 킬 · ' : '') + ('0' + ((u / 60) | 0)).slice(-2) + ':' + ('0' + (u % 60)).slice(-2) + ' 소요';
     $('r-k').textContent = r.stats.kills; $('r-d').textContent = r.stats.deaths; $('r-h').textContent = r.stats.heads;
     var nem = '없음', nb = 0; for (var nk in r.stats.by) if (r.stats.by[nk] > nb) { nb = r.stats.by[nk]; nem = nk + ' · ' + nb + '회'; }
     if (!r.practice) { stats.k += r.stats.kills; stats.d += r.stats.deaths; if (!r.draw) { if (r.win) stats.w++; else stats.l++; } save(); }

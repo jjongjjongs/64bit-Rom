@@ -490,20 +490,25 @@
   }
   function soldierModel(team, id) {
     var m = SV.soldier(team, id); scene.add(m.root); m.root.visible = false;
-    if (team === G.match.team) { var mk = new T.Mesh(new T.OctahedronGeometry(.09), new T.MeshBasicMaterial({ color: team === 'A' ? 0xffb347 : 0x6cc4e0, fog: false })); mk.position.y = 2.1; m.root.add(mk); }
+    if (team === G.match.team && !G.ffa) { var mk = new T.Mesh(new T.OctahedronGeometry(.09), new T.MeshBasicMaterial({ color: team === 'A' ? 0xffb347 : 0x6cc4e0, fog: false })); mk.position.y = 2.1; m.root.add(mk); }
     return m;
   }
+  // free-for-all: everyone but yourself is an enemy; otherwise the other team
+  function foe(a, e) { return a !== e && (G.ffa || a.team !== e.team); }
   function eye(a, out) { return out.set(a.pos.x, a.pos.y + (a.crouch ? EYEC : EYE), a.pos.z); }
+  // free-for-all spawns: anywhere on the walkable map, the spot farthest from (and out of sight of) the living
+  function ffaPoints() { var out = [], k, c, cc, q; for (k = 0; k < 36; k++) { c = nav.free[(Math.random() * nav.free.length) | 0]; if (c >= nav.N && !nav.hm) continue; cc = c % nav.N; q = snap(nav.ox + (cc % nav.nx) + .5, nav.oz + ((cc / nav.nx) | 0) + .5, c >= nav.N ? 1 : 0); if (q.l) continue; out.push(q); } return out.length ? out : G.map.spawns.A.concat(G.map.spawns.B); }
   function spawn(a) {
-    var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.map.spawns[side], best = pts[0], bd = -1, i, j;
-    for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (d > bd) { bd = d; best = pts[i]; } }
-    a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
+    var side = G.bomb ? (a.team === G.bomb.atk ? 'A' : 'B') : a.team, pts = G.ffa ? ffaPoints() : G.map.spawns[side], best = pts[0], bd = -1, i, j;
+    for (i = 0; i < pts.length; i++) { var d = 1e9; for (j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (o !== a && o.alive) d = Math.min(d, Math.hypot(o.pos.x - pts[i].x, o.pos.z - pts[i].z)); } d += Math.random() * 2; if (G.ffa && d > 6 && seenFrom(pts[i])) d *= .3; if (d > bd) { bd = d; best = pts[i]; } }
+    a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = G.ffa ? Math.atan2(best.x, best.z) : side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) { a.primary = G.match.primary; a.ads = false; if (SV.resetAds) SV.resetAds(); } a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
     a.ai.wantDrop = null; a.ai.skipDrop = {}; a.ai.swapped = false; a.ai.route = null; equipped(a);
     a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
   }
+  function seenFrom(q) { for (var j = 0; j < G.actors.length; j++) { var o = G.actors[j]; if (!o.alive) continue; eye(o, vO); vH.set(q.x, (q.y || 0) + 1.2, q.z).sub(vO); var d = vH.length(); if (d > 50) continue; vH.multiplyScalar(1 / d); if (rayWorld(vO, vH, d) >= d - .4) return true; } return false; }
   function feed(k, v, head) { G.feed.unshift({ k: k, v: v, head: head, t: 5 }); if (G.feed.length > 4) G.feed.pop(); G.feedDirty = true; }
   function hurt(v, dmg, by, head, wid) {
     if (G.net && v.remote) {   /* someone else's soldier: tell its owner; they decide and announce the result */
@@ -514,14 +519,14 @@
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
-      v.alive = false; v.respawn = 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds(); dropGun(v, v.slot, false, true);
+      v.alive = false; v.respawn = G.ffa ? 2 : 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds(); dropGun(v, v.slot, false, true);
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
       if (G.bomb && G.bomb.carrier === v) { G.bomb.carrier = null; G.bomb.drop = v.lastFree || snap(v.pos.x, v.pos.z, lvl(v)); }
       feed(by, v, head);
       if (by.isPlayer && by !== v) { G.stats.kills++; if (head) G.stats.heads++; G.streak++; G.stats.streak = Math.max(G.stats.streak, G.streak); showMsg(v.name + ' 처치' + (head ? ' · 헤드샷' : ''), 1.4); sndTone(660, .09, .12); setTimeout(function () { sndTone(990, .14, .12); }, 90); }
       if (v.isPlayer) { G.streak = 0; G.stats.deaths++; G.killer = by; if (by !== v) G.stats.by[by.name] = (G.stats.by[by.name] || 0) + 1; }
       if (G.net) G.net.send({ t: 'k', v: v.nid, by: by.nid, h: head ? 1 : 0 });
-      if (!G.bomb && G.score[by.team] >= G.match.target) endMatch();
+      if (!G.bomb && (G.ffa ? by.kills : G.score[by.team]) >= G.match.target) endMatch();
     }
     return true;
   }
@@ -531,7 +536,7 @@
   var vO = new T.Vector3(), vD = new T.Vector3(), vH = new T.Vector3(), vM = new T.Vector3(), vR = new T.Vector3(), vU = new T.Vector3();
   function castShot(a, o, d, range) {
     var tw = rayWorld(o, d, range), best = null, i, e, r;
-    for (i = 0; i < G.actors.length; i++) { e = G.actors[i]; if (!e.alive || e.team === a.team) continue; r = rayActor(o, d, e); if (r && r.t < tw && (!best || r.t < best.t)) { best = r; best.actor = e; } }
+    for (i = 0; i < G.actors.length; i++) { e = G.actors[i]; if (!e.alive || !foe(a, e)) continue; r = rayActor(o, d, e); if (r && r.t < tw && (!best || r.t < best.t)) { best = r; best.actor = e; } }
     // practice targets: boards that fall when hit (the player's shots only)
     if (a.isPlayer && G.targets) for (i = 0; i < G.targets.length; i++) {
       var tg = G.targets[i]; if (tg.down > 0) continue; var nx = Math.sin(tg.ry), nz = Math.cos(tg.ry), dn = d.x * nx + d.z * nz; if (Math.abs(dn) < 1e-4) continue;
@@ -660,7 +665,7 @@
       else if (n.t <= 0) {
         var bm = booms[i % booms.length]; bm.m.position.copy(n.pos); bm.m.visible = true; bm.life = .35; scene.remove(n.m); G.nades.splice(i, 1);
         var dp = Math.hypot(n.pos.x - G.player.pos.x, n.pos.z - G.player.pos.z); gunSnd('boom', clamp(1.4 - dp / 40, 0, 1.2), dp); if (dp < 12) G.shake = .35; for (k = 0; k < 6; k++) part(TX.soft, k < 2 ? cSpark : cSmoke, k < 2, n.pos, k < 2 ? .25 : 1.1, k < 2 ? 1.2 : .6, k < 2 ? 3 : 3.2, k < 2 ? 1 : .35, rnd(-1.5, 1.5), rnd(.5, 2.4), rnd(-1.5, 1.5), 0); mzLight.position.copy(n.pos); mzLight.intensity = 9;
-        for (k = 0; k < G.actors.length; k++) { var e = G.actors[k]; if (!e.alive || (e.team === n.by.team && e !== n.by)) continue; eye(e, vH); vO.copy(n.pos); vO.y += .3; vD.subVectors(vH, vO); var d = vD.length(); if (d > 6) continue; vD.normalize(); if (rayWorld(vO, vD, d) < d - .3) continue; hurt(e, 150 * (1 - d / 6.5), n.by, false, 'grenade'); }
+        for (k = 0; k < G.actors.length; k++) { var e = G.actors[k]; if (!e.alive || (!foe(n.by, e) && e !== n.by)) continue; eye(e, vH); vO.copy(n.pos); vO.y += .3; vD.subVectors(vH, vO); var d = vD.length(); if (d > 6) continue; vD.normalize(); if (rayWorld(vO, vD, d) < d - .3) continue; hurt(e, 150 * (1 - d / 6.5), n.by, false, 'grenade'); }
       }
     }
   }
@@ -821,7 +826,7 @@
     // aim assist: slow the view near a visible enemy, and optionally pull the trigger
     G.assistSlow = false; var onTarget = false;
     if (cfg.assist || cfg.autoFire) {
-      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || e.team === p.team) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) G.assistSlow = cfg.assist; }
+      for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || !foe(p, e)) continue; vH.set(e.pos.x, e.pos.y + 1.1, e.pos.z).sub(vO); var d = vH.length(); if (d > 60) continue; vH.multiplyScalar(1 / d); var dot = vH.dot(vD); if (dot > .9965 && rayWorld(vO, vH, d) >= d - .5 && !smokeHit(vO, vH, d)) G.assistSlow = cfg.assist; }
     }
     // auto-fire: the same test a bullet uses (every body part, crouched or behind low cover), along the crosshair and a hair to each side
     if (cfg.autoFire && !w.melee && g.reload <= 0) onTarget = aimOn(p, vO, vD, Math.min(w.range * .8, 80));
@@ -940,7 +945,7 @@
   function think(a) {
     var ai = a.ai, best = null, bd = 1e9, i, e, d, rg;
     for (i = 0; i < G.actors.length; i++) {
-      e = G.actors[i]; if (!e.alive || e.team === a.team) continue;
+      e = G.actors[i]; if (!e.alive || !foe(a, e)) continue;
       var dx = e.pos.x - a.pos.x, dz = e.pos.z - a.pos.z, dist = Math.hypot(dx, dz), facing = Math.abs(angd(Math.atan2(-dx, -dz), a.yaw)) < 1.75;
       if (!facing && dist > 7 && ai.hurtBy !== e && ai.tgt !== e) continue;
       d = canSee(a, e); if (d && d < bd) { bd = d; best = e; }
@@ -1132,7 +1137,7 @@
 
   // ---------- match ----------
   SV.start = function (match) {
-    SV.end(); G.match = match; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
+    SV.end(); G.match = match; G.ffa = match.mode === 2 && !match.net; G.diff = DIFF[match.diff]; G.score = { A: 0, B: 0 }; G.killer = null; G.time = match.minutes * 60; G.feed = []; G.feedDirty = true; G.streak = 0; G.shake = 0; G.hitFlash = 0; G.marker = 0;
     G.stats = { shots: 0, hits: 0, kills: 0, deaths: 0, heads: 0, streak: 0, by: {} };
     var map = G.map = SV.buildMap(match.map); boxes = map.boxes; indexBoxes(); scene.add(map.group); makeTargets(map);
     scene.background = new T.Color(map.bg).convertSRGBToLinear(); scene.fog = new T.Fog(scene.background.getHex(), map.fog[0], map.fog[1]); scene.fog.color.copy(scene.background);
@@ -1154,6 +1159,9 @@
     G.net = match.net || null;
     if (G.net) {   /* multiplayer: everyone builds the same list from the host's roster. Each phone runs its own soldier; the host also runs the bots; the rest are shown from what their owners send */
       G.net.acc = 0; G.net.roster.forEach(function (r) { var mine = r.id === G.net.me, a = actor(r.team, mine ? '나' : r.name, mine, mine ? match.primary : r.primary); a.nid = r.id; a.remote = !mine && !(r.bot && G.net.host); a.net = null; if (mine) G.player = a; G.actors.push(a); });
+    } else if (G.ffa) {   /* free-for-all: you in orange, everyone else in blue and on their own */
+      G.player = actor('A', '나', true, match.primary); G.actors.push(G.player); var pool = NAMES.B.concat(NAMES.A);
+      for (i = 0; i < match.perTeam * 2 - 1; i++) G.actors.push(actor('B', pool[i % pool.length], false, gun(i)));
     } else {
     G.player = actor(match.team, '나', true, match.primary); G.actors.push(G.player);
     for (i = 0; i < match.perTeam - 1; i++) G.actors.push(actor(match.team, NAMES[match.team][i], false, gun(i + 1)));
@@ -1162,7 +1170,7 @@
     if (!SV.gunsWarm) { SV.gunsWarm = true; ['rifle', 'rifle2', 'smg', 'sniper', 'shotgun', 'pistol', 'pistol2'].forEach(function (id) { SV.soldier('A', id); }); }   // build each held gun once now, so a pickup mid-match never stalls a frame
     var cnt = { A: 0, B: 0 }; G.actors.forEach(function (a) { a.idx = cnt[a.team]++; }); G.elapsed = 0; G.deadT = 0;
     G.bomb = match.mode === 1 && map.sites ? { atk: 'A', round: 1, need: 5, phase: 'live', swapped: false } : null;
-    G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + ' · 먼저 ' + match.target + '킬', 2.5);
+    G.mini = null; G.state = 'play'; SV.resize(); if (G.bomb) newRound(); else G.actors.forEach(spawn); if (!G.bomb) showMsg(match.practice ? '사격 연습장 · 표적을 맞히면 넘어갑니다' : map.name + (G.ffa ? ' · 개인전 · 모두가 적 · 먼저 ' : ' · 먼저 ') + match.target + '킬', 2.5);
   };
   SV.end = function () { G.net = null;
     if (G.map) { scene.remove(G.map.group); G.map.group.traverse(function (o) { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); G.map = null; }
@@ -1173,9 +1181,10 @@
   };
   function endMatch() {
     if (G.state !== 'play') return; G.state = 'over'; inp.fire = false;
-    var p = G.player, mine = G.score[p.team], theirs = G.score[p.team === 'A' ? 'B' : 'A'];
-    setTimeout(function () { SV.onEnd({ win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: G.bomb ? G.elapsed : (G.match.minutes * 60 - G.time), mode: G.bomb ? 1 : 0, map: G.map.name, weapon: W[G.match.primary].name, practice: !!G.match.practice }); }, 1200);
-    showMsg(mine > theirs ? '승리' : mine === theirs ? '무승부' : '패배', 5);
+    var p = G.player, mine = G.score[p.team], theirs = G.score[p.team === 'A' ? 'B' : 'A'], rank = 0, lead = 0;
+    if (G.ffa) { var bd = SV.board(); rank = bd.indexOf(p) + 1; lead = bd[0] === p ? (bd[1] ? bd[1].kills : 0) : bd[0].kills; mine = p.kills; theirs = rank === 1 && lead === p.kills ? p.kills : rank === 1 ? -1 : lead + 1; }
+    setTimeout(function () { SV.onEnd({ ffa: G.ffa, rank: rank, n: G.actors.length, mine: p.kills, lead: lead, win: mine > theirs, draw: mine === theirs, score: G.score, team: p.team, stats: G.stats, used: G.bomb ? G.elapsed : (G.match.minutes * 60 - G.time), mode: G.bomb ? 1 : 0, map: G.map.name, weapon: W[G.match.primary].name, practice: !!G.match.practice }); }, 1200);
+    showMsg(G.ffa ? rank + '위 · ' + p.kills + '킬' : mine > theirs ? '승리' : mine === theirs ? '무승부' : '패배', 5);
   }
 
   // ---------- HUD ----------
@@ -1193,7 +1202,7 @@
   var miniT = 0, lodT = 0;
   function updHud(dt) {
     var p = G.player, g = p.guns[p.slot], w = W[g.id], other = p.team === 'A' ? 'B' : 'A';
-    set('sc-a', G.score.A); set('sc-b', G.score.B); var t = Math.max(0, Math.ceil(G.time)); set('sc-t', ('0' + ((t / 60) | 0)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2));
+    if (G.ffa) { var top = 0; for (var q = 0; q < G.actors.length; q++) if (G.actors[q] !== p) top = Math.max(top, G.actors[q].kills); set('sc-a', p.kills); set('sc-b', top); } else { set('sc-a', G.score.A); set('sc-b', G.score.B); } var t = Math.max(0, Math.ceil(G.time)); set('sc-t', ('0' + ((t / 60) | 0)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2));
     set('hpn', Math.max(0, Math.ceil(p.hp))); var hw = clamp(p.hp, 0, 100) + '%'; if (last.hw !== hw) { last.hw = hw; $('hpf').style.width = hw; $('hpf').style.background = p.hp < 35 ? '#ff5a40' : '#e8e4da'; }
     set('am', w.melee ? '–' : g.reload > 0 ? '…' : g.mag); set('ar', w.melee ? '' : '/ ' + g.res);
     for (var i = 0; i < 3; i++) { var gi = p.guns[i], on = i === p.slot ? 'true' : 'false', key = on + (gi ? gi.id : '-'); if (last['s' + i] !== key) { last['s' + i] = key; var e = $('slot' + i); e.setAttribute('aria-pressed', on); e.textContent = gi ? W[gi.id].short : '—'; e.classList.toggle('empty', !gi); } }
