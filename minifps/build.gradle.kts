@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.minifps"
         minSdk = 24
         targetSdk = 34
-        versionCode = 72
-        versionName = "0.40"
+        versionCode = 73
+        versionName = "0.41"
     }
 
     // 저장소에 둔 고정 디버그 키로 서명한다. 러너마다 키가 달라지면 업데이트 설치가 거부된다.
