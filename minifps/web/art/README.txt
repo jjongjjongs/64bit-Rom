@@ -19,9 +19,11 @@ maps/resoforge.glb — the "오렌지 야드" map: "Lowpoly FPS TDM Game Map by 
   Used whole; the game repaints it with its own textures and builds collision from its meshes.
 
 maps/junkyard.glb — the "폐차 야적장" map: "Lowpoly Map Asset by Resoforge" (Sketchfab download "lowpoly-map-asset-by-resoforge").
-  Reduced for phones with glTF-Transform (normals and UVs dropped, vertices welded, meshoptimizer simplify at 1% error, duplicates merged).
-maps/junkyard.boxes.json — its collision boxes, worked out ahead of time from the reduced model: a box turned about the vertical per
-  small connected part, column boxes (0.5 m) for the big parts, nothing beyond the fence.
+  Reduced for phones with web/tools/junkyard_prep.js (glTF-Transform): normals and UVs dropped, vertices welded, meshoptimizer simplify
+  (1% error; 0.05% for containers and cars), duplicates merged, and the oversized cars shrunk to 0.63 (each pile about its own footing).
+  The game draws the yard at 3/4 size and repaints the cars as wrecks (faded paint, rust, dark glass, black tyres).
+maps/junkyard.boxes.json — its collision boxes, worked out ahead of time from the reduced model at 3/4 size: a box turned about the
+  vertical per small connected part, column boxes (0.4 m) for the big parts, fine columns (0.125 m) for flights of steps, nothing beyond the fence.
 
 ui/maps/m<N>.jpg — the match screen's map pictures, one per entry of SV.MAPS (same order): a view from above taken inside this game
   (walls cut at 2.75 m so rooms show), by the scratch tool that drives the game page. Re-take them when a map changes or moves.

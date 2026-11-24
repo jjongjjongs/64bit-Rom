@@ -1767,31 +1767,60 @@
     return lit('day', { name: '오렌지 야드', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [40, 80], H: H, navPad: .3, navDeck: .05, navPrune: true, links: links, ladders: [], routes: routes });
   }
 
-  // 01 폐차 야적장 — a ready-made level ("Lowpoly Map Asset" by Resoforge / Space_One, CC BY 4.0), laid lengthwise along x:
+  // a scrapped car: faded paint (one of a few per yard), rust along the sills, dark glass, black tyres. Worked out in the car's
+  // own frame (the model's cars stand on their local floor), so the cars tipped onto the piles keep their windows in place.
+  var WRECK = [0x8a3b2e, 0x6e4a33, 0x4d5d6b, 0x7b7e7e, 0xa39577, 0x5d6448, 0xb0ab9f, 0x7a2f2a, 0x405a52];
+  function wreck(b, o, seed) {
+    var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(), P = g.attributes.position.array, nt = P.length / 9, t, j, q;
+    g.computeBoundingBox(); var bb = g.boundingBox, sz = bb.getSize(new T.Vector3()), len = Math.max(sz.x, sz.z), eps = len * 2e-4;
+    // its separate shells: the body, the wheels, the mirrors
+    var par = new Int32Array(nt), key = {}; for (t = 0; t < nt; t++) par[t] = t;
+    function f(x) { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; }
+    for (t = 0; t < nt; t++) for (j = 0; j < 3; j++) { var o3 = (t * 3 + j) * 3, k = Math.round(P[o3] / eps) + ',' + Math.round(P[o3 + 1] / eps) + ',' + Math.round(P[o3 + 2] / eps); if (key[k] == null) key[k] = t; else { var r1 = f(t), r2 = f(key[k]); if (r1 !== r2) par[r1] = r2; } }
+    var parts = {}; for (t = 0; t < nt; t++) { var r = f(t); (parts[r] = parts[r] || []).push(t); }
+    var G = { body: [], rust: [], glass: [], tyre: [], dark: [] }, e1 = new T.Vector3(), e2 = new T.Vector3(), nn = new T.Vector3(), lo = bb.min.y, H = Math.max(.01, sz.y);
+    for (var pk in parts) {
+      var ts = parts[pk], pb = new T.Box3(); ts.forEach(function (t) { for (var j = 0; j < 3; j++) pb.expandByPoint(e1.set(P[t * 9 + j * 3], P[t * 9 + j * 3 + 1], P[t * 9 + j * 3 + 2])); });
+      var ps = pb.getSize(e2), small = Math.max(ps.x, ps.z) < len * .25, cls = small ? ((pb.min.y - lo) / H < .35 ? 'tyre' : 'dark') : null;
+      ts.forEach(function (t) { var o9 = t * 9, c = cls;
+        if (!c) { e1.set(P[o9 + 3] - P[o9], P[o9 + 4] - P[o9 + 1], P[o9 + 5] - P[o9 + 2]); e2.set(P[o9 + 6] - P[o9], P[o9 + 7] - P[o9 + 1], P[o9 + 8] - P[o9 + 2]); nn.crossVectors(e1, e2).normalize();
+          var h = ((P[o9 + 1] + P[o9 + 4] + P[o9 + 7]) / 3 - lo) / H; c = h > .6 && h < .93 && Math.abs(nn.y) < .6 ? 'glass' : h < .28 ? 'rust' : 'body'; }
+        for (var q = 0; q < 9; q++) G[c].push(P[o9 + q]); });
+    }
+    var col = WRECK[(seed * 5 + 3) % WRECK.length];
+    [['body', col, 'plain'], ['rust', 0x5c3b28, 'rust'], ['glass', 0x1c2328, 'glass'], ['tyre', 0x191a1b, 'rubber'], ['dark', 0x2a2c2e, 'plain']].forEach(function (k) { if (!G[k[0]].length) return;
+      var gg = new T.BufferGeometry(); gg.setAttribute('position', new T.Float32BufferAttribute(G[k[0]], 3)); gg.applyMatrix4(o.matrixWorld); gg.computeVertexNormals(); b.geo(gg, k[1], k[2], { pass: true }); });
+    g.dispose();
+  }
+  // 01 폐차 야적장 — a ready-made level ("Lowpoly Map Asset" by Resoforge), laid lengthwise along x and scaled to 3/4 (its
+  // pieces were built big: at this size a crate is about chest high and a stair step 0.375 m, one a walker can climb).
   // a fenced yard of containers, scrapped cars, tyre stacks and sheds. Drawn through the builder like the orange yard; small
   // pieces fade out with distance (tiers), and the collision boxes come worked out ahead of time (art/maps/junkyard.boxes.json).
+  var JK = .75;
   function junkM() {
-    var b = Builder(), A = SV.assets && SV.assets.maps || {}, src = A.junk, HW = 101, HD = 50, i;
+    var b = Builder(), A = SV.assets && SV.assets.maps || {}, src = A.junk, HW = 76, HD = 38, i, cars = 0;
     b.day = true;
     var LOOK = { PLANE: ['conc', 0x3c3e40, .85], YELLOW: ['plaster', 0xe8902c, .92], 'WHITE-EF': ['plain', 0xdedcd6], 'DARK-2': ['plain', 0x1d1e20], BLUE: ['plain', 0x2e6fd2], RED: ['plain', 0xd12b22],   // flat paint like the original
       WOOD: ['crate', 0xc98a45], DARK: ['plain', 0x232427], ORANGE: ['plain', 0xee6a24], 'D-W-50': ['conc', 0x76787a, .85] };
     b.ghost = true; b.box(0, 0, 420, 300, .3, 0x8f8a76, -.62, false, 'sand'); b.ghost = false;
     if (src) {
-      var root = src.scene.clone(true); root.rotation.y = PI / 2; root.updateMatrixWorld(true);
+      var root = src.scene.clone(true); root.rotation.y = PI / 2; root.scale.setScalar(JK); root.updateMatrixWorld(true);
       root.traverse(function (o) { if (!o.isMesh) return; var lk = LOOK[o.material.name], g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.index) g = g.toNonIndexed(); g.computeVertexNormals();   /* flat shading: the reduced model keeps no normals */
-        g.computeBoundingBox(); var q = g.boundingBox, ext = Math.max(q.max.x - q.min.x, q.max.y - q.min.y, q.max.z - q.min.z); b.tier = ext < 2.6 ? 1 : ext < 7 ? 2 : 0;
+        g.computeBoundingBox(); var q = g.boundingBox, ext = Math.max(q.max.x - q.min.x, q.max.y - q.min.y, q.max.z - q.min.z); b.tier = ext < 2 ? 1 : ext < 5.5 ? 2 : 0;
+        if (/^CAR/.test(o.name) || /^CAR/.test(o.parent && o.parent.name || '')) { b.tier = 2; g.dispose(); wreck(b, o, cars++); return; }
         b.geo(g, lk ? lk[1] : o.material.color.getHex(), lk ? lk[0] : 'plain', { pass: true, keep: lk && lk[2] }); });
       b.tier = 0;
     }
     (A.junkBox || []).forEach(function (q) { b.boxes.push(Object.assign({}, q)); });
     // the fence ring keeps everyone in (the concrete blocks along it can be climbed from the stacks beside them)
     [[0, -HD - .6, HW * 2 + 2, 1.2], [0, HD + .6, HW * 2 + 2, 1.2], [-HW - .6, 0, 1.2, HD * 2 + 2], [HW + .6, 0, 1.2, HD * 2 + 2]].forEach(function (w) { b.solid(w[0], w[1], w[2], w[3], 12, 0); });
-    [[-94.2, -6.1], [-94.2, -2], [-94.2, 2], [-94.2, 5.9], [-91, 0]].forEach(function (q) { b.spawns.A.push({ x: q[0], z: q[1] }); });
-    [[91.8, -6.6], [91.8, .4], [93.3, 1.9], [87.8, 3.4]].forEach(function (q) { b.spawns.B.push({ x: q[0], z: q[1] }); });
-    var routes = [{ kind: 'main', pts: [[-89.5, .5], [-80.2, -.1], [-56.7, -.1], [-30.2, -.1], [-.2, -2.6], [29.8, 1.4], [54.8, -2.6], [79.8, -.1], [90.5, .5]] },   // under the scaffold in the middle
-      { kind: 'flank', pts: [[-89.5, -3.5], [-80.2, -35.1], [-55.2, -35.1], [-30.2, -35.1], [-.2, -35.1], [29.8, -36.1], [54.8, -35.1], [79.8, -35.1], [89.5, -4.5]] },
-      { kind: 'flank', pts: [[-89.5, 4.5], [-80.2, 36.4], [-55.2, 34.9], [-31.7, 39.4], [-.2, 38.9], [29.8, 38.9], [58.8, 34.9], [78.5, 41.5], [88.5, 3.5]] }];
-    return lit('day', { name: '폐차 야적장', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [45, 90], navPad: .35, navStep: .44, navHead: 1.8, navPrune: true, routes: routes });
+    function sc(l) { return l.map(function (q) { return [q[0] * JK, q[1] * JK]; }); }
+    sc([[-94.2, -6.1], [-94.2, -2], [-94.2, 2], [-94.2, 5.9], [-91, 0]]).forEach(function (q) { b.spawns.A.push({ x: q[0], z: q[1] }); });
+    sc([[91.8, -6.6], [91.8, .4], [93.3, 1.9], [87.8, 3.4]]).forEach(function (q) { b.spawns.B.push({ x: q[0], z: q[1] }); });
+    var routes = [{ kind: 'main', pts: sc([[-89.5, .5], [-80.2, -.1], [-56.7, -.1], [-30.2, -.1], [-.2, -2.6], [29.8, 1.4], [54.8, -2.6], [79.8, -.1], [90.5, .5]]) },   // under the scaffold in the middle
+      { kind: 'flank', pts: sc([[-89.5, -3.5], [-80.2, -35.1], [-55.2, -35.1], [-30.2, -35.1], [-.2, -35.1], [29.8, -36.1], [54.8, -35.1], [79.8, -35.1], [89.5, -4.5]]) },
+      { kind: 'flank', pts: sc([[-89.5, 4.5], [-80.2, 36.4], [-55.2, 34.9], [-31.7, 39.4], [-.2, 38.9], [29.8, 38.9], [58.8, 34.9], [78.5, 41.5], [88.5, 3.5]]) }];
+    return lit('day', { name: '폐차 야적장', b: b, bounds: { minx: -HW, maxx: HW, minz: -HD, maxz: HD }, lod: [40, 80], navPad: .35, navStep: .44, navHead: 1.8, navPrune: true, routes: routes });
   }
 
   var MAKERS = [junkM, warehouseM, depotM, oldtownM, compoundM, arcticM, canyonM, customsM, passM, factoryM, marketM, yardM, range];
