@@ -18,7 +18,7 @@
   };
   var DIFF = [{ err: .05, react: .62, turn: 5 }, { err: .032, react: .42, turn: 7 }, { err: .02, react: .28, turn: 9.5 }, { err: .011, react: .17, turn: 13 }];
   var NAMES = { A: ['까치', '너구리', '수달', '오소리', '두루미', '고라니', '삵'], B: ['매', '늑대', '살쾡이', '올빼미', '멧돼지', '담비', '수리'] };
-  var BOTGUN = ['rifle', 'smg', 'sniper', 'shotgun', 'rifle2', 'smg', 'rifle'];
+  var BOTGUN = ['rifle', 'smg', 'lmg', 'sniper', 'shotgun', 'rifle2', 'smg', 'rifle'];
   var EYE = 1.64, EYEC = 1.12, RAD = .35, TALL = 1.78;   // the map pack's player reference: 1.78 m tall, eye at 1.64 m, capsule radius 0.35 m
 
   var G = SV.G = { state: 'menu', actors: [], nades: [], drops: [], score: { A: 0, B: 0 }, time: 0, stats: null, feed: [] };
