@@ -431,6 +431,30 @@
      · 3 hell (as hard, quicker, and changes spot every second peek; falls back toward a team-mate) */
   function botLv(a) { return a.ai.lv != null ? a.ai.lv : G.match.diff; }
   function dirK(dx, dz) { return ((Math.round(Math.atan2(dz, dx) / (2 * PI) * IDIR) % IDIR) + IDIR) % IDIR; }
+  /* ---------- bots, step 3: hearing, memory, sharing what they see ----------
+     Bots learn where an enemy is only from what a player could learn: seeing them, hearing their shots (lv 1+) or running steps
+     (lv 2+), or a team-mate calling it out (lv 2+). A heard or called-out position is a guess, rougher on the lower levels. */
+  var MEM = [3, 6, 10, 15], HEAR_SHOT = [0, 10, 25, 40], HEAR_RUN = [0, 0, 8, 12], HEAR_WALK = [0, 0, 0, 4], HEAR_ERR = [[0, 0], [.3, .35], [.26, .35], [.1, .15]];   // [angle (rad), share of the distance]
+  function suspect(b, x, z, l, how) {   // b now believes an enemy is about (x, z)
+    var ai = b.ai; if (ai.tgt || ai.deaf) return; var lv = botLv(b), dx = x - b.pos.x, dz = z - b.pos.z, d = Math.hypot(dx, dz), e = how === 'call' ? [0, 0] : HEAR_ERR[lv];
+    var ang = Math.atan2(dz, dx) + (Math.random() * 2 - 1) * e[0], dd = d * (1 + (Math.random() * 2 - 1) * e[1]);
+    ai.lastSeen = { x: b.pos.x + Math.cos(ang) * dd, z: b.pos.z + Math.sin(ang) * dd, l: l }; ai.lastSeenT = 0; ai.heard = how;
+    if (G.botStats) G.botStats[how] = (G.botStats[how] || 0) + 1;
+  }
+  function heardShot(a) {
+    if (!G.actors) return; for (var i = 0; i < G.actors.length; i++) { var b = G.actors[i]; if (b.isPlayer || b.remote || !b.alive || !foe(b, a)) continue; var r = HEAR_SHOT[botLv(b)];
+      if (r && Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) < r) suspect(b, a.pos.x, a.pos.z, lvl(a), 'shot'); } }
+  function listen(a) {   // running steps nearby (crouched steps are silent; walking, aiming, is heard only very close)
+    var lv = botLv(a); if (lv < 2 || a.ai.tgt) return;
+    for (var i = 0; i < G.actors.length; i++) { var e = G.actors[i]; if (!e.alive || !e.moving || e.crouch || !foe(a, e)) continue; var r = e.ads ? HEAR_WALK[lv] : HEAR_RUN[lv];
+      if (r && Math.hypot(e.pos.x - a.pos.x, e.pos.z - a.pos.z) < r) { suspect(a, e.pos.x, e.pos.z, lvl(e), 'step'); return; } } }
+  function callOut(a, e) {   // what a sees, its team-mates hear about (hard: those within 25 m; hell: all, and they come at it from different sides)
+    var lv = botLv(a); if (lv < 2 || (a.ai.callT || 0) > G.elapsed) return; a.ai.callT = G.elapsed + .5;
+    G.actors.forEach(function (m) { if (m === a || m.isPlayer || m.remote || !m.alive || foe(a, m) || m.ai.tgt || botLv(m) < 2) return;
+      if (lv < 3 && Math.hypot(m.pos.x - a.pos.x, m.pos.z - a.pos.z) > 25) return;
+      var x = e.pos.x, z = e.pos.z;
+      if (lv >= 3) { var side = (m.idx % 3) - 1, dx = x - m.pos.x, dz = z - m.pos.z, d = Math.hypot(dx, dz) || 1, c = freeNear(cellOf(x - dz / d * side * 6, z + dx / d * side * 6, lvl(e))), q = cellXZ(c); x = q[0]; z = q[1]; }   // a flank: a few metres to one side of the enemy
+      suspect(m, x, z, lvl(e), 'call'); }); }
   function coverFor(a, ex, ez, o) {
     var I = G.intel; if (!I) return null; var L = lvl(a), c0 = cellOf(a.pos.x, a.pos.z, L), cc = c0 % nav.N, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, base = c0 - cc, R = o.R || 8, best = null, bs = 1e9, i, j;
     var ed0 = Math.hypot(ex - a.pos.x, ez - a.pos.z), mate = null;
@@ -451,7 +475,8 @@
   /* what to walk to while fighting from cover (think), or null to fight the old way */
   function coverPlan(a, best) {
     var ai = a.ai, lv = botLv(a); if (lv < 1 || !G.intel) { ai.cb = null; return null; }
-    var e = best || (ai.cb && ai.lastSeenT < (lv >= 3 ? 7 : 5) ? ai.lastSeen : null); if (!e) { ai.cb = null; return null; }
+    var e = best || (ai.cb && ai.lastSeenT < Math.min(MEM[lv], lv >= 3 ? 7 : 5) ? ai.lastSeen : null) || (lv >= 2 && ai.heard && ai.heard !== 'call' && ai.lastSeen && ai.lastSeenT < (lv >= 3 ? 2.5 : 2) && Math.hypot(ai.lastSeen.x - a.pos.x, ai.lastSeen.z - a.pos.z) < 20 && !ai.deaf ? ai.lastSeen : null);   // heard close by, not seen: a moment in cover facing it, pre-aimed, before going to look (a team-mate's call: straight there)
+    if (!e) { ai.cb = null; return null; }
     var ex = e.pos ? e.pos.x : e.x, ez = e.pos ? e.pos.z : e.z, cb = ai.cb;
     if (lv >= 2 && a.hp < 25 && (!cb || cb.mode !== 'back')) { var r = coverFor(a, ex, ez, { away: true, full: true, noPeek: true, R: 12, mate: lv >= 3 }); if (r) { r.mode = 'back'; r.until = G.elapsed + rnd(4, 7); r.phase = 'go'; ai.cb = cb = r; } }
     if (cb && cb.mode === 'back' && G.elapsed > cb.until) cb = ai.cb = null;
@@ -627,6 +652,7 @@
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
+      if (G.botStats && !v.isPlayer && by !== v) { var bs2 = G.botStats, fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw), kx = by.pos.x - v.pos.x, kz = by.pos.z - v.pos.z; bs2.deaths[v.team]++; if ((fx * kx + fz * kz) / (Math.hypot(kx, kz) || 1) < -.2) bs2.behind[v.team]++; }   // tests: killed by someone it was not facing
       v.alive = false; v.respawn = G.ffa ? 2 : 3; v.deaths++; v.dead = .001; if (v.isPlayer && SV.resetAds) SV.resetAds(); dropGun(v, v.slot, false, true);
       if (by !== v) { by.kills++; if (!G.bomb) G.score[by.team]++; }
       if (G.bomb && G.bomb.carrier === v && !(G.net && !G.net.host)) G.bomb.carrier = nextLead(v);   // every attacker has a bomb: another one leads the way to the site
@@ -667,7 +693,7 @@
   function reload(a) { var g = a.guns[a.slot], w = W[g.id]; if (w.melee || g.reload > 0 || g.mag >= w.mag || g.res <= 0) return; g.reload = w.reload; g.rlEmpty = g.mag === 0; g.rlNeed = Math.min(w.mag - g.mag, g.res); a.ads = false; if (a.isPlayer) { vmSwap = .25; tick(.12, 1800, .22); tick(w.reload * .55, 900, .3, 2); tick(w.reload * .84, 2600, .22); tick(w.reload * .9, 1500, .22); } }
   function fire(a, o, dir, muzzle) {
     var g = a.guns[a.slot], w = W[g.id], i, res;
-    if (g.cool > 0 || g.reload > 0) return false; a.fireK = 1;
+    if (g.cool > 0 || g.reload > 0) return false; a.fireK = 1; if (!w.melee) heardShot(a);
     if (w.melee) {
       /* a blade sweeps a width, not a line: try the middle and a little to each side and above and below, keep the best thing met */
       g.cool = w.interval; var d0 = new T.Vector3().copy(dir); vR.set(d0.z, 0, -d0.x).normalize(); vU.crossVectors(vR, d0); var bestM = null, bx2, by2;
@@ -1075,16 +1101,16 @@
     if (best !== ai.tgt) { ai.seen = 0;
       if (best && ai.cb && botLv(a) >= 2 && ai.lastSeen && ai.lastSeenT < 3 && Math.hypot(best.pos.x - ai.lastSeen.x, best.pos.z - ai.lastSeen.z) < 3) ai.seen = (ai.df || G.diff).react * .6;   // it reappears where we were already aiming: less to take in
       ai.tgt = best; }
-    if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; ai.lastSeenT = 0; best.spot = 1.5; }
+    if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; ai.lastSeenT = 0; ai.heard = null; best.spot = 1.5; callOut(a, best); } else listen(a);
     // choose where to walk
     var want = null, pref = { lmg: 20, rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
     var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
     var dg = !best && !(ob && ob.force) && !(G.bomb && G.bomb.carrier === a) ? botDrop(a) : null;
     if (dg) want = { x: dg.pos.x, z: dg.pos.z, l: lvl(a) };
     else if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
-    else if ((best || ai.cb) && (rg = coverPlan(a, best))) want = rg;   // step 2: fight from cover
+    else if ((best || ai.cb || ai.heard) && (rg = coverPlan(a, best))) want = rg;   // step 2: fight from cover
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
-    else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
+    else if (ai.lastSeenT < (ai.deaf ? 6 : MEM[botLv(a)]) && ai.lastSeen) want = ai.lastSeen;   // remembered or heard: go and look
     else if (!G.bomb && (rg = routeGoal(a))) want = rg;   // no enemy in mind: walk one of the map's lanes toward the other side
     else if (!ai.goal || ai.path.length === 0 || ai.pathT > 9) { var h = Math.random() < .6 ? HOT[(Math.random() * HOT.length) | 0] : null; if (h) want = h; else { var c = nav.free[(Math.random() * nav.free.length) | 0]; var c2 = c % nav.N; want = { x: nav.ox + (c2 % nav.nx) + .5, z: nav.oz + ((c2 / nav.nx) | 0) + .5, l: c >= nav.N ? 1 : 0 }; } ai.goal = null; }
     if (want && (!ai.goal || Math.hypot(ai.goal.x - want.x, ai.goal.z - want.z) > 3 || ai.goal.l !== (want.l || 0) || ai.path.length === 0)) { ai.goal = { x: want.x, z: want.z, l: want.l || 0 }; ai.path = findPath(a.pos.x, a.pos.z, lvl(a), want.x, want.z, want.l || 0); ai.pathT = 0; }
@@ -1099,7 +1125,8 @@
     // follow the path
     var L = lvl(a); while (ai.path.length > 1 && !ai.path[0].jump && !ai.path[1].jump && ai.path[0].l === L && ai.path[1].l === L && lineFree(a.pos.x, a.pos.z, ai.path[1].x, ai.path[1].z, L)) ai.path.shift();
     if (ai.path.length) { var wp = ai.path[0], dx = wp.x - a.pos.x, dz = wp.z - a.pos.z, d = Math.hypot(dx, dz); if (d < .55 && (!wp.jump || Math.abs(a.pos.y - (wp.l ? nav.H : 0)) < .7)) ai.path.shift(); else if (wp.jump && d < .5) { vx = vz = 0; }   // right above or below the far end of a ladder: let go and let it carry us
-      else { vx = dx / d * sp; vz = dz / d * sp; if (!tgt) wantYaw = Math.atan2(-dx, -dz); } }
+      else { vx = dx / d * sp; vz = dz / d * sp; if (!tgt) wantYaw = Math.atan2(-dx, -dz);
+        if (!tgt && ai.lastSeen && ai.lastSeenT < MEM[botLv(a)] && botLv(a) >= 2 && Math.hypot(ai.lastSeen.x - a.pos.x, ai.lastSeen.z - a.pos.z) < 20) wantYaw = Math.atan2(a.pos.x - ai.lastSeen.x, a.pos.z - ai.lastSeen.z); } }   // walks in already aiming where the enemy should be
     if (tgt) {
       ai.seen += dt; var tx = tgt.pos.x - a.pos.x, tz = tgt.pos.z - a.pos.z, td = Math.hypot(tx, tz), ty = tgt.pos.y + (tgt.crouch ? .85 : 1.25) - (a.pos.y + EYE);
       wantYaw = Math.atan2(-tx, -tz); wantPitch = Math.atan2(ty, td);
@@ -1303,7 +1330,7 @@
     var r = Math.max(map.bounds.maxx, map.bounds.maxz) + 8, sc = sun.shadow.camera; sc.left = sc.bottom = -r; sc.right = sc.top = r; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
     if (renderer) renderer.shadowMap.needsUpdate = true;
     if (map.rain) makeRain();
-    buildNav(map); G.intel = window.NOINTEL ? null : mapIntel(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
+    buildNav(map); G.intel = window.NOINTEL ? null : mapIntel(map); G.botStats = { deaths: { A: 0, B: 0 }, behind: { A: 0, B: 0 } }; var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
     HOT = map.hot || [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
     clearDrops(); (map.armory || []).forEach(function (o, n) { var d = makeDrop({ g: -1 - n, id: o.id, mag: W[o.id].mag, res: W[o.id].res, p: [o.x, o.y, o.z], yaw: o.yaw, tilt: o.tilt, perm: true }); d.rest = true; });
     G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
