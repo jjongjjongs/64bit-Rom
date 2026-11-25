@@ -420,6 +420,8 @@
       ms: { rays: Math.round(tRays), peeks: Math.round(tPk - t0 - tRays), all: Math.round(performance.now() - t0) }, holdN: holdC.length };
     return I;
   }
+  SV.cellXZ = function (c) { return cellXZ(c); };   // tests
+  SV.rayWorld = function (o, d, max) { return rayWorld(o, d, max); };   // tests
   SV.intel = function () { var I = G.intel; if (!I) return null; var xz = function (c) { var p = cellXZ(c); return [+p[0].toFixed(1), +p[1].toFixed(1), c >= nav.N ? 1 : 0]; };
     return { map: G.map.name, nx: nav.nx, nz: nav.nz, ox: nav.ox, oz: nav.oz, N: nav.N, hm: !!nav.hm, ms: I.ms, routes: I.routes, nCells: I.cells.length,
       blk: Array.from(nav.blk), fl: Array.from(I.fl), cells: I.cells, cover: I.cover.map(function (q) { return [q.c, q.full, q.half]; }), peeks: I.peeks.map(function (q) { return [q.from, q.to, q.k, q.half ? 1 : 0]; }),
@@ -713,7 +715,10 @@
       var ang = Math.random() * 2 * PI, rad = Math.sqrt(Math.random()) * sp * (w.pellets > 1 ? 1 : 1);
       vD.copy(dir).addScaledVector(vR, Math.cos(ang) * rad).addScaledVector(vU, Math.sin(ang) * rad).normalize();
       res = castShot(a, o, vD, w.range); vH.copy(o).addScaledVector(vD, res.t);
-      if (i < 3) tracer(muzzle, vH);
+      if (i < 3) {   // the shot is worked out from the eye; when the gun's muzzle has something in the way of the hit point (a crate the eye looks over), the streak starts at the eye instead, so it is never drawn through a crate
+        vP.subVectors(vH, muzzle); var tl = vP.length(); vP.divideScalar(tl || 1);
+        if (tl > .2 && rayWorld(muzzle, vP, tl) < tl - .1) { vP.copy(o).addScaledVector(vD, .5); tracer(vP, vH); } else tracer(muzzle, vH); }
+      if (window.SHOTLOG && res.actor && res.actor.isPlayer) SHOTLOG.push([o.x, o.y, o.z, vD.x, vD.y, vD.z, res.t, res.actor.crouch ? 1 : 0, muzzle.x, muzzle.y, muzzle.z]);   // tests: shots that hit the player
       if (res.actor) { var dmg = w.dmg * (res.t > w.fall ? Math.max(.45, 1 - (res.t - w.fall) / w.range) : 1) * (res.head ? w.head : 1); if (hurt(res.actor, dmg, a, res.head, g.id)) { puff(vH, 0xc23b2a, .2, 1.3); if (a.isPlayer) G.stats.hits += 1 / w.pellets; } }
       else if (res.target) { hitTarget(res.target, res.bull); if (a.isPlayer) G.stats.hits += 1 / w.pellets; }
       else if (res.world) impact(vH, hitNrm);

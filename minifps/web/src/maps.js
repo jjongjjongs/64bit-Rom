@@ -202,13 +202,13 @@
       },
       mark: function (text, x, y, z, w, h, ry, fg, flat) { b.quad('m:' + text + fg, x, y, z, w, h, ry, { mode: 'alpha', make: label(text, fg || '#ecebe4'), flat: flat }); },
       crate: function (x, z, s, c, y0, h) {
-        h = h || s; y0 = y0 || 0; b.box(x, z, s, s, h, c || C.wood, y0, !(y0 > .5), 'crate', true);
+        h = h || s; y0 = y0 || 0; b.box(x, z, s, s, h, c || C.wood, y0, true, 'crate', true);   // stacked ones too: furniture is built as ghost, so a crate needs its own record to stop bullets
         var t = Math.min(.09, s * .07), e = s / 2 + .012, q = 0x5c4526, i, j, gh = b.ghost; b.ghost = true;   // the battens sit on the crate's own box: no records of their own   // battens proud of the faces: four uprights, top and bottom frames
         for (i = -1; i <= 1; i += 2) for (j = -1; j <= 1; j += 2) b.box(x + i * (e - t / 2), z + j * (e - t / 2), t, t, h + .02, q, y0 - .01, false, 'crate');
         [y0 + t / 2, y0 + h - t / 2].forEach(function (y) { for (i = -1; i <= 1; i += 2) { b.box(x + i * (e - t / 2), z, t, s, t, q, y - t / 2, false, 'crate'); b.box(x, z + i * (e - t / 2), s, t, t, q, y - t / 2, false, 'crate'); } });
         b.ghost = gh;
       },
-      barrel: function (x, z, c, y0) { y0 = y0 || 0; var id = c === C.red ? 'Barrel_01' : 'barrel_03'; if (b.model(id, x, y0, z, Math.random() * 6.28, id === 'barrel_03' ? .94 : 1)) { if (y0 < .5) coll(x, z, .58, .58, .88, y0); return; } b.cyl(x, z, .29, .88, c, y0, y0 < .5, 'metal', .29, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .28, false, 'plain', .305, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .58, false, 'plain', .305, 14); b.cyl(x, z, .25, .02, 0x1c1f22, y0 + .875, false, 'plain', .25, 14); },
+      barrel: function (x, z, c, y0) { y0 = y0 || 0; var id = c === C.red ? 'Barrel_01' : 'barrel_03'; if (b.model(id, x, y0, z, Math.random() * 6.28, id === 'barrel_03' ? .94 : 1)) { coll(x, z, .58, .58, .88, y0); return; } b.cyl(x, z, .29, .88, c, y0, y0 < .5, 'metal', .29, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .28, false, 'plain', .305, 14); b.cyl(x, z, .305, .04, 0x2a2e31, y0 + .58, false, 'plain', .305, 14); b.cyl(x, z, .25, .02, 0x1c1f22, y0 + .875, false, 'plain', .25, 14); },
       tires: function (x, z, n) { if (b.has('old_tyre')) { for (var j = 0; j < n; j++) b.model('old_tyre', x + rnd(-.04, .04), .11 + j * .215, z + rnd(-.04, .04), Math.random() * 6.28, 1.35, PI / 2); coll(x, z, .8, .8, n * .215, 0); return; } for (var i = 0; i < n; i++) { var g = new T.TorusGeometry(.3, .13, 6, 14); g.rotateX(PI / 2); g.translate(x + rnd(-.03, .03), .13 + i * .25, z + rnd(-.03, .03)); push(g, 0x17191b, 'plain', {}); } coll(x, z, .8, .8, n * .25, 0); },
       cone: function (x, z) { var g = new T.CylinderGeometry(.03, .16, .5, 10); g.translate(x, .27, z); push(g, C.orange, 'plain', {}); g = new T.CylinderGeometry(.075, .11, .12, 10); g.translate(x, .3, z); push(g, 0xf0efe8, 'plain', { flat: true }); b.box(x, z, .36, .36, .03, C.orange, 0, false); },
       pallet: function (x, z, y0, rot) { y0 = y0 || 0; var w = rot ? 1 : 1.2, d = rot ? 1.2 : 1, i; b.box(x, z, w, d, .03, C.wood, y0 + .11, false, 'crate', true); for (i = -1; i <= 1; i++) { if (rot) b.box(x, z + i * .5, 1, .1, .11, 0x8a6a3c, y0, false); else b.box(x + i * .5, z, .1, 1, .11, 0x8a6a3c, y0, false); } },
@@ -1290,7 +1290,7 @@
     desk: [1.6, 1.4, 1.1, function (f) { f.B(0, .72, -.3, 1.6, .05, .8, FK.wood, 'crate'); f.B(0, 0, -.65, 1.6, .72, .05, FK.wood, 'crate'); [-.75, .75].forEach(function (x) { f.B(x, 0, -.3, .05, .72, .8, FK.dark); }); f.B(.3, .77, -.5, .55, .38, .05, FK.screen); f.B(-.4, .77, -.25, .4, .05, .3, FK.paper); chairF(f.sub(0, .35, PI)); }],
     table: [2.2, 2.2, .8, function (f) { f.B(0, .76, 0, 2.2, .06, 1.1, FK.wood, 'crate'); [-1, 1].forEach(function (x) { [-.45, .45].forEach(function (z) { f.B(x, 0, z, .07, .76, .07, FK.dark); }); }); [-.6, .6].forEach(function (x) { f.B(x, 0, .85, .45, .45, .45, FK.wood, 'crate'); f.B(x, 0, -.85, .45, .45, .45, FK.wood, 'crate'); }); f.B(.4, .82, 0, .3, .25, .3, FK.white); }],
     crates: [2.3, 1.2, 0, function (f, b) { var p = f.at(-.55, 0), q = f.at(.62, 0); b.crate(p[0], p[1], 1.1, 0xb39058); b.crate(q[0], q[1], .95, 0xc9a66e); b.crate(p[0], p[1], .9, 0x9c8a62, 1.1); }],
-    pallet: [1.4, 1.2, 1.05, function (f, b) { var p = f.at(0, 0); b.pallet(p[0], p[1], 0, Math.abs(Math.sin(f.ang)) > .5); f.B(0, .14, 0, 1.1, .9, .95, 0xb39a72, 'crate'); f.B(0, 1.04, 0, .7, .3, .6, 0x8f8468, 'crate'); }],
+    pallet: [1.4, 1.2, 1.05, function (f, b) { var p = f.at(0, 0); b.pallet(p[0], p[1], 0, Math.abs(Math.sin(f.ang)) > .5); f.B(0, .14, 0, 1.1, .9, .95, 0xb39a72, 'crate'); f.B(0, 1.04, 0, .7, .3, .6, 0x8f8468, 'crate'); var tp = f.at(0, 0); b.rsolid(tp[0], tp[1], .7, .6, .3, 1.04, f.ang); }],
     xray: [2.8, 1.2, 1.85, function (f) { f.B(0, 0, 0, 2.8, .75, .9, FK.dark, 'metal'); f.B(-.2, .75, 0, 1, 1.1, 1.1, FK.white, 'paint'); f.B(-.2, .95, .56, .6, .5, .02, FK.screen); f.B(1.1, .75, 0, .6, .15, .7, FK.paper); f.B(-1.25, .75, 0, .3, .02, .9, 0x1c1f22); }],
     car: [4.6, 2.2, 0, function (f, b) { var p = f.at(0, 0); if (!b.prop('covered_car', p[0], p[1], f.ang + PI / 2, 1)) { f.B(0, .25, 0, 4, .75, 1.8, FK.blue, 'paint'); f.B(-.3, 1, 0, 2.2, .6, 1.6, FK.blue, 'paint'); b.solid(p[0], p[1], 4, 4, 1.6); } }],
     forklift: [2.4, 1.3, 2.2, function (f) { f.B(0, .2, 0, 1.6, 1, 1.2, C.yellow, 'metal'); f.B(-.3, 1.2, 0, .9, 1, 1.1, FK.dark); f.B(1, 0, -.35, .08, 2.2, .08, FK.dark); f.B(1, 0, .35, .08, 2.2, .08, FK.dark); f.B(1.4, .1, 0, .9, .06, .9, FK.steel, 'metal'); [[-.55, -.6], [.55, -.6], [-.55, .6], [.55, .6]].forEach(function (q) { f.Cy(q[0], 0, q[1], .28, .2, 0x17191b); }); }],
@@ -1420,7 +1420,7 @@
         function W(ya, yb, col, t) { if (yb - ya < .02) return; if (ln.hz) b.box(c, ln.at, L, .3, yb - ya, col, ya, true, t); else b.box(ln.at, c, .3, L, yb - ya, col, ya, true, t); }
         W(y0, Math.max(y0, h1), rn.col || th.wall, th.wallT); if (rn.h > 4) W(Math.max(y0, 3.3), rn.h, rn.col || th.wall2 || th.wall, th.wall2T || th.wallT);
         if (!rn.g) { var g0 = b.ghost; b.ghost = true; if (ln.hz) b.box(c, ln.at, L, .36, .25, th.base || 0x5d6163, 0, false, 'conc'); else b.box(ln.at, c, .36, L, .25, th.base || 0x5d6163, 0, false, 'conc'); b.ghost = g0; }   // a darker footing
-        else { var gh = b.ghost; b.ghost = true; [p, q].forEach(function (e) { if (ln.hz) b.box(e, ln.at, .12, .38, 2.3, 0x3f4447, 0, false, 'metal'); else b.box(ln.at, e, .38, .12, 2.3, 0x3f4447, 0, false, 'metal'); });   // door frame
+        else { var gh = b.ghost; b.ghost = true; [p, q].forEach(function (e) { if (ln.hz) b.box(e, ln.at, .12, .38, 2.3, 0x3f4447, 0, true, 'metal'); else b.box(ln.at, e, .38, .12, 2.3, 0x3f4447, 0, true, 'metal'); });   // door frame: stops people and bullets
           if (ln.hz) b.box(c, ln.at, L + .12, .38, .12, 0x3f4447, 2.25, false, 'metal'); else b.box(ln.at, c, .38, L + .12, .12, 0x3f4447, 2.25, false, 'metal'); b.ghost = gh; }
       });
     });
@@ -1450,15 +1450,16 @@
     function rackRow(cv, n) {
       var cx = cv.x + cv.w / 2, cz = cv.z + cv.d / 2, lx = cv.w >= cv.d, L = lx ? cv.w : cv.d, Dp = lx ? cv.d : cv.w;
       var f2 = Fr(b, cx, cz, lx ? 0 : PI / 2), k, cnt = Math.max(1, Math.round(L / 3)), seg = L / cnt; b.solid(cx, cz, cv.w, cv.d, 3.4, 0, true); b.ghost = true; b.tier = 2;
-      for (k = 0; k <= cnt; k++) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(-L / 2 + k * seg, 0, oz, .09, 3.6, .09, FK.orange, 'metal'); });
-      [.1, 1.3, 2.5].forEach(function (y, li) { if (li) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(0, y - .12, oz, L, .1, .07, FK.blue, 'metal'); });
-        for (k = 0; k < cnt * 2; k++) { var ax = -L / 2 + seg * (k + .5) / 2, q = (k + li + n) % 4; if (q === 3) continue; f2.B(ax, y, 0, seg / 2 - .2, .12, Dp - .25, FK.wood, 'crate'); f2.B(ax, y + .12, 0, seg / 2 - .35, q === 1 ? .7 : .95, Dp - .4, [0xb39a72, 0x8f8468, 0xc9a66e][q], 'crate'); } });
+      for (k = 0; k <= cnt; k++) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(-L / 2 + k * seg, 0, oz, .09, 3.6, .09, FK.orange, 'metal'); var up = f2.at(-L / 2 + k * seg, oz); b.rsolid(up[0], up[1], .09, .09, 3.6, 0, f2.ang); });
+      [.1, 1.3, 2.5].forEach(function (y, li) { if (li) [-Dp / 2 + .06, Dp / 2 - .06].forEach(function (oz) { f2.B(0, y - .12, oz, L, .1, .07, FK.blue, 'metal'); var bp = f2.at(0, oz); b.rsolid(bp[0], bp[1], L, .07, .1, y - .12, f2.ang); });
+        for (k = 0; k < cnt * 2; k++) { var ax = -L / 2 + seg * (k + .5) / 2, q = (k + li + n) % 4; if (q === 3) continue; f2.B(ax, y, 0, seg / 2 - .2, .12, Dp - .25, FK.wood, 'crate'); f2.B(ax, y + .12, 0, seg / 2 - .35, q === 1 ? .7 : .95, Dp - .4, [0xb39a72, 0x8f8468, 0xc9a66e][q], 'crate');
+          var lp = f2.at(ax, 0); b.rsolid(lp[0], lp[1], seg / 2 - .2, Dp - .25, .12, y, f2.ang); b.rsolid(lp[0], lp[1], seg / 2 - .35, Dp - .4, q === 1 ? .7 : .95, y + .12, f2.ang); } });   // each load stops bullets; the gaps between loads do not
       b.tier = 0; b.ghost = false;
     }
     bars.forEach(function (wl, n) {
       var cx = wl.x + wl.w / 2, cz = wl.z + wl.d / 2, lx = wl.w >= wl.d, L = lx ? wl.w : wl.d, Dp = lx ? wl.d : wl.w, r = roomOf(cx, cz), kind = r && /공장/.test(r.name) ? 'machine' : (th.wallKind || 'conc');
       if (kind === 'rack') return rackRow(wl, n);
-      if (kind === 'machine') { var f = Fr(b, cx, cz, lx ? 0 : PI / 2), cnt = Math.max(1, Math.floor(L / 3.6)), gh = b.ghost; b.ghost = true; b.tier = 2; for (var k = 0; k < cnt; k++) FURN.machine[3](f.sub(-L / 2 + (k + .5) * L / cnt, 0, 0), b); b.tier = 0; b.ghost = gh; b.solid(cx, cz, wl.w, wl.d, 2.4); return; }
+      if (kind === 'machine') { var f = Fr(b, cx, cz, lx ? 0 : PI / 2), cnt = Math.max(1, Math.floor(L / 3.6)), gh = b.ghost; b.ghost = true; b.tier = 2; for (var k = 0; k < cnt; k++) FURN.machine[3](f.sub(-L / 2 + (k + .5) * L / cnt, 0, 0), b); b.tier = 0; b.ghost = gh; var Lm = Math.max(L, L - L / cnt + 3.4), Dm = Math.max(Dp, 1.8); b.solid(cx, cz, lx ? Lm : Dm, lx ? Dm : Lm, 2.4); return; }   // the machines' own length: on a short wall they stick out past its ends
       if (kind === 'cliff') {
         var hc = th.wallH || 5.5; b.box(cx, cz, wl.w, wl.d, hc, th.cliffC || 0x8a7a60, 0, true, 'rock'); var g0 = b.ghost; b.ghost = true;
         for (var t = -L / 2 + 1; t < L / 2; t += 2.6) { var gg = new T.DodecahedronGeometry(Dp * .55 + (n + t) % 3 * .25, 0); gg.scale(1.3, .8, 1); gg.translate(cx + (lx ? t : 0), hc - .2, cz + (lx ? 0 : t)); b.geo(gg, th.cliffC || 0x8a7a60, 'rock', {}); }
@@ -1625,9 +1626,10 @@
       if (r.top && !th.hall && r.w * r.d > 60) { if (b.has('exterior_aircon_unit')) b.model('exterior_aircon_unit', r.x + r.w * .3, r.ht + .25, r.z + r.d * .4, 0, 1); b.ghost = true; b.box(r.x + r.w * .7, r.z + r.d * .62, .8, .8, .6, 0x6b7075, r.ht + .25, false, 'metal'); b.cyl(r.x + r.w * .62, r.z + r.d * .3, .18, .9, 0x55595c, r.ht + .25, false, 'metal', .18, 8); b.ghost = false; }
     });
     // scenery beyond the wall: trees, pines or nothing
-    if (th.trees) { b.ghost = true; for (var tk = 0; tk < th.trees; tk++) { var ang = tk / th.trees * PI * 2 + (tk % 3) * .13, rx = HW + 6 + (tk * 7 % 11), rz = HD + 6 + (tk * 5 % 9), tx2 = Math.cos(ang) * rx, tz2 = Math.sin(ang) * rz, k3 = .9 + (tk % 4) * .2;
-      if (th.pines) { b.cyl(tx2, tz2, .2 * k3, 1.6 * k3, 0x4a3a28, 0, false, 'plain', .15 * k3, 6); [0, 1, 2].forEach(function (j) { b.cyl(tx2, tz2, (2.2 - j * .6) * k3, 2.2 * k3, j % 2 ? 0x2f4a3a : 0x355440, (1.2 + j * 1.6) * k3, false, 'plain', .05, 8); }); }
-      else { b.cyl(tx2, tz2, .28 * k3, 3.2 * k3, 0x4a3a28, 0, false, 'plain', .2 * k3, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (q, n2) { var g = new T.IcosahedronGeometry(q[3] * k3, 1); g.translate(tx2 + q[0] * k3, q[1] * k3, tz2 + q[2] * k3); b.geo(g, n2 % 2 ? (th.leafC || 0x3f5a2c) : (th.leafC2 || 0x4c6a33), 'plain', {}); }); } } b.ghost = false; }
+    if (th.trees) { b.ghost = true;   // trunks keep a record of their own: on some maps these trees stand inside the walls
+    for (var tk = 0; tk < th.trees; tk++) { var ang = tk / th.trees * PI * 2 + (tk % 3) * .13, rx = HW + 6 + (tk * 7 % 11), rz = HD + 6 + (tk * 5 % 9), tx2 = Math.cos(ang) * rx, tz2 = Math.sin(ang) * rz, k3 = .9 + (tk % 4) * .2;
+      if (th.pines) { b.cyl(tx2, tz2, .2 * k3, 1.6 * k3, 0x4a3a28, 0, true, 'plain', .15 * k3, 6); [0, 1, 2].forEach(function (j) { b.cyl(tx2, tz2, (2.2 - j * .6) * k3, 2.2 * k3, j % 2 ? 0x2f4a3a : 0x355440, (1.2 + j * 1.6) * k3, false, 'plain', .05, 8); }); }
+      else { b.cyl(tx2, tz2, .28 * k3, 3.2 * k3, 0x4a3a28, 0, true, 'plain', .2 * k3, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (q, n2) { var g = new T.IcosahedronGeometry(q[3] * k3, 1); g.translate(tx2 + q[0] * k3, q[1] * k3, tz2 + q[2] * k3); b.geo(g, n2 % 2 ? (th.leafC || 0x3f5a2c) : (th.leafC2 || 0x4c6a33), 'plain', {}); }); } } b.ghost = false; }
     if (th.extra) th.extra(b, { rooms: rooms, doors: doors, sites: sites, spawns: spawns, HW: HW, HD: HD, bars: bars, conts: conts, waters: waters, busy: busy });
     // approaches to each site: the doors of the room it sits in (a step outside them), or four points round it in the open
     function via(s) {
@@ -1705,7 +1707,7 @@
       lamps(b, [[-20, -12, 1, 0], [20, 10, -1, 0], [-28, 20, 0, -1], [28, -20, 0, 1]], 5.5); } }));
   var customsM = mk('customs', lit('day', { name: '세관 야적장', clutter: ['metal_trash_can', 'utility_box_01', 'hand_truck'], trees: 18, ground: 0x8d8f8a, groundT: 'conc', far: 0x6f6b5c, outer: 0x9a9b98, wall: 0xc9c4b6, wallT: 'plaster', wall2: 0x8f9aa0, wall2T: 'panel', roofC: 0x6a7074, floor: 0xa2a49f, wallKind: 'conc', wallH: 2.8,
     cont: [0x7a3f30, 0x3f5f7a, 0x596a4a, 0x8a7a52, 0x2f6a6a], cover: crates, extra: function (b, P) { [[-16, -9], [-16, 8], [2, -9], [2, 8], [-9, 9.5]].forEach(function (q) { b.cone(q[0], q[1]); });
-      var gh = b.ghost; b.ghost = true; b.box(-7, -2, 16, 18, .2, 0x4f585e, 4.6, false, 'corr'); [-14, -7, 0].forEach(function (x) { [-10, 6].forEach(function (z) { b.box(x, z, .25, .25, 4.6, 0x3a4046, 0, false, 'metal'); }); }); b.ghost = gh; b.mark('CUSTOMS', 19, 3.4, -13.1, 5, 1.1, PI, '#2f4763'); } }));
+      var gh = b.ghost; b.ghost = true; b.box(-7, -2, 16, 18, .2, 0x4f585e, 4.6, false, 'corr'); [-14, -7, 0].forEach(function (x) { [-10, 6].forEach(function (z) { b.box(x, z, .25, .25, 4.6, 0x3a4046, 0, true, 'metal'); }); }); /* the canopy's posts stop bullets */  b.ghost = gh; b.mark('CUSTOMS', 19, 3.4, -13.1, 5, 1.1, PI, '#2f4763'); } }));
   var passM = mk('pass', lit('dusk', { name: '고갯길 검문소', clutter: ['old_military_crate', 'metal_jerrycan_green', 'utility_box_01'], trees: 20, pines: true, ground: 0x8a7a5e, groundT: 'sand', far: 0x6b5a44, farT: 'sand', outer: 0x8a8070, outerT: 'rock', outerH: 6, wall: 0xa7a39a, wallT: 'block', wall2: 0x9c988e, roofC: 0x5d5a52, floor: 0x8f8c84, roadC: 0x4a4a46,
     wallKind: 'cliff', cliffC: 0x7a6a54, wallH: 5.5, cont: [0x596a4a], cover: function (b, cv, cx, cz, lx, L, Dp, n) { if (Dp <= 2.1 && L >= 3) bagWall(b, cx, cz, lx, L); else crates(b, cv, cx, cz, lx, L, Dp, n); },
     extra: function (b, P) { [[-16, 17], [-14.5, 17.4], [16, -18], [17.5, -17.6]].forEach(function (q) { b.cone(q[0], q[1]); });
@@ -1785,6 +1787,7 @@
     [[0, -HD - .4, HW * 2 + 2, .8], [0, HD + .4, HW * 2 + 2, .8], [-HW - .4, 0, .8, HD * 2 + 2], [HW + .4, 0, .8, HD * 2 + 2]].forEach(function (w) { b.solid(w[0], w[1], w[2], w[3], 9, 0); });
     // ramps and stairs up to the roofs (2.8-2.9 m): the bots' links between the ground and the upper storey
     links.push({ a: [12, 9.9, 0], b: [18, 9.9, 1] }, { a: [9.2, -10.6, 0], b: [2, -10.6, 1] }, { a: [-9.2, -10.6, 0], b: [-2, -10.6, 1] }, { a: [-21.15, -8.6, 0], b: [-21.15, .4, 1] });
+    b.solid(-19.98, 11.375, 3.15, .35, 2.7, 0);   // the back wall of A's end building, ground floor: the collision read off the mesh misses it
     // trees and roofs beyond the wall
     var gh = b.ghost; b.ghost = true;
     [[-32, -18], [-34, 2], [-31, 17], [32, -16], [34, 4], [31, 18], [-12, -22], [8, -23], [-6, 22], [14, 23]].forEach(function (q, n) { var k = 1.4 + (n % 3) * .3; b.cyl(q[0], q[1], .28 * k, 3.2 * k, 0x4a3a28, 0, false, 'plain', .2 * k, 8); [[0, 4.4, 0, 2.3], [1.3, 3.6, .4, 1.7], [-1.2, 3.8, -.5, 1.8], [.3, 3.4, -1.4, 1.6]].forEach(function (c, m) { var g = new T.IcosahedronGeometry(c[3] * k, 1); g.translate(q[0] + c[0] * k, c[1] * k, q[1] + c[2] * k); b.geo(g, m % 2 ? 0x3f5a2c : 0x4c6a33, 'plain', {}); }); });
@@ -1800,24 +1803,24 @@
 
   // 13–17: five more bomb maps in the moods of the references the user brought (a desert town, a seaside resort, a prison,
   // a military quarantine zone, a rusty refinery) — layouts of our own, drawn with the same plan kit as the others.
-  function palm(b, x, z, h, lean) { var gh = b.ghost; b.ghost = true; var tx = x + lean[0], tz = z + lean[1]; b.seg(x, 0, z, tx, h, tz, .32, 0x8a6a48, 'crate');
+  function palm(b, x, z, h, lean) { var gh = b.ghost, tx = x + lean[0], tz = z + lean[1]; b.ghost = false; b.seg(x, 0, z, tx, h, tz, .32, 0x8a6a48, 'crate'); b.ghost = true;   /* the trunk stops bullets, the fronds do not */
     for (var k = 0; k < 7; k++) { var a = k / 7 * PI * 2, g = new T.BoxGeometry(3.2, .08, .7); g.translate(1.5, 0, 0); g.rotateZ(-.35); g.rotateY(a); g.translate(tx, h, tz); b.geo(g, k % 2 ? 0x4f7a34 : 0x5f8a3c, 'plain', { pass: true }); } b.ghost = gh; }
   function tank(b, x, z, r, h, c) { b.cyl(x, z, r, h, c, 0, true, 'metal', r, 28); var gh = b.ghost; b.ghost = true; [h * .33, h * .66].forEach(function (y) { b.cyl(x, z, r + .05, .25, 0x5a5650, y, false, 'metal', r + .05, 28); });
     b.cyl(x, z, r * .98, .6, c, h, false, 'metal', r * .55, 28); for (var y = .4; y < h; y += .45) b.box(x + r + .12, z, .06, .5, .05, 0x3a3630, y, false, 'metal'); b.seg(x + r + .12, 0, z - .25, x + r + .12, h + .6, z - .25, .05, 0x3a3630, 'metal'); b.seg(x + r + .12, 0, z + .25, x + r + .12, h + .6, z + .25, .05, 0x3a3630, 'metal'); b.ghost = gh; }
   var sandtownM = mk('sandtown', lit('day', { name: '모래 마을', tints: [0xd8c39a, 0xe2cfa6, 0xcfae82, 0xd9b48a, 0xe6d6b8, 0xc99e74], shutter: [0x5a3e28, 0x6e5034], facade: { cornice: 0xc8b088, beams: 0x6a4a30, doors: [0x6a4a30, 0x3f6a6a, 0x7a3a2a, 0x8a6a40], awn: [0x9a4a30, 0x2f6a6a, 0xb8863a, 0x6a4a7a] }, clutter: ['wooden_crate_02', 'Barrel_01', 'hand_truck'], ground: 0xc2a77a, groundT: 'sand', far: 0xb0915e, farT: 'sand', outer: 0xc9ae80, outerT: 'plaster', outerH: 4.2, wall: 0xd8c39a, wallT: 'plaster', wall2: 0xcdb68a, wall2T: 'plaster', roofC: 0xb89a6a, roofT: 'plaster', floor: 0xa89470, wallKind: 'conc', wallH: 3, barrierC: 0xcdb68a, barrierT: 'plaster',
     cont: [0x8a6a48], cover: crates, extra: function (b, P) { var gh = b.ghost, ST = 0xcdb68a, DK = 0x6a4a30; b.ghost = true;
       // A long's double door: an arch over the road, the two heavy leaves standing open against the walls
-      b.box(7, 22.4, 1.4, 1.2, 5, ST, 0, false, 'plaster'); b.box(7, 29.6, 1.4, 1.2, 5, ST, 0, false, 'plaster'); b.box(7, 26, 1.4, 8.4, 1, ST, 4.4, false, 'plaster');
-      b.box(7.8, 24.1, .14, 1.6, 3.4, DK, 0, false, 'crate'); b.box(7.8, 27.9, .14, 1.6, 3.4, DK, 0, false, 'crate');
+      b.box(7, 22.4, 1.4, 1.2, 5, ST, 0, true, 'plaster'); b.box(7, 29.6, 1.4, 1.2, 5, ST, 0, true, 'plaster'); b.box(7, 26, 1.4, 8.4, 1, ST, 4.4, false, 'plaster');
+      b.box(7.8, 24.1, .14, 1.6, 3.4, DK, 0, true, 'crate'); b.box(7.8, 27.9, .14, 1.6, 3.4, DK, 0, true, 'crate');   // piers and door leaves stop bullets
       for (var y = .4; y < 3.4; y += .8) { b.box(7.88, 24.1, .06, 1.6, .1, 0x2e241a, y, false, 'metal'); b.box(7.88, 27.9, .06, 1.6, .1, 0x2e241a, y, false, 'metal'); }
       // the mid door's arch
-      b.box(12, -5.2, 1.4, 1.2, 4.4, ST, 0, false, 'plaster'); b.box(12, 1.2, 1.4, 1.2, 4.4, ST, 0, false, 'plaster'); b.box(12, -2, 1.4, 7.6, 1, ST, 3.6, false, 'plaster');
+      b.box(12, -5.2, 1.4, 1.2, 4.4, ST, 0, true, 'plaster'); b.box(12, 1.2, 1.4, 1.2, 4.4, ST, 0, true, 'plaster'); b.box(12, -2, 1.4, 7.6, 1, ST, 3.6, false, 'plaster');
       var ar = new T.CylinderGeometry(1.5, 1.5, 1.5, 16, 1, false, 0, PI); ar.rotateZ(PI / 2); ar.rotateY(PI / 2); ar.translate(12, 3.6, -2); b.geo(ar, ST, 'plaster', { pass: true });
       // the tunnel's mouth and a wooden rail along the window ledge
-      b.box(-44.4, 14.6, .8, 1, 3.6, ST, 0, false, 'plaster'); b.box(-37.6, 14.6, .8, 1, 3.6, ST, 0, false, 'plaster'); b.box(-41, 14.6, 7.6, 1, .8, ST, 2.8, false, 'plaster');
+      b.box(-44.4, 14.6, .8, 1, 3.6, ST, 0, true, 'plaster'); b.box(-37.6, 14.6, .8, 1, 3.6, ST, 0, true, 'plaster'); /* the gate's piers stop bullets */  b.box(-41, 14.6, 7.6, 1, .8, ST, 2.8, false, 'plaster');
       b.box(0, -5.9, 8, .12, .1, DK, 3.4, false, 'crate'); for (var x = -3.8; x <= 4; x += 1.9) b.box(x, -5.9, .12, .12, 1, DK, 2.4, false, 'crate');
       // market stalls round the A site
-      [[16, 25], [34, 15], [33, 27]].forEach(function (q, n) { [-1, 1].forEach(function (i) { [-1, 1].forEach(function (j) { b.box(q[0] + i * 1.1, q[1] + j * .8, .1, .1, 2.4, DK, 0, false, 'crate'); }); });
+      [[16, 25], [34, 15], [33, 27]].forEach(function (q, n) { [-1, 1].forEach(function (i) { [-1, 1].forEach(function (j) { b.box(q[0] + i * 1.1, q[1] + j * .8, .1, .1, 2.4, DK, 0, true, 'crate'); }); });
         b.box(q[0], q[1], 2.6, 2, .06, [0x9a4a30, 0x2f6a6a, 0xb8863a][n], 2.4, false, 'canvas'); });
       // a minaret behind the defenders, seen from everywhere
       b.cyl(52, -37, 1.6, 15, 0xd8c39a, 0, false, 'plaster', 1.8, 12); b.cyl(52, -37, 2.3, .5, 0xc8b088, 15, false, 'plaster', 2.3, 12); b.cyl(52, -37, 1.3, 3, 0xd8c39a, 15.5, false, 'plaster', 1.3, 12);
