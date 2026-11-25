@@ -358,6 +358,72 @@
     }
     for (i = 0; i < (map.roamAll ? blk.length : N); i++) if (!blk[i]) nav.free.push(i);
   }
+  /* ---------- map intelligence (bot design doc, step 1) ----------
+     Worked out once per match from the walk grid, so every map, old or new, gets it without hand work. For every open cell, from
+     a crouching eye (1.05 m) and a standing eye (1.6 m) above its floor, the distance to the first solid thing in 16 directions.
+     From those: cover (something solid within 1.6 m in a direction), peek spots (one step from cover to a long view the same way),
+     chokes on the lanes (narrow), high ground (a floor well above the ground that sees a lane), and on each lane the spots an
+     enemy could hold that see it (danger). Nothing here reads anything a player could not see. */
+  var IDIR = 16, ICS = [], ISN = []; for (var ik = 0; ik < IDIR; ik++) { ICS.push(Math.cos(ik / IDIR * 2 * PI)); ISN.push(Math.sin(ik / IDIR * 2 * PI)); }
+  function cellFloor(c) { return nav.hm ? nav.fy[c] : c >= nav.N ? nav.H : 0; }
+  function cellXZ(c) { var cc = c % nav.N; return [nav.ox + (cc % nav.nx) + .5, nav.oz + ((cc / nav.nx) | 0) + .5]; }
+  var iO = new T.Vector3(), iD = new T.Vector3();
+  function seeLine(x0, y0, z0, x1, y1, z1) { iO.set(x0, y0, z0); iD.set(x1 - x0, y1 - y0, z1 - z0); var d = iD.length(); if (d < 1e-3) return true; iD.multiplyScalar(1 / d); return rayWorld(iO, iD, d) >= d - .3; }
+  function mapIntel(map) {
+    var t0 = performance.now(), cells = [], n, MAXC = 2;   // every open floor, upper decks too (nav.free leaves those out on some maps)
+    for (var q0 = 0; q0 < nav.blk.length; q0++) if (!nav.blk[q0]) cells.push(q0); n = cells.length; var MAX = 40, idx = new Int32Array(nav.blk.length).fill(-1), i, k, c;
+    var st = new Uint8Array(n * IDIR), cr = new Uint8Array(n * IDIR), fl = new Float32Array(n);   // distances in 0.2 m steps, capped at 40 m
+    for (i = 0; i < n; i++) { c = cells[i]; idx[c] = i; var xz = cellXZ(c), f = cellFloor(c); fl[i] = f;
+      for (k = 0; k < IDIR; k++) { iD.set(ICS[k], 0, ISN[k]);
+        iO.set(xz[0], f + 1.6, xz[1]); var dS = rayWorld(iO, iD, MAXC); st[i * IDIR + k] = dS < MAXC ? dS * 5 : 255;   // 255 = clear for 2 m, the full length worked out when asked (far())
+        iO.set(xz[0], f + 1.05, xz[1]); cr[i * IDIR + k] = Math.min(200, rayWorld(iO, iD, MAXC) * 5); } }   // crouched: only near things matter (cover within 1.6 m)
+    var tRays = performance.now() - t0;
+    function far(i, k) { var v = st[i * IDIR + k]; if (v !== 255) return v; var xz = cellXZ(cells[i]); iO.set(xz[0], fl[i] + 1.6, xz[1]); iD.set(ICS[k], 0, ISN[k]); v = Math.min(200, rayWorld(iO, iD, MAX) * 5); st[i * IDIR + k] = v; return v; }
+    // cover: crouched, something solid within 1.6 m that way (full: standing too; half: a standing eye sees over it)
+    var cover = [], coverAt = new Int32Array(n).fill(-1);
+    for (i = 0; i < n; i++) { var full = 0, half = 0; for (k = 0; k < IDIR; k++) if (cr[i * IDIR + k] <= 8) { if (st[i * IDIR + k] <= 8) full |= 1 << k; else half |= 1 << k; }
+      if (full || half) { coverAt[i] = cover.length; cover.push({ c: cells[i], full: full, half: half }); } }
+    // peek: a cover spot whose wall blocks direction k, with a neighbour one step to the side that sees at least 12 m along k;
+    // or a half-cover spot itself (stand up to look over)
+    var peeks = [];
+    cover.forEach(function (cv) { var i0 = idx[cv.c], cc = cv.c % nav.N, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, base = cv.c - cc;
+      for (k = 0; k < IDIR; k++) { var bit = 1 << k;
+        if (cv.half & bit) { if (far(i0, k) >= 60) peeks.push({ from: cv.c, to: cv.c, k: k, half: true }); continue; }
+        if (!(cv.full & bit)) continue;
+        [[-ISN[k], ICS[k]], [ISN[k], -ICS[k]]].forEach(function (sd) { var a = Math.round(ci + sd[0]), e = Math.round(cj + sd[1]); if (a < 0 || e < 0 || a >= nav.nx || e >= nav.nz) return; var nb = base + e * nav.nx + a, j = idx[nb];
+          if (j >= 0 && Math.abs(fl[j] - fl[i0]) < .5 && far(j, k) >= 60) peeks.push({ from: cv.c, to: nb, k: k, half: false }); }); } });
+    // lanes sampled every 1.5 m: width across the lane (standing eye, left + right), and which held spots see each sample
+    var R = map.routes || [], samples = [];
+    R.forEach(function (r, ri) { for (var q = 0; q + 1 < r.pts.length; q++) { var A = r.pts[q], B = r.pts[q + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]), m = Math.max(1, Math.ceil(L / 1.5));
+      for (var s = 0; s < m; s++) { var u = s / m, x = A[0] + (B[0] - A[0]) * u, z = A[1] + (B[1] - A[1]) * u, l = A[2] || 0, cS = freeNear(cellOf(x, z, l)), j = idx[cS]; if (j < 0) continue;
+        var ang = Math.atan2(B[1] - A[1], B[0] - A[0]), kl = Math.round((ang + PI / 2) / (2 * PI) * IDIR + IDIR) % IDIR, kr = (kl + IDIR / 2) % IDIR;
+        samples.push({ r: ri, c: cS, x: x, z: z, w: (far(j, kl) + far(j, kr)) / 5 + 1 }); } } });
+    /* a choke: where a lane is at its narrowest for a stretch (a local minimum over ±3 samples) and under half the lane's usual width */
+    var chokes = []; R.forEach(function (r, ri) { var S = samples.filter(function (sm) { return sm.r === ri; }), ws = S.map(function (sm) { return sm.w; }).sort(function (p2, q2) { return p2 - q2; }), med = ws[ws.length >> 1] || 0;
+      S.forEach(function (sm, q) { if (sm.w > Math.min(8, Math.max(4, med * .55))) return; for (var o = -3; o <= 3; o++) { var nb = S[q + o]; if (nb && o && nb.w < sm.w) return; }
+        if (!chokes.some(function (ch) { return Math.hypot(ch.x - sm.x, ch.z - sm.z) < 6; })) chokes.push(sm); }); });
+    // spots worth holding: peek spots and half cover, one per cell
+    var hold = {}, tPk = performance.now(); peeks.forEach(function (pk) { var cc = pk.to % nav.N, key = (pk.to >= nav.N ? 'u' : '') + ((cc % nav.nx) >> 1) + ',' + (((cc / nav.nx) | 0) >> 1); if (!(key in hold)) hold[key] = pk.to; });   // one held spot per 2 m square
+    var holdC = Object.keys(hold).map(function (k2) { return hold[k2]; });
+    samples.forEach(function (sm) { var a = cellXZ(sm.c), fa = cellFloor(sm.c) + 1.4, list = [];
+      holdC.forEach(function (h) { var b = cellXZ(h), d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (d < 2 || d > 30) return; if (seeLine(a[0], fa, a[1], b[0], cellFloor(h) + 1.5, b[1])) list.push(h); });
+      sm.danger = list.length; sm.from = list.slice(0, 12); });
+    // high ground: a floor at least 1.5 m above the lowest floor around it (6 m), that sees a lane sample within 35 m
+    var high = [];
+    for (i = 0; i < n; i++) { if (fl[i] < 1.5) continue; var cxz = cellXZ(cells[i]), lo = fl[i];
+      for (var dx = -6; dx <= 6; dx += 2) for (var dz = -6; dz <= 6; dz += 2) { var j2 = idx[cellOf(cxz[0] + dx, cxz[1] + dz, 0)]; if (j2 >= 0) lo = Math.min(lo, fl[j2]); }
+      if (fl[i] - lo < 1.5) continue; var sees = 0;
+      for (var q2 = 0; q2 < samples.length; q2 += 2) { var s2 = samples[q2], b2 = cellXZ(s2.c), d2 = Math.hypot(b2[0] - cxz[0], b2[1] - cxz[1]); if (d2 < 35 && seeLine(cxz[0], fl[i] + 1.5, cxz[1], b2[0], cellFloor(s2.c) + 1.3, b2[1])) sees++; }
+      if (sees >= 3) high.push({ c: cells[i], h: +(fl[i] - lo).toFixed(1), sees: sees }); }
+    var I = { far: far, cells: cells, idx: idx, st: st, cr: cr, fl: fl, cover: cover, coverAt: coverAt, peeks: peeks, samples: samples, chokes: chokes, high: high, routes: R.length,
+      ms: { rays: Math.round(tRays), peeks: Math.round(tPk - t0 - tRays), all: Math.round(performance.now() - t0) }, holdN: holdC.length };
+    return I;
+  }
+  SV.intel = function () { var I = G.intel; if (!I) return null; var xz = function (c) { var p = cellXZ(c); return [+p[0].toFixed(1), +p[1].toFixed(1), c >= nav.N ? 1 : 0]; };
+    return { map: G.map.name, nx: nav.nx, nz: nav.nz, ox: nav.ox, oz: nav.oz, N: nav.N, hm: !!nav.hm, ms: I.ms, routes: I.routes, nCells: I.cells.length,
+      blk: Array.from(nav.blk), fl: Array.from(I.fl), cells: I.cells, cover: I.cover.map(function (q) { return [q.c, q.full, q.half]; }), peeks: I.peeks.map(function (q) { return [q.from, q.to, q.k, q.half ? 1 : 0]; }),
+      samples: I.samples.map(function (q) { return [q.r, +q.x.toFixed(1), +q.z.toFixed(1), +q.w.toFixed(1), q.danger]; }), chokes: I.chokes.map(function (q) { return [+q.x.toFixed(1), +q.z.toFixed(1), +q.w.toFixed(1)]; }),
+      high: I.high.map(function (q) { return [q.c, q.h, q.sees]; }), routePts: (G.map.routes || []).map(function (r) { return { kind: r.kind, pts: r.pts }; }), xz: null }; };
   function cellOf(x, z, l) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return (l && nav.H ? nav.N : 0) + j * nav.nx + i; }
   function freeNear(c) {
     if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, r, i, j;
@@ -1184,7 +1250,7 @@
     var r = Math.max(map.bounds.maxx, map.bounds.maxz) + 8, sc = sun.shadow.camera; sc.left = sc.bottom = -r; sc.right = sc.top = r; sc.near = 1; sc.far = 200; sc.updateProjectionMatrix();
     if (renderer) renderer.shadowMap.needsUpdate = true;
     if (map.rain) makeRain();
-    buildNav(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
+    buildNav(map); G.intel = window.NOINTEL ? null : mapIntel(map); var b = map.bounds, cx = (b.minx + b.maxx) / 2, cz = (b.minz + b.maxz) / 2;
     HOT = map.hot || [{ x: cx, z: cz }, { x: cx, z: b.minz + 4 }, { x: cx, z: b.maxz - 4 }, { x: b.minx + 8, z: cz }, { x: b.maxx - 8, z: cz }, { x: cx - 8, z: cz + 6 }, { x: cx + 8, z: cz - 6 }];
     clearDrops(); (map.armory || []).forEach(function (o, n) { var d = makeDrop({ g: -1 - n, id: o.id, mag: W[o.id].mag, res: W[o.id].res, p: [o.x, o.y, o.z], yaw: o.yaw, tilt: o.tilt, perm: true }); d.rest = true; });
     G.actors = []; var other = match.team === 'A' ? 'B' : 'A', i, small = match.map === 1;
