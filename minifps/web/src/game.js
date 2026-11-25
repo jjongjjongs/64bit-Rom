@@ -415,7 +415,8 @@
       if (fl[i] - lo < 1.5) continue; var sees = 0;
       for (var q2 = 0; q2 < samples.length; q2 += 2) { var s2 = samples[q2], b2 = cellXZ(s2.c), d2 = Math.hypot(b2[0] - cxz[0], b2[1] - cxz[1]); if (d2 < 35 && seeLine(cxz[0], fl[i] + 1.5, cxz[1], b2[0], cellFloor(s2.c) + 1.3, b2[1])) sees++; }
       if (sees >= 3) high.push({ c: cells[i], h: +(fl[i] - lo).toFixed(1), sees: sees }); }
-    var I = { far: far, cells: cells, idx: idx, st: st, cr: cr, fl: fl, cover: cover, coverAt: coverAt, peeks: peeks, samples: samples, chokes: chokes, high: high, routes: R.length,
+    var peekFrom = {}; peeks.forEach(function (pk) { (peekFrom[pk.from] = peekFrom[pk.from] || []).push(pk); });
+    var I = { peekFrom: peekFrom, far: far, cells: cells, idx: idx, st: st, cr: cr, fl: fl, cover: cover, coverAt: coverAt, peeks: peeks, samples: samples, chokes: chokes, high: high, routes: R.length,
       ms: { rays: Math.round(tRays), peeks: Math.round(tPk - t0 - tRays), all: Math.round(performance.now() - t0) }, holdN: holdC.length };
     return I;
   }
@@ -424,6 +425,43 @@
       blk: Array.from(nav.blk), fl: Array.from(I.fl), cells: I.cells, cover: I.cover.map(function (q) { return [q.c, q.full, q.half]; }), peeks: I.peeks.map(function (q) { return [q.from, q.to, q.k, q.half ? 1 : 0]; }),
       samples: I.samples.map(function (q) { return [q.r, +q.x.toFixed(1), +q.z.toFixed(1), +q.w.toFixed(1), q.danger]; }), chokes: I.chokes.map(function (q) { return [+q.x.toFixed(1), +q.z.toFixed(1), +q.w.toFixed(1)]; }),
       high: I.high.map(function (q) { return [q.c, q.h, q.sees]; }), routePts: (G.map.routes || []).map(function (r) { return { kind: r.kind, pts: r.pts }; }), xz: null }; };
+  /* ---------- bots, step 2: fighting from cover ----------
+     lv: 0 easy (as before: stands in the open and shoots) · 1 normal (gets to the nearest cover facing the enemy, fights from it)
+     · 2 hard (hides, leans or stands out to shoot, ducks back when hit, reloads behind cover, falls back below 30 health)
+     · 3 hell (as hard, quicker, and changes spot every second peek; falls back toward a team-mate) */
+  function botLv(a) { return a.ai.lv != null ? a.ai.lv : G.match.diff; }
+  function dirK(dx, dz) { return ((Math.round(Math.atan2(dz, dx) / (2 * PI) * IDIR) % IDIR) + IDIR) % IDIR; }
+  function coverFor(a, ex, ez, o) {
+    var I = G.intel; if (!I) return null; var L = lvl(a), c0 = cellOf(a.pos.x, a.pos.z, L), cc = c0 % nav.N, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, base = c0 - cc, R = o.R || 8, best = null, bs = 1e9, i, j;
+    var ed0 = Math.hypot(ex - a.pos.x, ez - a.pos.z), mate = null;
+    if (o.mate) { var md = 1e9; G.actors.forEach(function (m) { if (m === a || !m.alive || foe(a, m)) return; var d = Math.hypot(m.pos.x - a.pos.x, m.pos.z - a.pos.z); if (d < md) { md = d; mate = m; } }); }
+    for (j = -R; j <= R; j++) for (i = -R; i <= R; i++) {
+      var a2 = ci + i, e2 = cj + j; if (a2 < 0 || e2 < 0 || a2 >= nav.nx || e2 >= nav.nz) continue; var c = base + e2 * nav.nx + a2, ix = I.idx[c]; if (ix < 0) continue; var cv = I.coverAt[ix]; if (cv < 0) continue;
+      if (o.skip && Math.hypot(cellXZ(c)[0] - o.skip.x, cellXZ(c)[1] - o.skip.z) < 2.5) continue;
+      var C = I.cover[cv], xz = cellXZ(c), dx = ex - xz[0], dz = ez - xz[1], de = Math.hypot(dx, dz); if (de < 4) continue;
+      var k = dirK(dx, dz), m3 = (1 << k) | (1 << ((k + 1) % IDIR)) | (1 << ((k + IDIR - 1) % IDIR)), full = !!(C.full & m3), half = !full && !!(C.half & (1 << k)); if (!full && !half) continue;
+      if (o.full && !full) continue;
+      var pk = null; if (full && !o.noPeek) { (I.peekFrom[c] || []).forEach(function (q) { var dk = Math.abs(((q.k - k + IDIR + IDIR / 2) % IDIR) - IDIR / 2); if (dk <= 2 && !pk) pk = q; }); if (!pk) continue; }   // a wall with no way to look round it toward the enemy is no place to fight from
+      var d = Math.hypot(xz[0] - a.pos.x, xz[1] - a.pos.z); if (d > R) continue;
+      var sc = d + (half ? 1.5 : 0) + (o.away ? -(de - ed0) * .8 : de < ed0 - 6 ? 3 : 0) + (mate ? Math.hypot(mate.pos.x - xz[0], mate.pos.z - xz[1]) * .5 : 0) + (lineFree(a.pos.x, a.pos.z, xz[0], xz[1], L) ? 0 : 4);
+      if (sc < bs) { bs = sc; var px = pk ? cellXZ(pk.to) : null; best = { c: c, x: xz[0], z: xz[1], l: L, full: full, peek: px ? { x: px[0], z: px[1] } : null }; }
+    }
+    return best;
+  }
+  /* what to walk to while fighting from cover (think), or null to fight the old way */
+  function coverPlan(a, best) {
+    var ai = a.ai, lv = botLv(a); if (lv < 1 || !G.intel) { ai.cb = null; return null; }
+    var e = best || (ai.cb && ai.lastSeenT < (lv >= 3 ? 7 : 5) ? ai.lastSeen : null); if (!e) { ai.cb = null; return null; }
+    var ex = e.pos ? e.pos.x : e.x, ez = e.pos ? e.pos.z : e.z, cb = ai.cb;
+    if (lv >= 2 && a.hp < 25 && (!cb || cb.mode !== 'back')) { var r = coverFor(a, ex, ez, { away: true, full: true, noPeek: true, R: 12, mate: lv >= 3 }); if (r) { r.mode = 'back'; r.until = G.elapsed + rnd(4, 7); r.phase = 'go'; ai.cb = cb = r; } }
+    if (cb && cb.mode === 'back' && G.elapsed > cb.until) cb = ai.cb = null;
+    if (cb && cb.mode !== 'back') {   // still facing the right way? the enemy may have moved round it
+      var C = G.intel.cover[G.intel.coverAt[G.intel.idx[cb.c]]], k = dirK(ex - cb.x, ez - cb.z), m3 = (1 << k) | (1 << ((k + 1) % IDIR)) | (1 << ((k + IDIR - 1) % IDIR));
+      if (!C || !((C.full | C.half) & m3) || Math.hypot(ex - cb.x, ez - cb.z) < 4) cb = ai.cb = null; }
+    if (cb && cb.mode !== 'back' && lv >= 3 && (cb.hits || 0) >= 2 && cb.phase === 'hide') { var n2 = coverFor(a, ex, ez, { skip: cb, R: 5 }); if (n2) { n2.phase = 'go'; n2.peeks = 0; n2.mode = 'fight'; cb = ai.cb = n2; } else cb.hits = 0; }   // hit twice from this spot: they know where it is
+    if (!cb) { var nc = coverFor(a, ex, ez, { R: lv >= 2 ? 9 : 6, noPeek: lv < 2 }); if (!nc) return null; nc.phase = 'go'; nc.peeks = 0; nc.mode = 'fight'; cb = ai.cb = nc; }
+    return cb.phase === 'peek' && cb.full && cb.peek ? { x: cb.peek.x, z: cb.peek.z, l: cb.l } : { x: cb.x, z: cb.z, l: cb.l };
+  }
   function cellOf(x, z, l) { var i = clamp(Math.floor(x - nav.ox), 0, nav.nx - 1), j = clamp(Math.floor(z - nav.oz), 0, nav.nz - 1); return (l && nav.H ? nav.N : 0) + j * nav.nx + i; }
   function freeNear(c) {
     if (!nav.blk[c]) return c; var base = c >= nav.N ? nav.N : 0, cc = c - base, ci = cc % nav.nx, cj = (cc / nav.nx) | 0, r, i, j;
@@ -573,7 +611,7 @@
     a.pos.set(best.x, best.y || 0, best.z); a.vy = 0; a.yaw = G.ffa ? Math.atan2(best.x, best.z) : side === 'A' ? -PI / 2 : PI / 2; a.pitch = 0; a.useP = 0; a.useAt = null; a.lastFree = null; a.hp = 100; a.alive = true; a.prot = 1.6; a.crouch = false; a.slot = 0; a.nade = 1; a.bloom = 0; a.dead = 0;
     if (a.isPlayer) { a.primary = G.match.primary; a.ads = false; if (SV.resetAds) SV.resetAds(); } a.guns = guns(a.primary, !a.isPlayer, a.isPlayer ? G.match.side : (a.idx % 2 ? 'pistol2' : 'pistol'));
     a.ai.wantDrop = null; a.ai.skipDrop = {}; a.ai.swapped = false; a.ai.route = null; equipped(a);
-    a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99;
+    a.ai.tgt = null; a.ai.path = []; a.ai.goal = null; a.ai.seen = 0; a.ai.hurtBy = null; a.ai.lastSeenT = 99; a.ai.cb = null;
     if (a.model) { a.model.root.visible = true; a.model.root.rotation.set(0, 0, 0); a.model.root.scale.set(1, 1, 1); a.kneel = 0; }
     if (a.isPlayer) { setVm(); $('msg').hidden = true; }
   }
@@ -585,7 +623,7 @@
       if (!v.alive || G.state !== 'play' || by.remote) return false; G.net.send({ t: 'h', v: v.nid, by: by.nid, d: Math.round(dmg), h: head ? 1 : 0 });
       if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); } return true; }
     if (!v.alive || v.prot > 0 || G.state !== 'play') return false;
-    v.hp -= dmg; v.ai.hurtBy = by;
+    v.hp -= dmg; v.ai.hurtBy = by; v.ai.hurtT = G.elapsed;
     if (v.isPlayer) { G.hitFlash = .5; sndTone(120, .12, .18, 'sawtooth'); }
     if (by.isPlayer && by !== v) { G.marker = head ? .3 : .18; G.markerHead = head; sndTone(head ? 1500 : 900, .05, .1); }
     if (v.hp <= 0) {
@@ -1034,7 +1072,9 @@
       if (!facing && dist > 7 && ai.hurtBy !== e && ai.tgt !== e) continue;
       d = canSee(a, e); if (d && d < bd) { bd = d; best = e; }
     }
-    if (best !== ai.tgt) { ai.seen = 0; ai.tgt = best; }
+    if (best !== ai.tgt) { ai.seen = 0;
+      if (best && ai.cb && botLv(a) >= 2 && ai.lastSeen && ai.lastSeenT < 3 && Math.hypot(best.pos.x - ai.lastSeen.x, best.pos.z - ai.lastSeen.z) < 3) ai.seen = (ai.df || G.diff).react * .6;   // it reappears where we were already aiming: less to take in
+      ai.tgt = best; }
     if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; ai.lastSeenT = 0; best.spot = 1.5; }
     // choose where to walk
     var want = null, pref = { lmg: 20, rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
@@ -1042,6 +1082,7 @@
     var dg = !best && !(ob && ob.force) && !(G.bomb && G.bomb.carrier === a) ? botDrop(a) : null;
     if (dg) want = { x: dg.pos.x, z: dg.pos.z, l: lvl(a) };
     else if (ob && (!best || ob.force || (G.bomb.carrier === a && bd > 11))) { /* the carrier keeps walking the bomb in unless the enemy is close */ if (ob.use) { ai.use = true; ai.path = []; ai.goal = null; } else if (Math.hypot(ob.x - a.pos.x, ob.z - a.pos.z) < 1.2 && (ob.l || 0) === lvl(a)) { ai.path = []; ai.goal = null; } else want = ob; }
+    else if ((best || ai.cb) && (rg = coverPlan(a, best))) want = rg;   // step 2: fight from cover
     else if (best) { if (bd > pref || lvl(best) !== lvl(a) && bd > 6) want = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; else { ai.path = []; ai.goal = null; } }
     else if (ai.lastSeenT < 6 && ai.lastSeen) want = ai.lastSeen;
     else if (!G.bomb && (rg = routeGoal(a))) want = rg;   // no enemy in mind: walk one of the map's lanes toward the other side
@@ -1050,7 +1091,7 @@
     var g = a.guns[a.slot]; if (!best && g.reload <= 0 && g.mag < W[g.id].mag * .4) reload(a);
   }
   function updBot(dt, a) {
-    var ai = a.ai, g = a.guns[a.slot], w = W[g.id], df = G.diff; ai.err = df.err;
+    var ai = a.ai, g = a.guns[a.slot], w = W[g.id], df = ai.df || G.diff; ai.err = df.err;
     ai.holdT = (ai.holdT || 0) - dt; if (ai.holdT <= 0) { ai.holdT = rnd(4, 9); ai.holdI = (Math.random() * 120) | 0; }   // time to shift to another post
     ai.think -= dt; ai.pathT += dt; ai.lastSeenT += dt; if (ai.think <= 0) { ai.think = .16 + Math.random() * .08; think(a); }
     var vx = 0, vz = 0, sp = 4.1, tgt = ai.tgt, wantYaw = a.yaw, wantPitch = 0;
@@ -1062,16 +1103,28 @@
     if (tgt) {
       ai.seen += dt; var tx = tgt.pos.x - a.pos.x, tz = tgt.pos.z - a.pos.z, td = Math.hypot(tx, tz), ty = tgt.pos.y + (tgt.crouch ? .85 : 1.25) - (a.pos.y + EYE);
       wantYaw = Math.atan2(-tx, -tz); wantPitch = Math.atan2(ty, td);
-      if (!ai.path.length && !ai.use) { ai.strafeT -= dt; if (ai.strafeT <= 0) { ai.strafeT = rnd(.5, 1.5); ai.strafe = Math.random() < .5 ? -1 : Math.random() < .2 ? 0 : 1; } var s = Math.sin(wantYaw), c = Math.cos(wantYaw); vx = c * ai.strafe * 2.6; vz = -s * ai.strafe * 2.6; }
+      if (!ai.path.length && !ai.use && !ai.cb) { ai.strafeT -= dt; if (ai.strafeT <= 0) { ai.strafeT = rnd(.5, 1.5); ai.strafe = Math.random() < .5 ? -1 : Math.random() < .2 ? 0 : 1; } var s = Math.sin(wantYaw), c = Math.cos(wantYaw); vx = c * ai.strafe * 2.6; vz = -s * ai.strafe * 2.6; }
     }
     if (!tgt && !ai.path.length && ai.look) wantYaw = Math.atan2(a.pos.x - ai.look.x, a.pos.z - ai.look.z);
     a.crouch = !!(ai.use || (G.bomb && !tgt && !ai.path.length && ai.look && (ai.holdI + a.idx) % 3 === 0));
+    var cb = ai.cb, hideNow = false;
+    if (cb) { var lv = botLv(a), at = Math.hypot(cb.x - a.pos.x, cb.z - a.pos.z) < .7, atP = cb.peek && Math.hypot(cb.peek.x - a.pos.x, cb.peek.z - a.pos.z) < .7;
+      if (!tgt && ai.lastSeen) { wantYaw = Math.atan2(a.pos.x - ai.lastSeen.x, a.pos.z - ai.lastSeen.z); wantPitch = 0; }   // pre-aimed where the enemy was last seen
+      if (cb.phase === 'go' && at) { cb.phase = 'hold'; cb.hurt0 = ai.hurtT || 0; }
+      if (cb.mode === 'back') { if (at && !tgt) a.crouch = true; }   // falling back: down behind cover; anyone who comes into view is shot at
+      else if (lv >= 2 && (cb.phase === 'hold' || cb.phase === 'peek')) {   // out and shooting while the trade goes our way; down when hit or to reload
+        var hit = (ai.hurtT || 0) > (cb.hurt0 || 0); if (hit) { cb.hurt0 = ai.hurtT; cb.hits = (cb.hits || 0) + 1; }
+        if ((hit && a.hp < (lv >= 3 ? 75 : 60)) || g.mag === 0 || (!tgt && g.mag < W[g.id].mag * .3)) { cb.phase = 'hide'; cb.t = lv >= 3 ? rnd(.2, .45) : rnd(.35, .7); } }
+      else if (cb.phase === 'hide') { cb.t -= dt; if (!cb.full && !tgt) a.crouch = true;   // an enemy that comes into view while hiding is shot at, not ignored
+        if (g.reload <= 0 && g.mag < W[g.id].mag * (lv >= 3 ? .7 : .5)) reload(a);   // reload where it is safe
+        if (cb.t <= 0 && g.reload <= 0) { cb.phase = 'peek'; cb.peeks = (cb.peeks || 0) + 1; cb.hurt0 = ai.hurtT || 0; } }
+    }
     var turn = df.turn * dt; a.yaw += clamp(angd(wantYaw, a.yaw), -turn, turn); a.pitch += clamp(wantPitch - a.pitch, -turn, turn);
     a.moving = (vx || vz) !== 0; moveActor(a, vx, vz, dt);
     // unstick
     ai.stuckT += dt; if (ai.stuckT > 1.2) { if (a.moving && Math.hypot(a.pos.x - ai.lastX, a.pos.z - ai.lastZ) + Math.abs(a.pos.y - (ai.lastY || 0)) < .35) { ai.path = []; ai.goal = null; ai.lastSeenT = 99; } ai.lastX = a.pos.x; ai.lastZ = a.pos.z; ai.lastY = a.pos.y; ai.stuckT = 0; }
     // shoot
-    if (!G.match.practice && !ai.use && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
+    if (!G.match.practice && !ai.use && !hideNow && tgt && ai.seen > df.react && Math.abs(angd(wantYaw, a.yaw)) < .12 && g.reload <= 0) {
       ai.pause -= dt;
       if (ai.pause <= 0 && g.cool <= 0) {
         eye(a, vO); vD.set(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch));
@@ -1327,6 +1380,7 @@
     // cell is shown or hidden by its distance from the camera. The distances are per map (map.lod), 40 / 80 m by default.
     lodT -= dt; if (lodT <= 0 && G.map) { lodT = .25; var ld = G.map.lod || [40, 80], ch = G.map.group.children, li; for (li = 0; li < ch.length; li++) { var lo = ch[li].userData; if (lo.lod) ch[li].visible = Math.hypot(lo.at.x - cam.position.x, lo.at.z - cam.position.z) < ld[lo.lod - 1] + 17; } }
   }
+  SV.DIFF = DIFF;
   SV.botGun = function (n, map) { var id = BOTGUN[n % BOTGUN.length]; return map === 1 && id === 'sniper' ? 'smg' : id; };
   // Side-on picture of a gun for the menus, drawn with the game renderer into a small off-screen target.
   var thumbs = {};
