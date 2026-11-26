@@ -591,13 +591,13 @@
   }
   // Recorded reports (public-domain range recordings, see art/README.txt) replace the synthesised ones once decoded; the far
   // version is the same recording, dulled and delayed by distance in gunSnd. REC_G evens out their loudness against each other.
-  var shotRec = {}, REC_G = { rifle: 3.06, rifle2: 2.95, smg: 2.35, pistol: 1.17, pistol2: 1.29, sniper: 1.16, shotgun: 1.19, lmg: 1.47 };
+  var SHOT_VOL = .7, shotRec = {}, REC_G = { rifle: 3.06, rifle2: 2.95, smg: 2.35, pistol: 1.17, pistol2: 1.29, sniper: 1.16, shotgun: 1.19, lmg: 1.47 };
   function loadShots() {
     if (window.SYNTH_SHOTS || !window.fetch) return;
     Object.keys(REC_G).forEach(function (id) {
       fetch(SV.assets.base + 'art/snd/' + id + '.ogg').then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(function (ab) {
         return new Promise(function (ok, no) { var p = ac.decodeAudioData(ab, ok, no); if (p && p.then) p.then(ok, no); }); })
-      .then(function (buf) { var d = buf.getChannelData(0), k = REC_G[id]; for (var i = 0; i < d.length; i++) d[i] *= k; shotRec[id] = true; shotBuf[id + 1] = shotBuf[id + 0] = buf; }).catch(function () { });
+      .then(function (buf) { var d = buf.getChannelData(0), k = REC_G[id] * SHOT_VOL; for (var i = 0; i < d.length; i++) d[i] *= k; shotRec[id] = true; shotBuf[id + 1] = shotBuf[id + 0] = buf; }).catch(function () { });
     });
   }
   SV.shotBufs = function () { return shotBuf; };   // tests: what each gun sounds like
