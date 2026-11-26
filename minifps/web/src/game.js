@@ -585,9 +585,22 @@
   function renderShots() {
     var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OC || !ac) return;
     Object.keys(SND).forEach(function (id) { [1, 0].forEach(function (near) {
-      try { var P = SND[id], cx = new OC(1, Math.ceil(ac.sampleRate * (P.len * 3.6 + .08)), ac.sampleRate); shotGraph(cx, P, near, cx.destination); var done = function (buf) { shotBuf[id + near] = buf; }, pr = cx.startRendering(); if (pr && pr.then) pr.then(done); else cx.oncomplete = function (e) { done(e.renderedBuffer); }; } catch (e) { }
+      try { var P = SND[id], cx = new OC(1, Math.ceil(ac.sampleRate * (P.len * 3.6 + .08)), ac.sampleRate); shotGraph(cx, P, near, cx.destination); var done = function (buf) { if (!shotRec[id]) shotBuf[id + near] = buf; }, pr = cx.startRendering(); if (pr && pr.then) pr.then(done); else cx.oncomplete = function (e) { done(e.renderedBuffer); }; } catch (e) { }
     }); });
+    loadShots();
   }
+  // Recorded reports (public-domain range recordings, see art/README.txt) replace the synthesised ones once decoded; the far
+  // version is the same recording, dulled and delayed by distance in gunSnd. REC_G evens out their loudness against each other.
+  var shotRec = {}, REC_G = { rifle: 3.06, rifle2: 2.95, smg: 2.35, pistol: 1.17, pistol2: 1.29, sniper: 1.16, shotgun: 1.19, lmg: 1.47 };
+  function loadShots() {
+    if (window.SYNTH_SHOTS || !window.fetch) return;
+    Object.keys(REC_G).forEach(function (id) {
+      fetch(SV.assets.base + 'art/snd/' + id + '.ogg').then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(function (ab) {
+        return new Promise(function (ok, no) { var p = ac.decodeAudioData(ab, ok, no); if (p && p.then) p.then(ok, no); }); })
+      .then(function (buf) { var d = buf.getChannelData(0), k = REC_G[id]; for (var i = 0; i < d.length; i++) d[i] *= k; shotRec[id] = true; shotBuf[id + 1] = shotBuf[id + 0] = buf; }).catch(function () { });
+    });
+  }
+  SV.shotBufs = function () { return shotBuf; };   // tests: what each gun sounds like
   function gunSnd(id, vol, dist) {
     if (!ac || !cfg.sound || vol < .04) return; dist = dist || 0;
     var own = dist === 0, now = ac.currentTime, buf = shotBuf[id + (dist < 18 ? 1 : 0)]; if (!buf) return;

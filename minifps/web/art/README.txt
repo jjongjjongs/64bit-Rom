@@ -37,3 +37,9 @@ c4.glb — the bomb: "C4 Explosive Device & Detonator Pack" by Fevzi_Beydili (ht
 fp/lmg.glb — LM-01: "LMG animated" by DJMaesen (https://sketchfab.com/bumstrum), CC BY 4.0, arms, gun and one animation track (fire,
   reload from empty, reload, idle and others, 15.6 s). https://sketchfab.com/3d-models/lmg-animated-50d67a9e586148a49c086fe3127e7abb
   Reduced with glTF-Transform (textures 1024 px WebP, meshopt) from the player's download: 30.9 MB -> 1.0 MB.
+
+snd/*.ogg — gunshot reports cut from recordings on Wikimedia Commons (single shots, trimmed and faded; loudness evened in game.js REC_G):
+  rifle, rifle2 (slowed 10%), smg (sped up 22%) — "Exercise Iron Sword Live-Fire.ogv", U.S. Marine Corps (Cpl. Clarence L. Wimberly), public domain (PD-USGov-Military-Marines)
+  sniper, shotgun (slowed 20%) — "Sniper Platoon Conducts Sniper Gunnery KStuTUYUOkE.webm", U.S. Army, public domain (PD-USGov-Army)
+  lmg — "M240 Machine Gun range (955234).webm", U.S. Army (173rd Airborne Brigade), public domain (PD-USGov-Military-Army)
+  pistol, pistol2 (slowed 6%) — "Gunshots 8.ogg" by aradlaw via pdsounds.org, public domain
