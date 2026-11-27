@@ -627,7 +627,7 @@
   }
 
   // ---------- actors ----------
-  function guns(primary, bot, side) { return [primary, side || 'pistol', 'knife'].map(function (id) { return { id: id, mag: W[id].mag, res: bot ? 9999 : W[id].res, cool: 0, reload: 0 }; }); }
+  function guns(primary, bot, side) { return [primary, side || 'pistol', 'knife'].map(function (id, k) { return { id: id, mag: W[id].mag, res: bot && k ? 9999 : W[id].res, cool: 0, reload: 0 }; }); }   // a bot's main gun carries the same ammunition as the player's; its pistol never runs dry
   function actor(team, name, isPlayer, primary) {
     var a = { team: team, name: name, isPlayer: isPlayer, primary: primary, pos: new T.Vector3(), vy: 0, yaw: 0, pitch: 0, hp: 100, alive: false, respawn: 0, prot: 0, crouch: false, ground: true,
       kills: 0, deaths: 0, slot: 0, guns: null, nade: 1, bloom: 0, ads: false, walk: 0, moving: false, dead: 0, spot: 0, model: null, useP: 0, useAt: null, idx: 0,
@@ -743,7 +743,7 @@
       vP.copy(o).addScaledVector(dir, .35).addScaledVector(vR, -.14); vP.y -= .08; shell(vP, -vR.x * 2 + dir.x * .4 + rnd(-.3, .3), 1.6 + rnd(0, .6), -vR.z * 2 + dir.z * .4 + rnd(-.3, .3), a.pos.y);   // spent case, thrown to the right
       if (w.scope) a.ads = false; }
     else { var dd = Math.hypot(a.pos.x - cam.position.x, a.pos.z - cam.position.z); if (dd < 70) muzzleFx(muzzle, dir, FLSIZE[g.id] || 1, false); gunSnd(g.id, clamp(1 - dd / 95, 0, 1) * .8, dd); }
-    if (g.mag <= 0 && !a.isPlayer) reload(a);
+    if (g.mag <= 0 && !a.isPlayer) { if (g.res > 0) reload(a); else if (a.slot === 0 && a.guns[1]) { a.slot = 1; equipped(a); } }   // main gun out of ammunition: on with the pistol
     return true;
   }
   // Smoke: a cloud that hides whatever is behind it, for the player and for bots alike. Each cloud is a handful of soft sprites
@@ -1045,7 +1045,7 @@
   }
   function takeDrop(d, a) {
     var s = slotOf(d.id);
-    if (!a.isPlayer) { if (a.guns[0]) dropGun(a, 0, true); a.guns[0] = { id: d.id, mag: d.mag > 0 ? d.mag : W[d.id].mag, res: 9999, cool: 0, reload: 0 }; a.slot = 0; a.ai.wantDrop = null; a.ai.swapped = true; }
+    if (!a.isPlayer) { var og = a.guns[0]; if (og && og.mag + og.res > 0) dropGun(a, 0, true); a.guns[0] = { id: d.id, mag: d.mag, res: d.res, cool: 0, reload: 0 }; if (!d.mag && d.res) reload(a); a.slot = 0; a.ai.wantDrop = null; }   /* an empty gun is not thrown down: nobody could use it */
     else { a.guns[s] = d.perm ? { id: d.id, mag: W[d.id].mag, res: W[d.id].res, cool: 0, reload: 0 } : { id: d.id, mag: d.mag, res: d.res, cool: 0, reload: 0 }; if (a.slot !== s) { a.slot = s; a.ads = false; if (SV.resetAds) SV.resetAds(); setVm(); } if (a === G.player) { sndTone(520, .05, .08); sndTone(780, .06, .06); showMsg(W[d.id].name + ' 획득', 1.2); } }
     if (!d.perm) killDrop(d); equipped(a);
   }
@@ -1078,13 +1078,16 @@
     if (p && p.alive) for (i = 0; i < G.drops.length; i++) { var q = G.drops[i]; if (!q.perm || q.pos.y - p.pos.y < -.5 || q.pos.y - p.pos.y > 1.5) continue; var dd = Math.hypot(p.pos.x - q.pos.x, p.pos.z - q.pos.z); if (dd < bd) { bd = dd; best = q; } }
     if (best !== G.armNear) { G.armNear = best; if (best && !p.guns[slotOf(best.id)]) takeDrop(best, p); }
   }
-  // a bot with nobody to fight may go for a different main gun lying near it; each gun is weighed once, and given up after 8 s
+  // a bot whose main gun is out of ammunition (it fights on with its pistol) picks up a loaded main gun lying within 5 m, when
+  // nobody is in sight; one it cannot reach in 8 s is given up for good
+  var DROP_R = 5;
+  function mainEmpty(a) { var g = a.guns[0]; return !g || g.mag + g.res <= 0; }
   function botDrop(a) {
     var ai = a.ai, d = ai.wantDrop != null ? findDrop(ai.wantDrop) : null;
-    if (d && G.elapsed - ai.wantAt < 8) return d; ai.skipDrop = ai.skipDrop || {}; if (d) ai.skipDrop[d.g] = true; ai.wantDrop = null;   // one it could not reach in time is given up for good if (ai.swapped) return null;   // one swap a life, and never back to a gun it threw away
-    var best = null, bd = 10;
-    for (var i = 0; i < G.drops.length; i++) { var q = G.drops[i]; if (!q.rest || q.perm || slotOf(q.id) || q.byA === a || (a.guns[0] && q.id === a.guns[0].id) || Math.abs(q.pos.y - a.pos.y) > 1.3) continue; var dd = Math.hypot(q.pos.x - a.pos.x, q.pos.z - a.pos.z); if (dd >= bd) continue;
-      if (ai.skipDrop[q.g] == null) ai.skipDrop[q.g] = Math.random() < .35; if (!ai.skipDrop[q.g]) { best = q; bd = dd; } }
+    if (!mainEmpty(a)) { ai.wantDrop = null; return null; }
+    if (d && G.elapsed - ai.wantAt < 8) return d; ai.skipDrop = ai.skipDrop || {}; if (d) ai.skipDrop[d.g] = true; ai.wantDrop = null;
+    var best = null, bd = DROP_R;
+    for (var i = 0; i < G.drops.length; i++) { var q = G.drops[i]; if (!q.rest || q.perm || slotOf(q.id) || ai.skipDrop[q.g] || q.mag + q.res <= 0 || Math.abs(q.pos.y - a.pos.y) > 1.3) continue; var dd = Math.hypot(q.pos.x - a.pos.x, q.pos.z - a.pos.z); if (dd < bd) { best = q; bd = dd; } }
     if (best) { ai.wantDrop = best.g; ai.wantAt = G.elapsed; } return best;
   }
   function muzzleWorld(p, out) { out.set(.16, -.12, -.6).applyEuler(cam.rotation).add(cam.position); return out; }
@@ -1121,7 +1124,7 @@
       ai.tgt = best; }
     if (best) { ai.lastSeen = { x: best.pos.x, z: best.pos.z, l: lvl(best) }; ai.lastSeenT = 0; ai.heard = null; best.spot = 1.5; callOut(a, best); } else listen(a);
     // choose where to walk
-    var want = null, pref = { lmg: 20, rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, knife: 2 }[a.guns[a.slot].id];
+    var want = null, pref = { lmg: 20, rifle: 20, smg: 10, sniper: 38, shotgun: 5, pistol: 12, pistol2: 12, knife: 2 }[a.guns[a.slot].id] || 12;
     var ob = G.bomb ? objective(a) : null; ai.use = false; ai.look = ob && ob.look;
     var dg = !best && !(ob && ob.force) && !(G.bomb && G.bomb.carrier === a) ? botDrop(a) : null;
     if (dg) want = { x: dg.pos.x, z: dg.pos.z, l: lvl(a) };
